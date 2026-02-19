@@ -35,6 +35,21 @@ struct IsoEntry {
     params: String,
 }
 
+#[derive(Deserialize)]
+struct BootConfig {
+    entries: Vec<BootEntryConfig>,
+    default_entry: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct BootEntryConfig {
+    title: String,
+    path: String,
+    params: String,
+    initrd: String,
+    kargs: String,
+}
+
 struct VecSink<'a> {
     events: &'a Mutex<Vec<ProgressEvent>>,
 }
@@ -114,10 +129,21 @@ fn scan_isos(dirs: Vec<String>) -> Result<Vec<IsoEntry>, String> {
         .collect())
 }
 
+#[tauri::command]
+fn save_boot_config(config: BootConfig) -> Result<(), String> {
+    let home = std::env::var("HOME").map_err(|_| "HOME not set".to_string())?;
+    let dir = std::path::Path::new(&home).join(".config").join("raidhos");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join("boot.json");
+    let body = serde_json::to_vec_pretty(&config).map_err(|e| e.to_string())?;
+    std::fs::write(path, body).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![list_disks, install, scan_isos])
+        .invoke_handler(tauri::generate_handler![list_disks, install, scan_isos, save_boot_config])
         .run(tauri::generate_context!())
         .expect("error while running RaidhOS");
 }
