@@ -376,12 +376,13 @@
         <div class="boot-progress" id="bootProgress">
           <div class="boot-progress-fill" id="bootProgressFill"></div>
         </div>
-        <div class="disks" id="disks"></div>
+        <div class="disks" id="entries"></div>
       </section>
 
       <section class="card panel">
         <h2>Install</h2>
         <p class="subtitle">Dry-run only for now. No changes are made.</p>
+        <div class="disks" id="targets"></div>
         <div class="confirm">
           <div><strong>Selected:</strong> <span id="selected">None</span></div>
           <div><small>Type the device path to confirm (e.g. /dev/sdb).</small></div>
@@ -397,7 +398,8 @@
     </div>
 
     <script>
-      const disksEl = document.getElementById('disks');
+      const entriesEl = document.getElementById('entries');
+      const targetsEl = document.getElementById('targets');
       const loadBtn = document.getElementById('load');
       const refreshBtn = document.getElementById('refresh');
       const splash = document.getElementById('splash');
@@ -410,7 +412,8 @@
       const bootProgressFill = document.getElementById('bootProgressFill');
 
       let selectedDisk = null;
-      let renderedDisks = [];
+      let renderedTargets = [];
+      let renderedEntries = [];
       let selectedIndex = -1;
       const BOOT_TIMEOUT_SECONDS = 7;
       let bootTimer = null;
@@ -424,54 +427,87 @@
         return `${value} ${units[i]}`;
       }
 
-      function renderDisks(disks) {
-        renderedDisks = disks;
+      function renderEntries(entries) {
+        renderedEntries = entries;
         selectedIndex = -1;
-        disksEl.innerHTML = '';
+        entriesEl.innerHTML = '';
         stopBootTimer();
-        if (!disks.length) {
-          disksEl.innerHTML = '<div class="disk">No entries detected.</div>';
+        if (!entries.length) {
+          entriesEl.innerHTML = '<div class="disk">No entries detected.</div>';
           return;
         }
-        disks.forEach((disk) => {
+        entries.forEach((entry) => {
           const el = document.createElement('div');
           el.className = 'disk';
           el.innerHTML = `
             <div>
-              <strong>${disk.id}</strong>
-              <div><small>${disk.model || 'Unknown model'} · ${formatBytes(disk.size_bytes)}</small></div>
+              <strong>${entry.title}</strong>
+              <div><small>${entry.subtitle}</small></div>
             </div>
-            <div class="pill">${disk.removable ? 'Removable' : 'Fixed'}</div>
+            <div class="pill">${entry.tag}</div>
           `;
-          el.addEventListener('click', () => selectDisk(disk, el));
-          disksEl.appendChild(el);
+          el.addEventListener('click', () => selectEntry(entry, el));
+          entriesEl.appendChild(el);
         });
 
         startBootTimer();
       }
 
       function selectByIndex(index) {
-        if (!renderedDisks.length) return;
-        const clamped = Math.max(0, Math.min(index, renderedDisks.length - 1));
-        const disk = renderedDisks[clamped];
-        const el = disksEl.children[clamped];
-        if (!disk || !el) return;
+        if (!renderedEntries.length) return;
+        const clamped = Math.max(0, Math.min(index, renderedEntries.length - 1));
+        const entry = renderedEntries[clamped];
+        const el = entriesEl.children[clamped];
+        if (!entry || !el) return;
         selectedIndex = clamped;
-        selectDisk(disk, el);
+        selectEntry(entry, el);
+      }
+
+      function selectEntry(entry, el) {
+        Array.from(entriesEl.children).forEach((d) => d.classList.remove('selected'));
+        el.classList.add('selected');
+        stopBootTimer();
+      }
+
+      function renderTargets(disks) {
+        renderedTargets = disks;
+        targetsEl.innerHTML = '';
+        if (!disks.length) {
+          targetsEl.innerHTML = '<div class="disk">No devices detected.</div>';
+          return;
+        }
+        disks.forEach((disk) => {
+          const el = document.createElement('div');
+          el.className = 'disk';
+          const mounts = disk.mountpoints && disk.mountpoints.length ? ` · ${disk.mountpoints.join(', ')}` : '';
+          const tag = disk.is_system ? 'System' : (disk.removable ? 'Removable' : 'Fixed');
+          el.innerHTML = `
+            <div>
+              <strong>${disk.id}</strong>
+              <div><small>${disk.model || 'Unknown model'} · ${formatBytes(disk.size_bytes)}${mounts}</small></div>
+            </div>
+            <div class="pill">${tag}</div>
+          `;
+          if (disk.is_system) {
+            el.style.opacity = '0.5';
+          } else {
+            el.addEventListener('click', () => selectDisk(disk, el));
+          }
+          targetsEl.appendChild(el);
+        });
       }
 
       function selectDisk(disk, el) {
         selectedDisk = disk;
         selectedEl.textContent = `${disk.id} (${formatBytes(disk.size_bytes)})`;
         confirmInput.value = '';
-        Array.from(document.getElementsByClassName('disk')).forEach((d) => d.classList.remove('selected'));
+        Array.from(targetsEl.children).forEach((d) => d.classList.remove('selected'));
         el.classList.add('selected');
         updateInstallState();
-        stopBootTimer();
       }
 
       function updateInstallState() {
-        const ok = selectedDisk && confirmInput.value.trim() === selectedDisk.id;
+        const ok = selectedDisk && !selectedDisk.is_system && confirmInput.value.trim() === selectedDisk.id;
         installBtn.disabled = !ok;
       }
 
@@ -479,14 +515,14 @@
         try {
           const { invoke } = window.__TAURI__.tauri;
           const disks = await invoke('list_disks');
-          renderDisks(disks);
+          renderTargets(disks);
         } catch (err) {
-          disksEl.innerHTML = `<div class="disk">${String(err)}</div>`;
+          targetsEl.innerHTML = `<div class="disk">${String(err)}</div>`;
         }
       }
 
       function startBootTimer() {
-        if (!renderedDisks.length) return;
+        if (!renderedEntries.length) return;
         bootRemaining = BOOT_TIMEOUT_SECONDS;
         updateBootStatus();
         bootTimer = setInterval(() => {
@@ -571,7 +607,7 @@
       refreshBtn.addEventListener('click', listDisks);
       installBtn.addEventListener('click', runInstall);
       document.addEventListener('keydown', (event) => {
-        if (!renderedDisks.length) return;
+        if (!renderedEntries.length) return;
         if (event.key === 'ArrowDown') {
           event.preventDefault();
           selectByIndex(selectedIndex + 1);
@@ -581,11 +617,17 @@
           selectByIndex(selectedIndex - 1);
         }
         if (event.key === 'Enter') {
-          if (selectedDisk && confirmInput.value.trim() === selectedDisk.id) {
-            runInstall();
-          }
+          selectByIndex(selectedIndex < 0 ? 0 : selectedIndex);
         }
       });
+
+      const bootEntries = [
+        { title: 'RaidhOS', subtitle: 'Boot from USB media', tag: 'Default' },
+        { title: 'Diagnostics', subtitle: 'Hardware tests and recovery tools', tag: 'Tools' },
+        { title: 'Memory Test', subtitle: 'Quick RAM validation', tag: 'Utility' },
+      ];
+
+      renderEntries(bootEntries);
       bootSequence();
     </script>
   </body>

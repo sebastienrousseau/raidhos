@@ -35,6 +35,8 @@ pub struct DiskInfo {
     pub model: String,
     pub size_bytes: u64,
     pub removable: bool,
+    pub mountpoints: Vec<String>,
+    pub is_system: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -87,11 +89,15 @@ mod platform {
         #[serde(default)]
         #[allow(dead_code)]
         type_field: Option<String>,
+        #[serde(default)]
+        mountpoints: Option<Vec<Option<String>>>,
+        #[serde(default)]
+        children: Option<Vec<LsblkDevice>>,
     }
 
     pub fn list_disks() -> Result<Vec<DiskInfo>> {
         let output = Command::new("lsblk")
-            .args(["-b", "-J", "-o", "NAME,MODEL,SIZE,RM,TYPE"])
+            .args(["-b", "-J", "-o", "NAME,MODEL,SIZE,RM,TYPE,MOUNTPOINTS"])
             .output()
             .map_err(|e| CoreError::Io(e.to_string()))?;
 
@@ -116,15 +122,36 @@ mod platform {
                 .parse::<u64>()
                 .unwrap_or(0);
 
+            let mut mounts = Vec::new();
+            collect_mounts(&dev, &mut mounts);
+            let is_system = mounts.iter().any(|m| m == "/" || m == "/boot" || m == "/boot/efi");
+
             disks.push(DiskInfo {
                 id: format!("/dev/{}", dev.name),
                 model: dev.model.unwrap_or_else(|| "Unknown".to_string()),
                 size_bytes,
                 removable: dev.rm.unwrap_or(false),
+                mountpoints: mounts,
+                is_system,
             });
         }
 
         Ok(disks)
+    }
+
+    fn collect_mounts(dev: &LsblkDevice, mounts: &mut Vec<String>) {
+        if let Some(mps) = &dev.mountpoints {
+            for mp in mps.iter().flatten() {
+                if !mp.is_empty() {
+                    mounts.push(mp.clone());
+                }
+            }
+        }
+        if let Some(children) = &dev.children {
+            for child in children {
+                collect_mounts(child, mounts);
+            }
+        }
     }
 
     pub fn install(req: InstallRequest, sink: &dyn ProgressSink) -> Result<()> {
@@ -143,6 +170,24 @@ mod platform {
         if !req.wipe {
             return Err(CoreError::Validation(
                 "wipe flag must be set for destructive install".to_string(),
+            ));
+        }
+
+        let disks = list_disks()?;
+        let target = disks
+            .iter()
+            .find(|d| d.id == req.device)
+            .ok_or_else(|| CoreError::Validation("device not found".to_string()))?;
+
+        if target.is_system {
+            return Err(CoreError::Validation(
+                "refusing to operate on system disk".to_string(),
+            ));
+        }
+
+        if !target.mountpoints.is_empty() {
+            return Err(CoreError::Validation(
+                "device has mounted partitions; unmount first".to_string(),
             ));
         }
 

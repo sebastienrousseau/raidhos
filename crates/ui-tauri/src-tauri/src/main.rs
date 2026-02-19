@@ -16,6 +16,8 @@ struct DiskInfo {
     model: String,
     size_bytes: u64,
     removable: bool,
+    mountpoints: Vec<String>,
+    is_system: bool,
 }
 
 #[derive(Serialize, Clone)]
@@ -58,6 +60,8 @@ fn list_disks() -> Result<Vec<DiskInfo>, String> {
             model: d.model,
             size_bytes: d.size_bytes,
             removable: d.removable,
+            mountpoints: d.mountpoints,
+            is_system: d.is_system,
         })
         .collect())
 }
