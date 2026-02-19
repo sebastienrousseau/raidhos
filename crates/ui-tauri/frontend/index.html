@@ -169,12 +169,24 @@
         background: var(--surface);
         transition: transform 160ms ease, box-shadow 160ms ease;
         cursor: pointer;
+        position: relative;
       }
 
       .disk.selected {
         border-color: var(--stroke-strong);
         background: var(--surface-strong);
         box-shadow: none;
+      }
+
+      .disk.selected::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: var(--space-1);
+        background: var(--stroke-strong);
+        border-radius: var(--radius-md) 0 0 var(--radius-md);
       }
 
       .disk:hover {
@@ -344,7 +356,7 @@
 
       <section class="card">
         <h2>Boot Entries</h2>
-        <p class="subtitle">Use ↑/↓ to move. Enter to select.</p>
+        <p class="subtitle">Use ↑/↓ to move. Enter to select. <span id="bootStatus"></span></p>
         <div class="disks" id="disks"></div>
       </section>
 
@@ -375,10 +387,13 @@
       const confirmInput = document.getElementById('confirmInput');
       const installBtn = document.getElementById('installBtn');
       const progressEl = document.getElementById('progress');
+      const bootStatus = document.getElementById('bootStatus');
 
       let selectedDisk = null;
       let renderedDisks = [];
       let selectedIndex = -1;
+      let bootTimer = null;
+      let bootRemaining = 0;
 
       function formatBytes(bytes) {
         if (!bytes || bytes === 0) return '0 B';
@@ -392,6 +407,7 @@
         renderedDisks = disks;
         selectedIndex = -1;
         disksEl.innerHTML = '';
+        stopBootTimer();
         if (!disks.length) {
           disksEl.innerHTML = '<div class="disk">No entries detected.</div>';
           return;
@@ -409,6 +425,8 @@
           el.addEventListener('click', () => selectDisk(disk, el));
           disksEl.appendChild(el);
         });
+
+        startBootTimer();
       }
 
       function selectByIndex(index) {
@@ -428,6 +446,7 @@
         Array.from(document.getElementsByClassName('disk')).forEach((d) => d.classList.remove('selected'));
         el.classList.add('selected');
         updateInstallState();
+        stopBootTimer();
       }
 
       function updateInstallState() {
@@ -442,6 +461,37 @@
           renderDisks(disks);
         } catch (err) {
           disksEl.innerHTML = `<div class="disk">${String(err)}</div>`;
+        }
+      }
+
+      function startBootTimer() {
+        if (!renderedDisks.length) return;
+        bootRemaining = 5;
+        updateBootStatus();
+        bootTimer = setInterval(() => {
+          bootRemaining -= 1;
+          updateBootStatus();
+          if (bootRemaining <= 0) {
+            selectByIndex(0);
+            stopBootTimer();
+          }
+        }, 1000);
+      }
+
+      function stopBootTimer() {
+        if (bootTimer) {
+          clearInterval(bootTimer);
+          bootTimer = null;
+        }
+        updateBootStatus();
+      }
+
+      function updateBootStatus() {
+        if (!bootStatus) return;
+        if (bootTimer) {
+          bootStatus.textContent = `Auto-select in ${bootRemaining}s`;
+        } else {
+          bootStatus.textContent = '';
         }
       }
 
