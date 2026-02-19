@@ -335,6 +335,32 @@
         margin-right: var(--space-2);
       }
 
+      .modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        display: none;
+        place-items: center;
+        z-index: 1000;
+      }
+
+      .modal.open {
+        display: grid;
+      }
+
+      .modal-card {
+        background: #1a1a1a;
+        border: 1px solid var(--stroke);
+        padding: var(--space-5);
+        width: min(420px, 90vw);
+      }
+
+      .modal-actions {
+        display: flex;
+        gap: var(--space-3);
+        margin-top: var(--space-4);
+      }
+
       @keyframes spin {
         to {
           transform: rotate(360deg);
@@ -444,6 +470,16 @@
     </div>
 
     <div class="shell app" id="app">
+      <div class="modal" id="resetModal">
+        <div class="modal-card">
+          <strong>Reset all parameters?</strong>
+          <p class="subtitle">This will revert params, initrd, and kernel args for all entries.</p>
+          <div class="modal-actions">
+            <button class="ghost" id="cancelReset">Cancel</button>
+            <button class="primary" id="confirmReset">Reset</button>
+          </div>
+        </div>
+      </div>
       <section class="card boot-config" id="bootConfig">
         <details open>
           <summary>Boot Config</summary>
@@ -464,6 +500,7 @@
         </div>
         <div class="actions">
           <button class="ghost" id="saveConfig">Save Config</button>
+          <span class="subtitle" id="lastSaved"></span>
           <button class="ghost" id="refresh">Refresh</button>
           <button class="primary" id="load">List Disks</button>
         </div>
@@ -525,6 +562,7 @@
       const entriesConfigEl = document.getElementById('entriesConfig');
       const targetsEl = document.getElementById('targets');
       const saveConfigBtn = document.getElementById('saveConfig');
+      const lastSavedEl = document.getElementById('lastSaved');
       const loadBtn = document.getElementById('load');
       const refreshBtn = document.getElementById('refresh');
       const splash = document.getElementById('splash');
@@ -548,6 +586,9 @@
       const configBanner = document.getElementById('configBanner');
       const resetParamsBtn = document.getElementById('resetParams');
       const saveOnInstallOnly = document.getElementById('saveOnInstallOnly');
+      const resetModal = document.getElementById('resetModal');
+      const cancelReset = document.getElementById('cancelReset');
+      const confirmReset = document.getElementById('confirmReset');
 
       let selectedDisk = null;
       let renderedTargets = [];
@@ -848,8 +889,15 @@
         }
         await pushBootConfig();
         await writeConfigToTarget();
+        updateLastSaved();
       });
       if (resetParamsBtn) resetParamsBtn.addEventListener('click', () => {
+        if (resetModal) resetModal.classList.add('open');
+      });
+      if (cancelReset) cancelReset.addEventListener('click', () => {
+        if (resetModal) resetModal.classList.remove('open');
+      });
+      if (confirmReset) confirmReset.addEventListener('click', () => {
         renderedEntries.forEach((entry) => {
           entry.params = 'quiet splash';
           entry.initrd = '';
@@ -858,6 +906,8 @@
         });
         renderConfigEntries(renderedEntries);
         pushBootConfig();
+        updateLastSaved();
+        if (resetModal) resetModal.classList.remove('open');
       });
       document.addEventListener('keydown', (event) => {
         if (!renderedEntries.length) return;
@@ -1091,6 +1141,12 @@
       updateInstallState();
       loadEntries();
       bootSequence();
+
+      function updateLastSaved() {
+        if (!lastSavedEl) return;
+        const now = new Date();
+        lastSavedEl.textContent = `Last saved: ${now.toLocaleTimeString()}`;
+      }
     </script>
   </body>
 </html>
