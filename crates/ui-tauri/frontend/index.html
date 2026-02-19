@@ -8,13 +8,14 @@
       :root {
         --bg: #121212;
         --bg-2: #1a1a1a;
-        --ink: #e7e7e7;
+        --ink: #e0e0e0;
         --muted: #bdbdbd;
         --accent: #705122;
         --accent-2: #6a4f22;
         --accent-3: #705225;
         --card: #171717;
         --surface: #1f1f1f;
+        --surface-strong: #232323;
         --stroke: #8a7a55;
         --stroke-strong: #b5a985;
         --glow: rgba(156, 122, 59, 0.22);
@@ -83,8 +84,8 @@
         width: var(--icon-lg);
         height: var(--icon-lg);
         border-radius: var(--radius-lg);
-        background: linear-gradient(135deg, #705122 0%, #7a5826 45%, #8a6b33 100%);
-        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 10px 30px rgba(138, 107, 51, 0.35);
+        background: #1f1f1f;
+        box-shadow: inset 0 0 0 1px rgba(224, 224, 224, 0.2);
         display: grid;
         place-items: center;
         color: #f0f0f0;
@@ -138,9 +139,9 @@
       }
 
       .primary {
-        background: linear-gradient(135deg, #705122 0%, #7a5826 45%, #8a6b33 100%);
-        color: #fff;
-        box-shadow: 0 16px 40px rgba(112, 81, 34, 0.35);
+        background: #2b2416;
+        color: #f0f0f0;
+        box-shadow: none;
       }
 
       .primary:hover {
@@ -172,7 +173,8 @@
 
       .disk.selected {
         border-color: var(--stroke-strong);
-        box-shadow: 0 12px 30px rgba(181, 169, 133, 0.18);
+        background: var(--surface-strong);
+        box-shadow: none;
       }
 
       .disk:hover {
@@ -275,33 +277,15 @@
       }
 
       .splash-logo {
-        width: var(--icon-xxl);
-        height: var(--icon-xxl);
-        border-radius: var(--icon-xl);
-        background: #121212;
-        box-shadow:
-          0 0 24px rgba(255, 255, 255, 0.18),
-          0 0 80px rgba(181, 169, 133, 0.18);
         display: grid;
         place-items: center;
         position: relative;
-        overflow: hidden;
-      }
-
-      .splash-logo::after {
-        content: "";
-        position: absolute;
-        inset: -40%;
-        background: conic-gradient(from 120deg, transparent 0deg, rgba(255, 255, 255, 0.4) 90deg, transparent 180deg);
-        animation: sweep 2.6s linear infinite;
       }
 
       .splash-glyph {
         font-size: var(--font-xl);
         color: #f0f0f0;
-        text-shadow:
-          0 0 10px rgba(255, 255, 255, 0.45),
-          0 0 22px rgba(181, 169, 133, 0.22);
+        text-shadow: none;
         z-index: 1;
       }
 
@@ -312,32 +296,20 @@
         color: #9aa7b8;
       }
 
-      @keyframes sweep {
-        0% {
-          transform: translateX(-30%) rotate(0deg);
-        }
-        100% {
-          transform: translateX(30%) rotate(360deg);
-        }
-      }
-
       @keyframes pulse {
         0% {
-          transform: scale(1);
-          filter: brightness(1);
+          opacity: 0.85;
         }
         50% {
-          transform: scale(1.03);
-          filter: brightness(1.1);
+          opacity: 1;
         }
         100% {
-          transform: scale(1);
-          filter: brightness(1);
+          opacity: 0.85;
         }
       }
 
       .splash-logo {
-        animation: pulse 2.4s ease-in-out infinite;
+        animation: pulse 2.8s ease-in-out infinite;
       }
 
       .app {
