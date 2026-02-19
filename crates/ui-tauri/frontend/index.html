@@ -71,6 +71,11 @@
         margin: 0;
       }
 
+      h2 {
+        margin: 0 0 8px 0;
+        font-size: 18px;
+      }
+
       .subtitle {
         color: var(--muted);
         margin: 4px 0 0 0;
@@ -171,10 +176,114 @@
       .card {
         animation: fadeUp 380ms ease both;
       }
+
+      /* Boot splash */
+      .splash {
+        position: fixed;
+        inset: 0;
+        background: radial-gradient(900px 700px at 50% 40%, #ffffff 0%, #f2f5fb 55%, #e9edf4 100%);
+        display: grid;
+        place-items: center;
+        z-index: 999;
+        opacity: 1;
+        transition: opacity 420ms ease;
+      }
+
+      .splash.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .splash-logo {
+        width: 140px;
+        height: 140px;
+        border-radius: 44px;
+        background: radial-gradient(120px 120px at 35% 30%, #ffffff, #f7f8fb 60%, #e9edf4 100%);
+        box-shadow:
+          0 30px 80px rgba(15, 23, 42, 0.22),
+          inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+        display: grid;
+        place-items: center;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .splash-logo::after {
+        content: "";
+        position: absolute;
+        inset: -40%;
+        background: conic-gradient(from 120deg, transparent 0deg, rgba(255, 255, 255, 0.85) 90deg, transparent 180deg);
+        animation: sweep 2.6s linear infinite;
+      }
+
+      .splash-glyph {
+        font-size: 80px;
+        color: #0f172a;
+        text-shadow:
+          0 0 8px rgba(255, 255, 255, 0.9),
+          0 0 22px rgba(255, 255, 255, 0.6),
+          0 10px 24px rgba(15, 23, 42, 0.2);
+        z-index: 1;
+      }
+
+      .splash-text {
+        margin-top: 20px;
+        font-size: 13px;
+        letter-spacing: 1.2px;
+        color: #76839a;
+      }
+
+      @keyframes sweep {
+        0% {
+          transform: translateX(-30%) rotate(0deg);
+        }
+        100% {
+          transform: translateX(30%) rotate(360deg);
+        }
+      }
+
+      @keyframes pulse {
+        0% {
+          transform: scale(1);
+          filter: brightness(1);
+        }
+        50% {
+          transform: scale(1.03);
+          filter: brightness(1.1);
+        }
+        100% {
+          transform: scale(1);
+          filter: brightness(1);
+        }
+      }
+
+      .splash-logo {
+        animation: pulse 2.4s ease-in-out infinite;
+      }
+
+      .app {
+        opacity: 0;
+        transform: translateY(6px);
+        transition: opacity 420ms ease, transform 420ms ease;
+      }
+
+      .app.ready {
+        opacity: 1;
+        transform: translateY(0);
+      }
     </style>
   </head>
   <body>
-    <div class="shell">
+    <div class="splash" id="splash">
+      <div>
+        <div class="splash-logo">
+          <div class="splash-glyph">ᚱ</div>
+        </div>
+        <div class="splash-text">RAIDHOS</div>
+      </div>
+    </div>
+
+    <div class="shell app" id="app">
       <header>
         <div class="brand">
           <div class="logo">R</div>
@@ -204,6 +313,8 @@
       const disksEl = document.getElementById('disks');
       const loadBtn = document.getElementById('load');
       const refreshBtn = document.getElementById('refresh');
+      const splash = document.getElementById('splash');
+      const app = document.getElementById('app');
 
       function formatBytes(bytes) {
         if (!bytes || bytes === 0) return '0 B';
@@ -243,8 +354,28 @@
         }
       }
 
+      function bootSequence() {
+        const minBootMs = 1400;
+        const start = Date.now();
+        const finish = () => {
+          const elapsed = Date.now() - start;
+          const wait = Math.max(0, minBootMs - elapsed);
+          setTimeout(() => {
+            splash.classList.add('hidden');
+            app.classList.add('ready');
+          }, wait);
+        };
+
+        if (window.__TAURI__) {
+          finish();
+        } else {
+          setTimeout(finish, 200);
+        }
+      }
+
       loadBtn.addEventListener('click', listDisks);
       refreshBtn.addEventListener('click', listDisks);
+      bootSequence();
     </script>
   </body>
 </html>
