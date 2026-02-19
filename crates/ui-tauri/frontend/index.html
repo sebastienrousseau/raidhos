@@ -104,6 +104,11 @@
         transition: transform 160ms ease, box-shadow 160ms ease;
       }
 
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
       .primary {
         background: var(--accent);
         color: #fff;
@@ -133,6 +138,12 @@
         border: 1px solid rgba(15, 23, 42, 0.08);
         background: rgba(255, 255, 255, 0.72);
         transition: transform 160ms ease, box-shadow 160ms ease;
+        cursor: pointer;
+      }
+
+      .disk.selected {
+        border-color: rgba(13, 59, 102, 0.4);
+        box-shadow: 0 12px 30px rgba(13, 59, 102, 0.18);
       }
 
       .disk:hover {
@@ -160,6 +171,42 @@
       .footer {
         color: var(--muted);
         font-size: 12px;
+      }
+
+      .panel {
+        display: grid;
+        gap: 12px;
+      }
+
+      .confirm {
+        display: grid;
+        gap: 10px;
+        padding: 14px;
+        border-radius: 14px;
+        border: 1px dashed rgba(15, 23, 42, 0.18);
+        background: rgba(255, 255, 255, 0.6);
+      }
+
+      input {
+        width: 100%;
+        border-radius: 10px;
+        padding: 10px 12px;
+        border: 1px solid rgba(15, 23, 42, 0.2);
+        font-size: 14px;
+      }
+
+      .progress {
+        display: grid;
+        gap: 8px;
+      }
+
+      .progress-item {
+        display: flex;
+        justify-content: space-between;
+        background: rgba(15, 23, 42, 0.04);
+        border-radius: 10px;
+        padding: 8px 10px;
+        font-size: 13px;
       }
 
       @keyframes fadeUp {
@@ -304,6 +351,18 @@
         <div class="disks" id="disks"></div>
       </section>
 
+      <section class="card panel">
+        <h2>Install</h2>
+        <p class="subtitle">Dry-run only for now. No changes are made.</p>
+        <div class="confirm">
+          <div><strong>Selected:</strong> <span id="selected">None</span></div>
+          <div><small>Type the device path to confirm (e.g. /dev/sdb).</small></div>
+          <input id="confirmInput" placeholder="/dev/sdX" />
+          <button class="primary" id="installBtn" disabled>Run Dry-Run Install</button>
+        </div>
+        <div class="progress" id="progress"></div>
+      </section>
+
       <section class="card footer">
         Cross-platform core in Rust. UI powered by Tauri.
       </section>
@@ -315,6 +374,12 @@
       const refreshBtn = document.getElementById('refresh');
       const splash = document.getElementById('splash');
       const app = document.getElementById('app');
+      const selectedEl = document.getElementById('selected');
+      const confirmInput = document.getElementById('confirmInput');
+      const installBtn = document.getElementById('installBtn');
+      const progressEl = document.getElementById('progress');
+
+      let selectedDisk = null;
 
       function formatBytes(bytes) {
         if (!bytes || bytes === 0) return '0 B';
@@ -340,8 +405,23 @@
             </div>
             <div class="pill">${disk.removable ? 'Removable' : 'Fixed'}</div>
           `;
+          el.addEventListener('click', () => selectDisk(disk, el));
           disksEl.appendChild(el);
         });
+      }
+
+      function selectDisk(disk, el) {
+        selectedDisk = disk;
+        selectedEl.textContent = `${disk.id} (${formatBytes(disk.size_bytes)})`;
+        confirmInput.value = '';
+        Array.from(document.getElementsByClassName('disk')).forEach((d) => d.classList.remove('selected'));
+        el.classList.add('selected');
+        updateInstallState();
+      }
+
+      function updateInstallState() {
+        const ok = selectedDisk && confirmInput.value.trim() === selectedDisk.id;
+        installBtn.disabled = !ok;
       }
 
       async function listDisks() {
@@ -351,6 +431,34 @@
           renderDisks(disks);
         } catch (err) {
           disksEl.innerHTML = `<div class="disk">${String(err)}</div>`;
+        }
+      }
+
+      function renderProgress(events) {
+        progressEl.innerHTML = '';
+        events.forEach((event) => {
+          const row = document.createElement('div');
+          row.className = 'progress-item';
+          const percent = event.percent !== null && event.percent !== undefined ? `${event.percent}%` : '';
+          row.innerHTML = `<span>${event.phase}: ${event.message}</span><span>${percent}</span>`;
+          progressEl.appendChild(row);
+        });
+      }
+
+      async function runInstall() {
+        if (!selectedDisk) return;
+        progressEl.innerHTML = '';
+        try {
+          const { invoke } = window.__TAURI__.tauri;
+          const events = await invoke('install', {
+            device: selectedDisk.id,
+            payloadVersion: '1.1.10',
+            wipe: true,
+            dryRun: true,
+          });
+          renderProgress(events);
+        } catch (err) {
+          progressEl.innerHTML = `<div class="progress-item">${String(err)}</div>`;
         }
       }
 
@@ -373,8 +481,10 @@
         }
       }
 
+      confirmInput.addEventListener('input', updateInstallState);
       loadBtn.addEventListener('click', listDisks);
       refreshBtn.addEventListener('click', listDisks);
+      installBtn.addEventListener('click', runInstall);
       bootSequence();
     </script>
   </body>

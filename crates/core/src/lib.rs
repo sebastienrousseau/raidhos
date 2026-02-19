@@ -42,6 +42,7 @@ pub struct InstallRequest {
     pub device: String,
     pub payload_version: String,
     pub wipe: bool,
+    pub dry_run: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -59,15 +60,13 @@ pub fn list_disks() -> Result<Vec<DiskInfo>> {
     platform::list_disks()
 }
 
-pub fn install(_req: InstallRequest, _sink: &dyn ProgressSink) -> Result<()> {
-    Err(CoreError::NotImplemented(
-        "install not implemented yet".to_string(),
-    ))
+pub fn install(req: InstallRequest, sink: &dyn ProgressSink) -> Result<()> {
+    platform::install(req, sink)
 }
 
 #[cfg(target_os = "linux")]
 mod platform {
-    use super::{CoreError, DiskInfo, Result};
+    use super::{CoreError, DiskInfo, InstallRequest, ProgressEvent, ProgressSink, Result};
     use serde::Deserialize;
     use std::process::Command;
 
@@ -92,7 +91,7 @@ mod platform {
 
     pub fn list_disks() -> Result<Vec<DiskInfo>> {
         let output = Command::new("lsblk")
-            .args(["-b", "-J", "-o", "NAME,MODEL,SIZE,RM,TYPE"]) 
+            .args(["-b", "-J", "-o", "NAME,MODEL,SIZE,RM,TYPE"])
             .output()
             .map_err(|e| CoreError::Io(e.to_string()))?;
 
@@ -127,26 +126,95 @@ mod platform {
 
         Ok(disks)
     }
+
+    pub fn install(req: InstallRequest, sink: &dyn ProgressSink) -> Result<()> {
+        if !req.device.starts_with("/dev/") {
+            return Err(CoreError::Validation(
+                "device must be an absolute /dev path".to_string(),
+            ));
+        }
+
+        sink.emit(ProgressEvent {
+            phase: "validate".to_string(),
+            message: format!("Validating target {}", req.device),
+            percent: Some(5),
+        });
+
+        if !req.wipe {
+            return Err(CoreError::Validation(
+                "wipe flag must be set for destructive install".to_string(),
+            ));
+        }
+
+        sink.emit(ProgressEvent {
+            phase: "prepare".to_string(),
+            message: "Preparing partition layout".to_string(),
+            percent: Some(20),
+        });
+
+        sink.emit(ProgressEvent {
+            phase: "payload".to_string(),
+            message: format!("Staging Ventoy payload {}", req.payload_version),
+            percent: Some(45),
+        });
+
+        sink.emit(ProgressEvent {
+            phase: "write".to_string(),
+            message: "Writing boot structures".to_string(),
+            percent: Some(70),
+        });
+
+        sink.emit(ProgressEvent {
+            phase: "finalize".to_string(),
+            message: "Final checks".to_string(),
+            percent: Some(90),
+        });
+
+        if req.dry_run {
+            sink.emit(ProgressEvent {
+                phase: "complete".to_string(),
+                message: "Dry-run complete. No changes made.".to_string(),
+                percent: Some(100),
+            });
+            return Ok(());
+        }
+
+        Err(CoreError::NotImplemented(
+            "installer not wired yet; use dry_run".to_string(),
+        ))
+    }
 }
 
 #[cfg(target_os = "macos")]
 mod platform {
-    use super::{CoreError, DiskInfo, Result};
+    use super::{CoreError, DiskInfo, InstallRequest, ProgressSink, Result};
 
     pub fn list_disks() -> Result<Vec<DiskInfo>> {
         Err(CoreError::NotImplemented(
             "macOS disk discovery not implemented yet".to_string(),
         ))
     }
+
+    pub fn install(_req: InstallRequest, _sink: &dyn ProgressSink) -> Result<()> {
+        Err(CoreError::NotImplemented(
+            "macOS installer not implemented yet".to_string(),
+        ))
+    }
 }
 
 #[cfg(target_os = "windows")]
 mod platform {
-    use super::{CoreError, DiskInfo, Result};
+    use super::{CoreError, DiskInfo, InstallRequest, ProgressSink, Result};
 
     pub fn list_disks() -> Result<Vec<DiskInfo>> {
         Err(CoreError::NotImplemented(
             "Windows disk discovery not implemented yet".to_string(),
+        ))
+    }
+
+    pub fn install(_req: InstallRequest, _sink: &dyn ProgressSink) -> Result<()> {
+        Err(CoreError::NotImplemented(
+            "Windows installer not implemented yet".to_string(),
         ))
     }
 }
