@@ -1,0 +1,7 @@
+{
+  "name": "ventoy-payload",
+  "version": "1.1.10",
+  "source": "https://www.ventoy.net",
+  "checksum": "",
+  "notes": "Pin exact payload release and verify checksum before install."
+}

@@ -1,0 +1,19 @@
+{
+  "package": {
+    "productName": "RaidhOS",
+    "version": "0.1.0"
+  },
+  "build": {
+    "distDir": "frontend",
+    "devPath": "frontend"
+  },
+  "tauri": {
+    "windows": [
+      {
+        "title": "RaidhOS",
+        "width": 960,
+        "height": 600
+      }
+    ]
+  }
+}
