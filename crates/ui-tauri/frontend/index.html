@@ -12,8 +12,10 @@
         --accent: #1b3fb3;
         --accent-2: #5a2bd6;
         --accent-3: #096178;
-        --card: rgba(10, 14, 22, 0.92);
-        --stroke: rgba(186, 200, 221, 0.45);
+        --card: #0b111b;
+        --surface: #0a1018;
+        --stroke: #6b7d99;
+        --stroke-strong: #8ea1c5;
         --glow: rgba(30, 79, 214, 0.35);
         --shadow: 0 20px 60px rgba(0, 0, 0, 0.75);
         --space-1: 4px;
@@ -143,7 +145,7 @@
 
       .ghost {
         background: transparent;
-        border: 1px solid rgba(186, 200, 221, 0.6);
+        border: 1px solid var(--stroke);
         color: var(--ink);
       }
 
@@ -158,14 +160,14 @@
         align-items: center;
         padding: var(--space-4) var(--space-4);
         border-radius: var(--radius-md);
-        border: 1px solid rgba(186, 200, 221, 0.35);
-        background: rgba(8, 12, 20, 0.9);
+        border: 1px solid var(--stroke);
+        background: var(--surface);
         transition: transform 160ms ease, box-shadow 160ms ease;
         cursor: pointer;
       }
 
       .disk.selected {
-        border-color: rgba(27, 63, 179, 0.85);
+        border-color: var(--stroke-strong);
         box-shadow: 0 12px 30px rgba(27, 63, 179, 0.4);
       }
 
@@ -184,11 +186,12 @@
 
       .pill {
         padding: var(--space-2) var(--space-3);
-        background: rgba(27, 63, 179, 0.32);
+        background: #23409b;
         color: #e8f0ff;
         border-radius: 999px;
         font-size: var(--font-xs);
         font-weight: 600;
+        border: 1px solid var(--stroke-strong);
       }
 
       .footer {
@@ -206,17 +209,17 @@
         gap: var(--space-3);
         padding: var(--space-4);
         border-radius: var(--radius-md);
-        border: 1px dashed rgba(186, 200, 221, 0.55);
-        background: rgba(8, 12, 20, 0.85);
+        border: 1px dashed var(--stroke);
+        background: var(--surface);
       }
 
       input {
         width: 100%;
         border-radius: var(--radius-md);
         padding: var(--space-3) var(--space-4);
-        border: 1px solid rgba(186, 200, 221, 0.6);
+        border: 1px solid var(--stroke);
         font-size: var(--font-sm);
-        background: rgba(6, 9, 15, 0.9);
+        background: #06090f;
         color: var(--ink);
       }
 
@@ -228,7 +231,8 @@
       .progress-item {
         display: flex;
         justify-content: space-between;
-        background: rgba(186, 200, 221, 0.12);
+        background: #1a2638;
+        border: 1px solid var(--stroke);
         border-radius: var(--radius-md);
         padding: var(--space-2) var(--space-3);
         font-size: var(--font-sm);
