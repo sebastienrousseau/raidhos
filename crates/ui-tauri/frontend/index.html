@@ -377,6 +377,7 @@
           <div class="boot-progress-fill" id="bootProgressFill"></div>
         </div>
         <div class="disks" id="entries"></div>
+        <p class="subtitle" id="entryNote"></p>
       </section>
 
       <section class="card panel">
@@ -410,6 +411,7 @@
       const progressEl = document.getElementById('progress');
       const bootProgress = document.getElementById('bootProgress');
       const bootProgressFill = document.getElementById('bootProgressFill');
+      const entryNote = document.getElementById('entryNote');
 
       let selectedDisk = null;
       let renderedTargets = [];
@@ -434,6 +436,7 @@
         stopBootTimer();
         if (!entries.length) {
           entriesEl.innerHTML = '<div class="disk">No entries detected.</div>';
+          if (entryNote) entryNote.textContent = 'No ISO images found in default paths.';
           return;
         }
         entries.forEach((entry) => {
@@ -443,6 +446,7 @@
             <div>
               <strong>${entry.title}</strong>
               <div><small>${entry.subtitle}</small></div>
+              <div><small>Params: ${entry.params}</small></div>
             </div>
             <div class="pill">${entry.tag}</div>
           `;
@@ -450,6 +454,7 @@
           entriesEl.appendChild(el);
         });
 
+        if (entryNote) entryNote.textContent = 'Entries sourced from ISO files.';
         startBootTimer();
       }
 
@@ -576,6 +581,7 @@
             payloadVersion: '1.1.10',
             wipe: true,
             dryRun: true,
+            allowWrite: false,
           });
           renderProgress(events);
         } catch (err) {
@@ -621,13 +627,24 @@
         }
       });
 
-      const bootEntries = [
-        { title: 'RaidhOS', subtitle: 'Boot from USB media', tag: 'Default' },
-        { title: 'Diagnostics', subtitle: 'Hardware tests and recovery tools', tag: 'Tools' },
-        { title: 'Memory Test', subtitle: 'Quick RAM validation', tag: 'Utility' },
-      ];
+      async function loadEntries() {
+        try {
+          const { invoke } = window.__TAURI__.tauri;
+          const dirs = ['/media', '/mnt', '/home'];
+          const isos = await invoke('scan_isos', { dirs });
+          const entries = isos.map((iso) => ({
+            title: iso.title,
+            subtitle: iso.path,
+            tag: 'ISO',
+            params: iso.params || 'quiet splash',
+          }));
+          renderEntries(entries);
+        } catch (err) {
+          renderEntries([]);
+        }
+      }
 
-      renderEntries(bootEntries);
+      loadEntries();
       bootSequence();
     </script>
   </body>

@@ -45,6 +45,7 @@ pub struct InstallRequest {
     pub payload_version: String,
     pub wipe: bool,
     pub dry_run: bool,
+    pub allow_write: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -52,6 +53,14 @@ pub struct ProgressEvent {
     pub phase: String,
     pub message: String,
     pub percent: Option<u8>,
+}
+
+#[derive(Clone, Debug)]
+pub struct IsoEntry {
+    pub title: String,
+    pub path: String,
+    pub size_bytes: u64,
+    pub params: String,
 }
 
 pub trait ProgressSink {
@@ -66,11 +75,16 @@ pub fn install(req: InstallRequest, sink: &dyn ProgressSink) -> Result<()> {
     platform::install(req, sink)
 }
 
+pub fn scan_isos(dirs: Vec<String>) -> Result<Vec<IsoEntry>> {
+    platform::scan_isos(dirs)
+}
+
 #[cfg(target_os = "linux")]
 mod platform {
     use super::{CoreError, DiskInfo, InstallRequest, ProgressEvent, ProgressSink, Result};
     use serde::Deserialize;
     use std::process::Command;
+    use std::{fs, path::PathBuf};
 
     #[derive(Deserialize)]
     struct LsblkOutput {
@@ -223,10 +237,146 @@ mod platform {
             });
             return Ok(());
         }
+        if !req.allow_write {
+            return Err(CoreError::Validation(
+                "write blocked: set allow_write to proceed".to_string(),
+            ));
+        }
 
-        Err(CoreError::NotImplemented(
-            "installer not wired yet; use dry_run".to_string(),
-        ))
+        sink.emit(ProgressEvent {
+            phase: "partition".to_string(),
+            message: "Creating GPT partitions".to_string(),
+            percent: Some(30),
+        });
+
+        run("parted", &[&req.device, "-s", "mklabel", "gpt"])?;
+        run(
+            "parted",
+            &[
+                &req.device,
+                "-s",
+                "mkpart",
+                "primary",
+                "fat32",
+                "1MiB",
+                "33MiB",
+            ],
+        )?;
+        run("parted", &[&req.device, "-s", "set", "1", "esp", "on"])?;
+        run(
+            "parted",
+            &[
+                &req.device,
+                "-s",
+                "mkpart",
+                "primary",
+                "33MiB",
+                "100%",
+            ],
+        )?;
+        run("parted", &[&req.device, "-s", "print"])?;
+
+        sink.emit(ProgressEvent {
+            phase: "format".to_string(),
+            message: "Formatting partitions".to_string(),
+            percent: Some(60),
+        });
+
+        let part1 = part_path(&req.device, 1);
+        let part2 = part_path(&req.device, 2);
+        run("mkfs.vfat", &["-F", "32", &part1])?;
+
+        if has_cmd("mkfs.exfat") {
+            run("mkfs.exfat", &[&part2])?;
+        } else if has_cmd("mkexfatfs") {
+            run("mkexfatfs", &[&part2])?;
+        } else {
+            return Err(CoreError::Io(
+                "exFAT formatter not found (mkfs.exfat or mkexfatfs)".to_string(),
+            ));
+        }
+
+        sink.emit(ProgressEvent {
+            phase: "complete".to_string(),
+            message: "Install complete. Payload step pending.".to_string(),
+            percent: Some(100),
+        });
+        Ok(())
+    }
+
+    pub fn scan_isos(dirs: Vec<String>) -> Result<Vec<super::IsoEntry>> {
+        let mut results = Vec::new();
+        for dir in dirs {
+            let root = PathBuf::from(dir);
+            if !root.exists() {
+                continue;
+            }
+            let entries = fs::read_dir(&root).map_err(|e| CoreError::Io(e.to_string()))?;
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() {
+                    push_iso(&mut results, &path);
+                } else if path.is_dir() {
+                    if let Ok(subs) = fs::read_dir(&path) {
+                        for sub in subs.flatten() {
+                            let subpath = sub.path();
+                            if subpath.is_file() {
+                                push_iso(&mut results, &subpath);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        results.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+        Ok(results)
+    }
+
+    fn push_iso(results: &mut Vec<super::IsoEntry>, path: &PathBuf) {
+        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+            if ext.eq_ignore_ascii_case("iso") {
+                if let Ok(meta) = fs::metadata(path) {
+                    let title = path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("ISO")
+                        .to_string();
+                    results.push(super::IsoEntry {
+                        title,
+                        path: path.display().to_string(),
+                        size_bytes: meta.len(),
+                        params: "quiet splash".to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    fn run(cmd: &str, args: &[&str]) -> Result<()> {
+        let status = Command::new(cmd)
+            .args(args)
+            .status()
+            .map_err(|e| CoreError::Io(e.to_string()))?;
+        if !status.success() {
+            return Err(CoreError::Io(format!("command failed: {cmd}")));
+        }
+        Ok(())
+    }
+
+    fn has_cmd(cmd: &str) -> bool {
+        Command::new("sh")
+            .args(["-c", &format!("command -v {cmd} >/dev/null 2>&1")])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
+
+    fn part_path(device: &str, idx: u8) -> String {
+        if device.chars().last().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+            format!("{device}p{idx}")
+        } else {
+            format!("{device}{idx}")
+        }
     }
 }
 
@@ -245,6 +395,12 @@ mod platform {
             "macOS installer not implemented yet".to_string(),
         ))
     }
+
+    pub fn scan_isos(_dirs: Vec<String>) -> Result<Vec<super::IsoEntry>> {
+        Err(CoreError::NotImplemented(
+            "macOS ISO scan not implemented yet".to_string(),
+        ))
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -260,6 +416,12 @@ mod platform {
     pub fn install(_req: InstallRequest, _sink: &dyn ProgressSink) -> Result<()> {
         Err(CoreError::NotImplemented(
             "Windows installer not implemented yet".to_string(),
+        ))
+    }
+
+    pub fn scan_isos(_dirs: Vec<String>) -> Result<Vec<super::IsoEntry>> {
+        Err(CoreError::NotImplemented(
+            "Windows ISO scan not implemented yet".to_string(),
         ))
     }
 }

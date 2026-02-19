@@ -27,6 +27,14 @@ struct ProgressEvent {
     percent: Option<u8>,
 }
 
+#[derive(Serialize)]
+struct IsoEntry {
+    title: String,
+    path: String,
+    size_bytes: u64,
+    params: String,
+}
+
 struct VecSink<'a> {
     events: &'a Mutex<Vec<ProgressEvent>>,
 }
@@ -48,6 +56,7 @@ struct InstallArgs {
     payload_version: String,
     wipe: bool,
     dry_run: bool,
+    allow_write: bool,
 }
 
 #[tauri::command]
@@ -82,6 +91,7 @@ fn install(args: InstallArgs, state: State<'_, AppState>) -> Result<Vec<Progress
         payload_version: args.payload_version,
         wipe: args.wipe,
         dry_run: args.dry_run,
+        allow_write: args.allow_write,
     };
 
     core::install(req, &sink).map_err(|e| e.to_string())?;
@@ -90,10 +100,24 @@ fn install(args: InstallArgs, state: State<'_, AppState>) -> Result<Vec<Progress
     Ok(guard.clone())
 }
 
+#[tauri::command]
+fn scan_isos(dirs: Vec<String>) -> Result<Vec<IsoEntry>, String> {
+    let entries = core::scan_isos(dirs).map_err(|e| e.to_string())?;
+    Ok(entries
+        .into_iter()
+        .map(|e| IsoEntry {
+            title: e.title,
+            path: e.path,
+            size_bytes: e.size_bytes,
+            params: e.params,
+        })
+        .collect())
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![list_disks, install])
+        .invoke_handler(tauri::generate_handler![list_disks, install, scan_isos])
         .run(tauri::generate_context!())
         .expect("error while running RaidhOS");
 }
