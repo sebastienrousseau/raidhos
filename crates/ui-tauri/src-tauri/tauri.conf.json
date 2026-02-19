@@ -1,0 +1,25 @@
+{
+  "build": {
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "",
+    "devPath": "../frontend",
+    "distDir": "../frontend"
+  },
+  "package": {
+    "productName": "RaidhOS",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "windows": [
+      {
+        "title": "RaidhOS",
+        "width": 980,
+        "height": 640,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
+}

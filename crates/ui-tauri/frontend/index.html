@@ -4,11 +4,74 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>RaidhOS</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "SF Pro Text", "Segoe UI", "Inter", system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 32px;
+        background: radial-gradient(1200px 800px at 20% 10%, #f6f8fb, #eef1f6 60%, #e9edf4 100%);
+        color: #1b1e26;
+      }
+      .card {
+        max-width: 720px;
+        background: #ffffffcc;
+        backdrop-filter: blur(12px);
+        border: 1px solid #e6eaf2;
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 12px 40px rgba(30, 35, 60, 0.08);
+      }
+      h1 {
+        margin: 0 0 8px 0;
+        font-size: 28px;
+      }
+      p {
+        margin: 0 0 16px 0;
+        color: #4a5160;
+      }
+      button {
+        background: #111827;
+        color: #fff;
+        border: 0;
+        padding: 10px 14px;
+        border-radius: 10px;
+        cursor: pointer;
+      }
+      pre {
+        background: #0f172a;
+        color: #e2e8f0;
+        padding: 12px;
+        border-radius: 10px;
+        overflow: auto;
+      }
+    </style>
   </head>
   <body>
-    <main>
+    <div class="card">
       <h1>RaidhOS</h1>
-      <p>UI scaffold placeholder. Tauri integration coming next.</p>
-    </main>
+      <p>UI scaffold placeholder. Tauri wiring is live and will call Rust commands next.</p>
+      <button id="load">List Disks</button>
+      <pre id="out">(output)</pre>
+    </div>
+
+    <script>
+      const out = document.getElementById('out');
+      const btn = document.getElementById('load');
+
+      async function listDisks() {
+        try {
+          const { invoke } = window.__TAURI__.tauri;
+          const disks = await invoke('list_disks');
+          out.textContent = JSON.stringify(disks, null, 2);
+        } catch (err) {
+          out.textContent = String(err);
+        }
+      }
+
+      btn.addEventListener('click', listDisks);
+    </script>
   </body>
 </html>
