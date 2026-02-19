@@ -150,10 +150,29 @@ fn write_boot_config_to_device(mount_path: String, config: BootConfig) -> Result
     Ok(())
 }
 
+#[tauri::command]
+fn get_payload_version() -> Result<String, String> {
+    let candidates = [
+        "payload/manifest.json",
+        "../payload/manifest.json",
+        "../../payload/manifest.json",
+    ];
+    for path in candidates {
+        if let Ok(body) = std::fs::read(path) {
+            if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&body) {
+                if let Some(v) = value.get("version").and_then(|v| v.as_str()) {
+                    return Ok(v.to_string());
+                }
+            }
+        }
+    }
+    Ok("unknown".to_string())
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![list_disks, install, scan_isos, save_boot_config, write_boot_config_to_device])
+        .invoke_handler(tauri::generate_handler![list_disks, install, scan_isos, save_boot_config, write_boot_config_to_device, get_payload_version])
         .run(tauri::generate_context!())
         .expect("error while running RaidhOS");
 }

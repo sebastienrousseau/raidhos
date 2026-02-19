@@ -299,6 +299,48 @@
         font-size: var(--font-sm);
       }
 
+      .plan {
+        display: grid;
+        gap: var(--space-2);
+        font-size: var(--font-sm);
+        color: var(--muted);
+      }
+
+      .plan-item {
+        border: 1px solid var(--stroke);
+        padding: var(--space-2) var(--space-3);
+        background: #1d1d1d;
+      }
+
+      .banner {
+        display: none;
+        border: 1px solid var(--stroke);
+        padding: var(--space-2) var(--space-3);
+        background: #1a1a1a;
+        font-size: var(--font-sm);
+        color: var(--ink);
+      }
+
+      .banner.error {
+        border-color: #7a7a7a;
+      }
+
+      .spinner {
+        display: inline-block;
+        width: var(--space-3);
+        height: var(--space-3);
+        border: 2px solid var(--stroke);
+        border-top-color: transparent;
+        animation: spin 700ms linear infinite;
+        margin-right: var(--space-2);
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
       .boot-progress {
         height: var(--space-1);
         background: #1a1a1a;
@@ -425,12 +467,16 @@
 
       <section class="card panel">
         <h2>Install</h2>
-        <p class="subtitle">Dry-run only for now. No changes are made.</p>
+        <p class="subtitle">Dry-run only for now. No changes are made. <span id="payloadLabel"></span></p>
         <div class="confirm">
           <div><strong>ISO scan paths</strong></div>
           <div><small>Comma-separated directories (default: /media, /mnt, /home)</small></div>
           <input id="scanPaths" placeholder="/media,/mnt,/home" />
           <button class="ghost" id="scanBtn">Rescan ISOs</button>
+        </div>
+        <div class="confirm">
+          <div><strong>Install plan</strong></div>
+          <div class="plan" id="installPlan"></div>
         </div>
         <div class="disks" id="targets"></div>
         <div class="confirm">
@@ -451,6 +497,7 @@
           </div>
           <button class="primary" id="installBtn" disabled>Run Dry-Run Install</button>
         </div>
+        <div class="banner" id="configBanner"></div>
         <div class="progress" id="progress"></div>
       </section>
 
@@ -480,6 +527,9 @@
       const bootProgressFill = document.getElementById('bootProgressFill');
       const entryNote = document.getElementById('entryNote');
       const defaultLabel = document.getElementById('defaultLabel');
+      const planEl = document.getElementById('installPlan');
+      const payloadLabel = document.getElementById('payloadLabel');
+      const configBanner = document.getElementById('configBanner');
 
       let selectedDisk = null;
       let renderedTargets = [];
@@ -643,6 +693,7 @@
         if (enableWrite && enableWrite.checked && !allowWriteOk) {
           installBtn.disabled = true;
         }
+        updateInstallPlan();
       }
 
       async function listDisks() {
@@ -786,6 +837,44 @@
         defaultLabel.textContent = entry ? `Default: ${entry.title}` : '';
       }
 
+      function showBanner(message, isError, isLoading) {
+        if (!configBanner) return;
+        configBanner.style.display = 'block';
+        configBanner.className = isError ? 'banner error' : 'banner';
+        if (isLoading) {
+          configBanner.innerHTML = `<span class="spinner"></span>${message}`;
+        } else {
+          configBanner.textContent = message;
+        }
+      }
+
+      function updateInstallPlan() {
+        if (!planEl) return;
+        const steps = [];
+        steps.push('Validate target and confirmations');
+        steps.push('Create GPT and partitions');
+        steps.push('Format EFI + data partitions');
+        steps.push('Copy payload (if RAIDHOS_PAYLOAD_DIR set)');
+        steps.push('Write boot config to target');
+        if (enableWrite && enableWrite.checked) {
+          steps.push('Actual write enabled');
+        } else {
+          steps.push('Dry-run mode');
+        }
+        planEl.innerHTML = steps.map((s) => `<div class="plan-item">${s}</div>`).join('');
+      }
+
+      async function loadPayloadVersion() {
+        if (!payloadLabel) return;
+        try {
+          const { invoke } = window.__TAURI__.tauri;
+          const version = await invoke('get_payload_version');
+          payloadLabel.textContent = `Payload: ${version}`;
+        } catch (_err) {
+          payloadLabel.textContent = 'Payload: unknown';
+        }
+      }
+
       function parseScanDirs() {
         const raw = (scanPathsInput && scanPathsInput.value) ? scanPathsInput.value : '';
         const defaults = ['/media', '/mnt', '/home'];
@@ -894,6 +983,7 @@
         const mount = selectedDisk.mountpoints && selectedDisk.mountpoints.length ? selectedDisk.mountpoints[0] : null;
         if (!mount) return;
         try {
+          showBanner('Writing config to target...', false, true);
           const { invoke } = window.__TAURI__.tauri;
           const defaultEntry = localStorage.getItem('raidhos_default_entry');
           const payload = {
@@ -907,7 +997,9 @@
             })),
           };
           await invoke('write_boot_config_to_device', { mountPath: mount, config: payload });
+          showBanner('Config written to target.', false, false);
         } catch (_err) {
+          showBanner('Failed to write config to target.', true, false);
         }
       }
 
@@ -928,6 +1020,8 @@
       if (enableWrite) enableWrite.addEventListener('change', persistState);
 
       restoreState();
+      updateInstallPlan();
+      loadPayloadVersion();
       loadCachedEntries();
       updateInstallState();
       loadEntries();
