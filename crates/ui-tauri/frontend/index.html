@@ -27,6 +27,11 @@
         --radius-sm: var(--space-2);
         --radius-md: var(--space-4);
         --radius-lg: var(--space-5);
+        --icon-sm: var(--space-4);
+        --icon-md: var(--space-5);
+        --icon-lg: var(--space-6);
+        --icon-xl: var(--space-7);
+        --icon-xxl: var(--space-8);
         --font-xs: 12px;
         --font-sm: 13px;
         --font-md: 16px;
@@ -69,8 +74,8 @@
       }
 
       .logo {
-        width: var(--space-6);
-        height: var(--space-6);
+        width: var(--icon-lg);
+        height: var(--icon-lg);
         border-radius: var(--radius-lg);
         background: linear-gradient(135deg, #1b3fb3 0%, #3040d6 45%, #5a2bd6 100%);
         box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28), 0 10px 30px rgba(27, 63, 179, 0.45);
@@ -114,6 +119,7 @@
         border: 0;
         border-radius: var(--radius-md);
         padding: var(--space-3) var(--space-4);
+        min-height: var(--space-5);
         font-weight: 600;
         cursor: pointer;
         transition: transform 160ms ease, box-shadow 160ms ease;
@@ -260,9 +266,9 @@
       }
 
       .splash-logo {
-        width: var(--space-8);
-        height: var(--space-8);
-        border-radius: var(--space-7);
+        width: var(--icon-xxl);
+        height: var(--icon-xxl);
+        border-radius: var(--icon-xl);
         background: radial-gradient(120px 120px at 35% 30%, #ffffff, #f2f4f8 60%, #dfe6f2 100%);
         box-shadow:
           0 0 40px rgba(255, 255, 255, 0.25),
