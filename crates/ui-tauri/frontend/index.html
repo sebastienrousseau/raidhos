@@ -6,17 +6,18 @@
     <title>RaidhOS</title>
     <style>
       :root {
-        --bg: #000000;
-        --ink: #f2f6ff;
-        --muted: #b8c4d6;
-        --accent: #1b3fb3;
-        --accent-2: #5a2bd6;
-        --accent-3: #096178;
-        --card: #0b111b;
-        --surface: #0a1018;
-        --stroke: #6b7d99;
-        --stroke-strong: #8ea1c5;
-        --glow: rgba(30, 79, 214, 0.35);
+        --bg: #121212;
+        --bg-2: #1a1a1a;
+        --ink: #e7e7e7;
+        --muted: #bdbdbd;
+        --accent: #705122;
+        --accent-2: #6a4f22;
+        --accent-3: #705225;
+        --card: #171717;
+        --surface: #1f1f1f;
+        --stroke: #8a7a55;
+        --stroke-strong: #b5a985;
+        --glow: rgba(156, 122, 59, 0.22);
         --shadow: 0 20px 60px rgba(0, 0, 0, 0.75);
         --space-1: 4px;
         --space-2: 6px;
@@ -50,11 +51,13 @@
         min-height: 100vh;
         display: grid;
         place-items: center;
-        background: var(--bg);
+        background: radial-gradient(1200px 800px at 25% 10%, var(--bg-2), var(--bg) 60%);
         color: var(--ink);
         font-family: "Avenir Next", "SF Pro Display", "Segoe UI Variable", "Noto Sans", "Ubuntu", sans-serif;
-        letter-spacing: 0.2px;
+        letter-spacing: 0.4px;
+        line-height: 1.6;
         font-size: var(--font-sm);
+        font-weight: 500;
       }
 
       .shell {
@@ -80,13 +83,13 @@
         width: var(--icon-lg);
         height: var(--icon-lg);
         border-radius: var(--radius-lg);
-        background: linear-gradient(135deg, #1b3fb3 0%, #3040d6 45%, #5a2bd6 100%);
-        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28), 0 10px 30px rgba(27, 63, 179, 0.45);
+        background: linear-gradient(135deg, #705122 0%, #7a5826 45%, #8a6b33 100%);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 10px 30px rgba(138, 107, 51, 0.35);
         display: grid;
         place-items: center;
-        color: #fff;
-        font-weight: 600;
-        letter-spacing: 1px;
+        color: #f0f0f0;
+        font-weight: 700;
+        letter-spacing: 1.2px;
       }
 
       h1 {
@@ -97,6 +100,7 @@
       h2 {
         margin: 0 0 var(--space-2) 0;
         font-size: var(--font-md);
+        font-weight: 600;
       }
 
       .subtitle {
@@ -134,9 +138,9 @@
       }
 
       .primary {
-        background: linear-gradient(135deg, #1b3fb3 0%, #3040d6 45%, #5a2bd6 100%);
+        background: linear-gradient(135deg, #705122 0%, #7a5826 45%, #8a6b33 100%);
         color: #fff;
-        box-shadow: 0 16px 40px rgba(27, 63, 179, 0.5);
+        box-shadow: 0 16px 40px rgba(112, 81, 34, 0.35);
       }
 
       .primary:hover {
@@ -168,7 +172,7 @@
 
       .disk.selected {
         border-color: var(--stroke-strong);
-        box-shadow: 0 12px 30px rgba(27, 63, 179, 0.4);
+        box-shadow: 0 12px 30px rgba(181, 169, 133, 0.18);
       }
 
       .disk:hover {
@@ -186,8 +190,8 @@
 
       .pill {
         padding: var(--space-2) var(--space-3);
-        background: #23409b;
-        color: #e8f0ff;
+        background: #2b2416;
+        color: #eaeaea;
         border-radius: 999px;
         font-size: var(--font-xs);
         font-weight: 600;
@@ -219,7 +223,7 @@
         padding: var(--space-3) var(--space-4);
         border: 1px solid var(--stroke);
         font-size: var(--font-sm);
-        background: #06090f;
+        background: #141414;
         color: var(--ink);
       }
 
@@ -231,7 +235,7 @@
       .progress-item {
         display: flex;
         justify-content: space-between;
-        background: #1a2638;
+        background: #221c12;
         border: 1px solid var(--stroke);
         border-radius: var(--radius-md);
         padding: var(--space-2) var(--space-3);
@@ -257,7 +261,7 @@
       .splash {
         position: fixed;
         inset: 0;
-        background: #000000;
+        background: #121212;
         display: grid;
         place-items: center;
         z-index: 999;
@@ -274,11 +278,10 @@
         width: var(--icon-xxl);
         height: var(--icon-xxl);
         border-radius: var(--icon-xl);
-        background: radial-gradient(120px 120px at 35% 30%, #ffffff, #f2f4f8 60%, #dfe6f2 100%);
+        background: #121212;
         box-shadow:
-          0 0 40px rgba(255, 255, 255, 0.25),
-          0 0 120px rgba(27, 63, 179, 0.25),
-          0 0 200px rgba(90, 43, 214, 0.18);
+          0 0 24px rgba(255, 255, 255, 0.18),
+          0 0 80px rgba(181, 169, 133, 0.18);
         display: grid;
         place-items: center;
         position: relative;
@@ -289,17 +292,16 @@
         content: "";
         position: absolute;
         inset: -40%;
-        background: conic-gradient(from 120deg, transparent 0deg, rgba(255, 255, 255, 0.8) 90deg, transparent 180deg);
+        background: conic-gradient(from 120deg, transparent 0deg, rgba(255, 255, 255, 0.4) 90deg, transparent 180deg);
         animation: sweep 2.6s linear infinite;
       }
 
       .splash-glyph {
         font-size: var(--font-xl);
-        color: #0b0f17;
+        color: #f0f0f0;
         text-shadow:
-          0 0 12px rgba(255, 255, 255, 0.9),
-          0 0 28px rgba(27, 63, 179, 0.55),
-          0 0 36px rgba(90, 43, 214, 0.35);
+          0 0 10px rgba(255, 255, 255, 0.45),
+          0 0 22px rgba(181, 169, 133, 0.22);
         z-index: 1;
       }
 
@@ -352,22 +354,15 @@
   </head>
   <body>
     <div class="splash" id="splash">
-      <div>
-        <div class="splash-logo">
-          <div class="splash-glyph">ᚱ</div>
-        </div>
-        <div class="splash-text">RAIDHOS</div>
+      <div class="splash-logo">
+        <div class="splash-glyph">ᚱ</div>
       </div>
     </div>
 
     <div class="shell app" id="app">
       <header>
         <div class="brand">
-          <div class="logo">R</div>
-          <div>
-            <h1>RaidhOS</h1>
-            <p class="subtitle">Sleek Ventoy-style USB creator</p>
-          </div>
+          <div class="logo">ᚱ</div>
         </div>
         <div class="actions">
           <button class="ghost" id="refresh">Refresh</button>
