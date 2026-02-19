@@ -591,6 +591,8 @@
       const confirmReset = document.getElementById('confirmReset');
 
       let selectedDisk = null;
+      let selectedEspMount = null;
+      let selectedDataMount = null;
       let renderedTargets = [];
       let renderedEntries = [];
       let selectedIndex = -1;
@@ -796,6 +798,7 @@
         confirmInput.value = '';
         Array.from(targetsEl.children).forEach((d) => d.classList.remove('selected'));
         el.classList.add('selected');
+        loadPartitions(disk.id);
         updateInstallState();
       }
 
@@ -828,6 +831,27 @@
         } catch (err) {
           targetsEl.innerHTML = `<div class="disk">${String(err)}</div>`;
         }
+      }
+
+      async function loadPartitions(device) {
+        selectedEspMount = null;
+        selectedDataMount = null;
+        try {
+          const { invoke } = window.__TAURI__.tauri;
+          const parts = await invoke('list_partitions', { device });
+          parts.forEach((p) => {
+            const mounts = p.mountpoints || [];
+            if (!mounts.length) return;
+            if (p.label === 'RAIDHOS_EFI' || p.fstype === 'vfat') {
+              selectedEspMount = mounts[0];
+            }
+            if (p.label === 'RAIDHOS' || p.fstype === 'exfat') {
+              selectedDataMount = mounts[0];
+            }
+          });
+        } catch (_err) {
+        }
+        updateInstallPlan();
       }
 
       function startBootTimer() {
@@ -890,7 +914,9 @@
           });
           renderProgress(events);
           if (enableWrite && enableWrite.checked) {
+            await copyIsosToData();
             await writeConfigToTarget();
+            await writeGrubCfgToEsp();
             progressEl.innerHTML += '<div class="progress-item">config: written to target</div>';
           }
         } catch (err) {
@@ -930,8 +956,10 @@
           showBanner('Save on install only is enabled.', false, false);
           return;
         }
+        await copyIsosToData();
         await pushBootConfig();
         await writeConfigToTarget();
+        await writeGrubCfgToEsp();
         updateLastSaved();
       });
       if (resetParamsBtn) resetParamsBtn.addEventListener('click', () => {
@@ -984,6 +1012,31 @@
         defaultLabel.textContent = entry ? `Default: ${entry.title}` : '';
       }
 
+      function mapEntryPath(entry) {
+        const src = entry.subtitle || entry.path || '';
+        const name = src.split('/').pop();
+        if (!name) return '/boot/isos/unknown.iso';
+        return `/boot/isos/${name}`;
+      }
+
+      async function copyIsosToData() {
+        if (!selectedDataMount) {
+          showBanner('Data partition not mounted. Cannot copy ISOs.', true, false);
+          return;
+        }
+        const sources = renderedEntries.map((entry) => entry.subtitle || entry.path).filter(Boolean);
+        if (!sources.length) return;
+        try {
+          const { invoke } = window.__TAURI__.tauri;
+          await invoke('copy_isos_to_data', { mountPath: selectedDataMount, sources });
+          renderedEntries.forEach((entry) => {
+            entry.path = mapEntryPath(entry);
+          });
+        } catch (_err) {
+          showBanner('Failed to copy ISO files to target.', true, false);
+        }
+      }
+
       function showBanner(message, isError, isLoading) {
         if (!configBanner) return;
         configBanner.style.display = 'block';
@@ -1006,10 +1059,14 @@
         steps.push('Format EFI + data partitions');
         steps.push('Copy payload (if RAIDHOS_PAYLOAD_DIR set)');
         steps.push('Write boot config to target');
+        steps.push('Write grub.cfg to ESP');
         if (enableWrite && enableWrite.checked) {
           steps.push('Actual write enabled');
         } else {
           steps.push('Dry-run mode');
+        }
+        if (selectedDisk && !selectedEspMount) {
+          steps.push('ESP not mounted (grub.cfg will be skipped)');
         }
         planEl.innerHTML = steps.map((s) => `<div class="plan-item">${s}</div>`).join('');
       }
@@ -1121,7 +1178,7 @@
             defaultEntry: defaultEntry || null,
             entries: renderedEntries.map((entry) => ({
               title: entry.title,
-              path: entry.subtitle || entry.path,
+              path: entry.path || mapEntryPath(entry),
               params: entry.params || '',
               initrd: entry.initrd || '',
               kargs: entry.kargs || '',
@@ -1134,8 +1191,11 @@
 
       async function writeConfigToTarget() {
         if (!selectedDisk) return;
-        const mount = selectedDisk.mountpoints && selectedDisk.mountpoints.length ? selectedDisk.mountpoints[0] : null;
-        if (!mount) return;
+        const mount = selectedDataMount || (selectedDisk.mountpoints && selectedDisk.mountpoints.length ? selectedDisk.mountpoints[0] : null);
+        if (!mount) {
+          showBanner('Data partition not mounted. Cannot write config.', true, false);
+          return;
+        }
         try {
           showBanner('Writing config to target...', false, true);
           const { invoke } = window.__TAURI__.tauri;
@@ -1154,6 +1214,30 @@
           showBanner('Config written to target.', false, false);
         } catch (_err) {
           showBanner('Failed to write config to target.', true, false);
+        }
+      }
+
+      async function writeGrubCfgToEsp() {
+        if (!selectedEspMount) {
+          showBanner('ESP not mounted. Cannot write grub.cfg.', true, false);
+          return;
+        }
+        try {
+          const { invoke } = window.__TAURI__.tauri;
+          const defaultEntry = localStorage.getItem('raidhos_default_entry');
+          const payload = {
+            defaultEntry: defaultEntry || null,
+            entries: renderedEntries.map((entry) => ({
+              title: entry.title,
+              path: entry.path || mapEntryPath(entry),
+              params: entry.params || '',
+              initrd: entry.initrd || '',
+              kargs: entry.kargs || '',
+            })),
+          };
+          await invoke('write_grub_cfg_to_esp', { espMount: selectedEspMount, config: payload, dataLabel: 'DATA' });
+        } catch (_err) {
+          showBanner('Failed to write grub.cfg to ESP.', true, false);
         }
       }
 

@@ -40,6 +40,14 @@ pub struct DiskInfo {
 }
 
 #[derive(Clone, Debug)]
+pub struct PartitionInfo {
+    pub id: String,
+    pub label: String,
+    pub fstype: String,
+    pub mountpoints: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
 pub struct InstallRequest {
     pub device: String,
     pub payload_version: String,
@@ -79,9 +87,13 @@ pub fn scan_isos(dirs: Vec<String>) -> Result<Vec<IsoEntry>> {
     platform::scan_isos(dirs)
 }
 
+pub fn list_partitions(device: String) -> Result<Vec<PartitionInfo>> {
+    platform::list_partitions(device)
+}
+
 #[cfg(target_os = "linux")]
 mod platform {
-    use super::{CoreError, DiskInfo, InstallRequest, ProgressEvent, ProgressSink, Result};
+    use super::{CoreError, DiskInfo, InstallRequest, PartitionInfo, ProgressEvent, ProgressSink, Result};
     use serde::Deserialize;
     use std::process::Command;
     use std::{fs, path::PathBuf};
@@ -107,6 +119,12 @@ mod platform {
         mountpoints: Option<Vec<Option<String>>>,
         #[serde(default)]
         children: Option<Vec<LsblkDevice>>,
+        #[serde(default)]
+        label: Option<String>,
+        #[serde(default)]
+        fstype: Option<String>,
+        #[serde(default)]
+        pkname: Option<String>,
     }
 
     pub fn list_disks() -> Result<Vec<DiskInfo>> {
@@ -164,6 +182,50 @@ mod platform {
         if let Some(children) = &dev.children {
             for child in children {
                 collect_mounts(child, mounts);
+            }
+        }
+    }
+
+    pub fn list_partitions(device: String) -> Result<Vec<PartitionInfo>> {
+        let output = Command::new("lsblk")
+            .args(["-b", "-J", "-o", "NAME,TYPE,LABEL,FSTYPE,MOUNTPOINTS,PKNAME"])
+            .output()
+            .map_err(|e| CoreError::Io(e.to_string()))?;
+        if !output.status.success() {
+            return Err(CoreError::Io("lsblk failed".to_string()));
+        }
+        let parsed: LsblkOutput = serde_json::from_slice(&output.stdout)
+            .map_err(|e| CoreError::Parse(e.to_string()))?;
+        let dev_name = device.trim_start_matches("/dev/").to_string();
+        let mut parts = Vec::new();
+        for dev in parsed.blockdevices {
+            collect_parts(&dev, &dev_name, &mut parts);
+        }
+        Ok(parts)
+    }
+
+    fn collect_parts(dev: &LsblkDevice, parent: &str, parts: &mut Vec<PartitionInfo>) {
+        if dev.type_field.as_deref() == Some("part") {
+            if dev.pkname.as_deref() == Some(parent) {
+                let mut mounts = Vec::new();
+                if let Some(mps) = &dev.mountpoints {
+                    for mp in mps.iter().flatten() {
+                        if !mp.is_empty() {
+                            mounts.push(mp.clone());
+                        }
+                    }
+                }
+                parts.push(PartitionInfo {
+                    id: format!("/dev/{}", dev.name),
+                    label: dev.label.clone().unwrap_or_default(),
+                    fstype: dev.fstype.clone().unwrap_or_default(),
+                    mountpoints: mounts,
+                });
+            }
+        }
+        if let Some(children) = &dev.children {
+            for child in children {
+                collect_parts(child, parent, parts);
             }
         }
     }
@@ -284,12 +346,18 @@ mod platform {
 
         let part1 = part_path(&req.device, 1);
         let part2 = part_path(&req.device, 2);
-        run("mkfs.vfat", &["-F", "32", &part1])?;
+        run("mkfs.vfat", &["-F", "32", "-n", "RAIDHOS_EFI", &part1])?;
 
         if has_cmd("mkfs.exfat") {
-            run("mkfs.exfat", &[&part2])?;
+            if run("mkfs.exfat", &["-n", "DATA", &part2]).is_err() {
+                run("mkfs.exfat", &[&part2])?;
+                let _ = run("exfatlabel", &[&part2, "DATA"]);
+            }
         } else if has_cmd("mkexfatfs") {
-            run("mkexfatfs", &[&part2])?;
+            if run("mkexfatfs", &["-n", "DATA", &part2]).is_err() {
+                run("mkexfatfs", &[&part2])?;
+                let _ = run("exfatlabel", &[&part2, "DATA"]);
+            }
         } else {
             return Err(CoreError::Io(
                 "exFAT formatter not found (mkfs.exfat or mkexfatfs)".to_string(),
