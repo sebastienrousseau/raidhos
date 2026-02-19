@@ -383,11 +383,23 @@
       <section class="card panel">
         <h2>Install</h2>
         <p class="subtitle">Dry-run only for now. No changes are made.</p>
+        <div class="confirm">
+          <div><strong>ISO scan paths</strong></div>
+          <div><small>Comma-separated directories (default: /media, /mnt, /home)</small></div>
+          <input id="scanPaths" placeholder="/media,/mnt,/home" />
+          <button class="ghost" id="scanBtn">Rescan ISOs</button>
+        </div>
         <div class="disks" id="targets"></div>
         <div class="confirm">
           <div><strong>Selected:</strong> <span id="selected">None</span></div>
           <div><small>Type the device path to confirm (e.g. /dev/sdb).</small></div>
           <input id="confirmInput" placeholder="/dev/sdX" />
+          <div class="confirm">
+            <label>
+              <input type="checkbox" id="acceptWrite" />
+              I understand this will erase the selected device.
+            </label>
+          </div>
           <button class="primary" id="installBtn" disabled>Run Dry-Run Install</button>
         </div>
         <div class="progress" id="progress"></div>
@@ -407,6 +419,9 @@
       const app = document.getElementById('app');
       const selectedEl = document.getElementById('selected');
       const confirmInput = document.getElementById('confirmInput');
+      const acceptWrite = document.getElementById('acceptWrite');
+      const scanPathsInput = document.getElementById('scanPaths');
+      const scanBtn = document.getElementById('scanBtn');
       const installBtn = document.getElementById('installBtn');
       const progressEl = document.getElementById('progress');
       const bootProgress = document.getElementById('bootProgress');
@@ -512,7 +527,11 @@
       }
 
       function updateInstallState() {
-        const ok = selectedDisk && !selectedDisk.is_system && confirmInput.value.trim() === selectedDisk.id;
+        const ok = selectedDisk
+          && !selectedDisk.is_system
+          && confirmInput.value.trim() === selectedDisk.id
+          && acceptWrite
+          && acceptWrite.checked;
         installBtn.disabled = !ok;
       }
 
@@ -581,7 +600,7 @@
             payloadVersion: '1.1.10',
             wipe: true,
             dryRun: true,
-            allowWrite: false,
+            allowWrite: acceptWrite ? acceptWrite.checked : false,
           });
           renderProgress(events);
         } catch (err) {
@@ -609,9 +628,11 @@
       }
 
       confirmInput.addEventListener('input', updateInstallState);
+      if (acceptWrite) acceptWrite.addEventListener('change', updateInstallState);
       loadBtn.addEventListener('click', listDisks);
       refreshBtn.addEventListener('click', listDisks);
       installBtn.addEventListener('click', runInstall);
+      if (scanBtn) scanBtn.addEventListener('click', loadEntries);
       document.addEventListener('keydown', (event) => {
         if (!renderedEntries.length) return;
         if (event.key === 'ArrowDown') {
@@ -627,10 +648,20 @@
         }
       });
 
+      function parseScanDirs() {
+        const raw = (scanPathsInput && scanPathsInput.value) ? scanPathsInput.value : '';
+        const defaults = ['/media', '/mnt', '/home'];
+        if (!raw.trim()) return defaults;
+        return raw
+          .split(',')
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+      }
+
       async function loadEntries() {
         try {
           const { invoke } = window.__TAURI__.tauri;
-          const dirs = ['/media', '/mnt', '/home'];
+          const dirs = parseScanDirs();
           const isos = await invoke('scan_isos', { dirs });
           const entries = isos.map((iso) => ({
             title: iso.title,
