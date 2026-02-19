@@ -444,6 +444,11 @@
     </div>
 
     <div class="shell app" id="app">
+      <section class="card boot-config" id="bootConfig">
+        <h2>Boot Config</h2>
+        <p class="subtitle">Edit boot entries and parameters.</p>
+        <div class="disks" id="entriesConfig"></div>
+      </section>
       <header>
         <div class="brand">
           <div class="logo">ᚱ</div>
@@ -474,7 +479,7 @@
           <input id="scanPaths" placeholder="/media,/mnt,/home" />
           <button class="ghost" id="scanBtn">Rescan ISOs</button>
         </div>
-        <div class="confirm">
+        <div class="confirm" id="planContainer">
           <div><strong>Install plan</strong></div>
           <div class="plan" id="installPlan"></div>
         </div>
@@ -508,6 +513,7 @@
 
     <script>
       const entriesEl = document.getElementById('entries');
+      const entriesConfigEl = document.getElementById('entriesConfig');
       const targetsEl = document.getElementById('targets');
       const saveConfigBtn = document.getElementById('saveConfig');
       const loadBtn = document.getElementById('load');
@@ -528,6 +534,7 @@
       const entryNote = document.getElementById('entryNote');
       const defaultLabel = document.getElementById('defaultLabel');
       const planEl = document.getElementById('installPlan');
+      const planContainer = document.getElementById('planContainer');
       const payloadLabel = document.getElementById('payloadLabel');
       const configBanner = document.getElementById('configBanner');
 
@@ -551,12 +558,39 @@
         renderedEntries = entries;
         selectedIndex = -1;
         entriesEl.innerHTML = '';
+        if (entriesConfigEl) entriesConfigEl.innerHTML = '';
         stopBootTimer();
         if (!entries.length) {
           entriesEl.innerHTML = '<div class="disk">No entries detected.</div>';
           if (entryNote) entryNote.textContent = 'No ISO images found in default paths.';
           return;
         }
+        entries.forEach((entry) => {
+          const el = document.createElement('div');
+          el.className = 'disk';
+          el.innerHTML = `
+            <div>
+              <strong>${entry.title}</strong>
+              <div><small>${entry.subtitle}</small></div>
+            </div>
+            <div class="pill">${entry.tag}</div>
+          `;
+          el.addEventListener('click', () => selectEntry(entry, el));
+          entriesEl.appendChild(el);
+        });
+
+        if (entriesConfigEl) {
+          renderConfigEntries(entries);
+        }
+
+        if (entryNote) entryNote.textContent = 'Entries sourced from ISO files.';
+        startBootTimer();
+        pushBootConfig();
+        updateDefaultLabel();
+      }
+
+      function renderConfigEntries(entries) {
+        entriesConfigEl.innerHTML = '';
         entries.forEach((entry) => {
           const el = document.createElement('div');
           el.className = 'disk';
@@ -594,6 +628,7 @@
             defaultInput.addEventListener('change', () => {
               localStorage.setItem('raidhos_default_entry', entry.path);
               pushBootConfig();
+              updateDefaultLabel();
             });
           }
           const initrdInput = el.querySelector('.entry-initrd');
@@ -612,14 +647,8 @@
               pushBootConfig();
             });
           }
-          el.addEventListener('click', () => selectEntry(entry, el));
-          entriesEl.appendChild(el);
+          entriesConfigEl.appendChild(el);
         });
-
-        if (entryNote) entryNote.textContent = 'Entries sourced from ISO files.';
-        startBootTimer();
-        pushBootConfig();
-        updateDefaultLabel();
       }
 
       function selectByIndex(index) {
@@ -850,6 +879,9 @@
 
       function updateInstallPlan() {
         if (!planEl) return;
+        if (planContainer) {
+          planContainer.style.display = selectedDisk ? 'grid' : 'none';
+        }
         const steps = [];
         steps.push('Validate target and confirmations');
         steps.push('Create GPT and partitions');
@@ -871,7 +903,8 @@
           const version = await invoke('get_payload_version');
           payloadLabel.textContent = `Payload: ${version}`;
         } catch (_err) {
-          payloadLabel.textContent = 'Payload: unknown';
+          payloadLabel.textContent = 'Payload: missing';
+          showBanner('Payload manifest not found. Set payload/manifest.json.', true, false);
         }
       }
 
