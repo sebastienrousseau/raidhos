@@ -445,9 +445,18 @@
 
     <div class="shell app" id="app">
       <section class="card boot-config" id="bootConfig">
-        <h2>Boot Config</h2>
-        <p class="subtitle">Edit boot entries and parameters.</p>
-        <div class="disks" id="entriesConfig"></div>
+        <details open>
+          <summary>Boot Config</summary>
+          <p class="subtitle">Edit boot entries and parameters.</p>
+          <div class="actions" style="margin-bottom: var(--space-3);">
+            <button class="ghost" id="resetParams">Reset Params</button>
+            <label class="entry-default">
+              <input type="checkbox" id="saveOnInstallOnly" />
+              Save config only after install
+            </label>
+          </div>
+          <div class="disks" id="entriesConfig"></div>
+        </details>
       </section>
       <header>
         <div class="brand">
@@ -537,6 +546,8 @@
       const planContainer = document.getElementById('planContainer');
       const payloadLabel = document.getElementById('payloadLabel');
       const configBanner = document.getElementById('configBanner');
+      const resetParamsBtn = document.getElementById('resetParams');
+      const saveOnInstallOnly = document.getElementById('saveOnInstallOnly');
 
       let selectedDisk = null;
       let renderedTargets = [];
@@ -831,8 +842,22 @@
       installBtn.addEventListener('click', runInstall);
       if (scanBtn) scanBtn.addEventListener('click', loadEntries);
       if (saveConfigBtn) saveConfigBtn.addEventListener('click', async () => {
+        if (saveOnInstallOnly && saveOnInstallOnly.checked) {
+          showBanner('Save on install only is enabled.', false, false);
+          return;
+        }
         await pushBootConfig();
         await writeConfigToTarget();
+      });
+      if (resetParamsBtn) resetParamsBtn.addEventListener('click', () => {
+        renderedEntries.forEach((entry) => {
+          entry.params = 'quiet splash';
+          entry.initrd = '';
+          entry.kargs = '';
+          persistEntryParams(entry);
+        });
+        renderConfigEntries(renderedEntries);
+        pushBootConfig();
       });
       document.addEventListener('keydown', (event) => {
         if (!renderedEntries.length) return;
@@ -962,6 +987,9 @@
         if (enableWrite) {
           enableWrite.checked = localStorage.getItem('raidhos_enable_write') === 'true';
         }
+        if (saveOnInstallOnly) {
+          saveOnInstallOnly.checked = localStorage.getItem('raidhos_save_on_install_only') === 'true';
+        }
       }
 
       function entryKey(entry) {
@@ -1046,11 +1074,15 @@
         if (enableWrite) {
           localStorage.setItem('raidhos_enable_write', String(enableWrite.checked));
         }
+        if (saveOnInstallOnly) {
+          localStorage.setItem('raidhos_save_on_install_only', String(saveOnInstallOnly.checked));
+        }
       }
 
       if (scanPathsInput) scanPathsInput.addEventListener('change', persistState);
       if (acceptWrite) acceptWrite.addEventListener('change', persistState);
       if (enableWrite) enableWrite.addEventListener('change', persistState);
+      if (saveOnInstallOnly) saveOnInstallOnly.addEventListener('change', persistState);
 
       restoreState();
       updateInstallPlan();
