@@ -392,6 +392,7 @@
       let selectedDisk = null;
       let renderedDisks = [];
       let selectedIndex = -1;
+      const BOOT_TIMEOUT_SECONDS = 7;
       let bootTimer = null;
       let bootRemaining = 0;
 
@@ -466,7 +467,7 @@
 
       function startBootTimer() {
         if (!renderedDisks.length) return;
-        bootRemaining = 5;
+        bootRemaining = BOOT_TIMEOUT_SECONDS;
         updateBootStatus();
         bootTimer = setInterval(() => {
           bootRemaining -= 1;
