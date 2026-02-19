@@ -394,6 +394,7 @@
           <div class="logo">ᚱ</div>
         </div>
         <div class="actions">
+          <button class="ghost" id="saveConfig">Save Config</button>
           <button class="ghost" id="refresh">Refresh</button>
           <button class="primary" id="load">List Disks</button>
         </div>
@@ -401,7 +402,7 @@
 
       <section class="card">
         <h2>Boot Entries</h2>
-        <p class="subtitle">Use ↑/↓ to move. Enter to select.</p>
+        <p class="subtitle">Use ↑/↓ to move. Enter to select. <span id="defaultLabel"></span></p>
         <div class="boot-progress" id="bootProgress">
           <div class="boot-progress-fill" id="bootProgressFill"></div>
         </div>
@@ -448,6 +449,7 @@
     <script>
       const entriesEl = document.getElementById('entries');
       const targetsEl = document.getElementById('targets');
+      const saveConfigBtn = document.getElementById('saveConfig');
       const loadBtn = document.getElementById('load');
       const refreshBtn = document.getElementById('refresh');
       const splash = document.getElementById('splash');
@@ -464,6 +466,7 @@
       const bootProgress = document.getElementById('bootProgress');
       const bootProgressFill = document.getElementById('bootProgressFill');
       const entryNote = document.getElementById('entryNote');
+      const defaultLabel = document.getElementById('defaultLabel');
 
       let selectedDisk = null;
       let renderedTargets = [];
@@ -553,6 +556,7 @@
         if (entryNote) entryNote.textContent = 'Entries sourced from ISO files.';
         startBootTimer();
         pushBootConfig();
+        updateDefaultLabel();
       }
 
       function selectByIndex(index) {
@@ -729,6 +733,10 @@
       refreshBtn.addEventListener('click', listDisks);
       installBtn.addEventListener('click', runInstall);
       if (scanBtn) scanBtn.addEventListener('click', loadEntries);
+      if (saveConfigBtn) saveConfigBtn.addEventListener('click', async () => {
+        await pushBootConfig();
+        await writeConfigToTarget();
+      });
       document.addEventListener('keydown', (event) => {
         if (!renderedEntries.length) return;
         if (event.key === 'ArrowDown') {
@@ -748,6 +756,17 @@
         const path = localStorage.getItem('raidhos_default_entry');
         if (!path) return -1;
         return renderedEntries.findIndex((entry) => entry.path === path);
+      }
+
+      function updateDefaultLabel() {
+        if (!defaultLabel) return;
+        const path = localStorage.getItem('raidhos_default_entry');
+        if (!path) {
+          defaultLabel.textContent = '';
+          return;
+        }
+        const entry = renderedEntries.find((e) => e.path === path);
+        defaultLabel.textContent = entry ? `Default: ${entry.title}` : '';
       }
 
       function parseScanDirs() {
@@ -849,6 +868,28 @@
             })),
           };
           await invoke('save_boot_config', { config: payload });
+        } catch (_err) {
+        }
+      }
+
+      async function writeConfigToTarget() {
+        if (!selectedDisk) return;
+        const mount = selectedDisk.mountpoints && selectedDisk.mountpoints.length ? selectedDisk.mountpoints[0] : null;
+        if (!mount) return;
+        try {
+          const { invoke } = window.__TAURI__.tauri;
+          const defaultEntry = localStorage.getItem('raidhos_default_entry');
+          const payload = {
+            defaultEntry: defaultEntry || null,
+            entries: renderedEntries.map((entry) => ({
+              title: entry.title,
+              path: entry.subtitle || entry.path,
+              params: entry.params || '',
+              initrd: entry.initrd || '',
+              kargs: entry.kargs || '',
+            })),
+          };
+          await invoke('write_boot_config_to_device', { mountPath: mount, config: payload });
         } catch (_err) {
         }
       }

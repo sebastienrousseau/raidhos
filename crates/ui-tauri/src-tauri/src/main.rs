@@ -140,10 +140,20 @@ fn save_boot_config(config: BootConfig) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn write_boot_config_to_device(mount_path: String, config: BootConfig) -> Result<(), String> {
+    let dir = std::path::Path::new(&mount_path).join("raidhos");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join("boot.json");
+    let body = serde_json::to_vec_pretty(&config).map_err(|e| e.to_string())?;
+    std::fs::write(path, body).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![list_disks, install, scan_isos, save_boot_config])
+        .invoke_handler(tauri::generate_handler![list_disks, install, scan_isos, save_boot_config, write_boot_config_to_device])
         .run(tauri::generate_context!())
         .expect("error while running RaidhOS");
 }
