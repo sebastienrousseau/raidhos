@@ -714,6 +714,10 @@
             allowWrite: (acceptWrite && acceptWrite.checked) && (enableWrite && enableWrite.checked) && (confirmErase && confirmErase.value.trim() === 'ERASE'),
           });
           renderProgress(events);
+          if (enableWrite && enableWrite.checked) {
+            await writeConfigToTarget();
+            progressEl.innerHTML += '<div class="progress-item">config: written to target</div>';
+          }
         } catch (err) {
           progressEl.innerHTML = `<div class="progress-item">${String(err)}</div>`;
         }
