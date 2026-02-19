@@ -1,6 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use raidhos_core as core;
+mod grub;
+
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::State;
@@ -193,7 +195,7 @@ fn get_payload_version() -> Result<String, String> {
 
 #[tauri::command]
 fn write_grub_cfg_to_esp(esp_mount: String, config: BootConfig, data_label: String) -> Result<(), String> {
-    let cfg = render_grub_cfg(&config, &data_label);
+    let cfg = grub::render_grub_cfg(&config, &data_label);
     let path = std::path::Path::new(&esp_mount)
         .join("EFI")
         .join("BOOT")
@@ -222,77 +224,6 @@ fn copy_isos_to_data(mount_path: String, sources: Vec<String>) -> Result<Vec<Str
     Ok(copied)
 }
 
-fn render_grub_cfg(config: &BootConfig, data_label: &str) -> String {
-    let mut out = String::new();
-    out.push_str("set timeout=5\n");
-    if let Some(default) = &config.default_entry {
-        out.push_str(&format!("set default=\"{}\"\n", sanitize(default)));
-    }
-    out.push_str("insmod part_gpt\n");
-    out.push_str("insmod fat\n");
-    out.push_str("insmod exfat\n");
-    out.push_str("insmod iso9660\n");
-    out.push_str("insmod loopback\n");
-    out.push_str("insmod search\n");
-    out.push_str(&format!(
-        "search --no-floppy --label {} --set=root\n",
-        sanitize(data_label)
-    ));
-    out.push_str("set isopath=/boot/isos\n");
-    out.push_str("export root\n");
-    out.push_str("export isopath\n");
-
-    for entry in &config.entries {
-        let title = sanitize(&entry.title);
-        let path = sanitize(&entry.path);
-        let params = sanitize(&entry.params);
-        let initrd = sanitize(&entry.initrd);
-        let kargs = sanitize(&entry.kargs);
-
-        out.push_str(&format!("menuentry \"{}\" {{\n", title));
-        out.push_str(&format!("  set isofile=\"($root){}\"\n", path_prefix(&path)));
-        out.push_str("  loopback loop $isofile\n");
-        out.push_str("  if [ -f (loop)/boot/grub/grub.cfg ]; then\n");
-        out.push_str("    configfile (loop)/boot/grub/grub.cfg\n");
-        out.push_str("  elif [ -f (loop)/casper/vmlinuz ]; then\n");
-        out.push_str(&format!(
-            "    linux (loop)/casper/vmlinuz {} {} iso-scan/filename=$isofile\n",
-            params, kargs
-        ));
-        if !initrd.is_empty() {
-            out.push_str(&format!("    initrd {}\n", initrd));
-        } else {
-            out.push_str("    initrd (loop)/casper/initrd\n");
-        }
-        out.push_str("  elif [ -f (loop)/live/vmlinuz ]; then\n");
-        out.push_str(&format!(
-            "    linux (loop)/live/vmlinuz {} {} boot=live findiso=$isofile\n",
-            params, kargs
-        ));
-        if !initrd.is_empty() {
-            out.push_str(&format!("    initrd {}\n", initrd));
-        } else {
-            out.push_str("    initrd (loop)/live/initrd.img\n");
-        }
-        out.push_str("  else\n");
-        out.push_str("    echo \"No known kernel path found in ISO.\"\n");
-        out.push_str("  fi\n");
-        out.push_str("}\n");
-    }
-    out
-}
-
-fn sanitize(input: &str) -> String {
-    input.replace('"', "").replace('\n', " ").trim().to_string()
-}
-
-fn path_prefix(path: &str) -> String {
-    if path.starts_with('/') {
-        path.to_string()
-    } else {
-        format!("/{}", path)
-    }
-}
 
 fn main() {
     tauri::Builder::default()
