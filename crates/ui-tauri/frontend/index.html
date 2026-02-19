@@ -657,6 +657,11 @@
                 <input type="radio" name="defaultEntry" ${isDefault ? 'checked' : ''} />
                 Default entry
               </label>
+              <div class="actions" style="margin-top: var(--space-2);">
+                <button class="ghost entry-up">Move Up</button>
+                <button class="ghost entry-down">Move Down</button>
+                <button class="ghost entry-delete">Delete</button>
+              </div>
               <details class="entry-advanced">
                 <summary>Advanced options</summary>
                 <div><small>Initrd (optional)</small></div>
@@ -699,8 +704,46 @@
               pushBootConfig();
             });
           }
+          const upBtn = el.querySelector('.entry-up');
+          const downBtn = el.querySelector('.entry-down');
+          const delBtn = el.querySelector('.entry-delete');
+          if (upBtn) {
+            upBtn.addEventListener('click', () => {
+              moveEntry(entry.path, -1);
+            });
+          }
+          if (downBtn) {
+            downBtn.addEventListener('click', () => {
+              moveEntry(entry.path, 1);
+            });
+          }
+          if (delBtn) {
+            delBtn.addEventListener('click', () => {
+              deleteEntry(entry.path);
+            });
+          }
           entriesConfigEl.appendChild(el);
         });
+      }
+
+      function moveEntry(path, direction) {
+        const idx = renderedEntries.findIndex((e) => e.path === path);
+        if (idx < 0) return;
+        const next = idx + direction;
+        if (next < 0 || next >= renderedEntries.length) return;
+        const temp = renderedEntries[idx];
+        renderedEntries[idx] = renderedEntries[next];
+        renderedEntries[next] = temp;
+        localStorage.setItem('raidhos_last_isos', JSON.stringify(renderedEntries));
+        renderEntries(renderedEntries);
+        pushBootConfig();
+      }
+
+      function deleteEntry(path) {
+        renderedEntries = renderedEntries.filter((e) => e.path !== path);
+        localStorage.setItem('raidhos_last_isos', JSON.stringify(renderedEntries));
+        renderEntries(renderedEntries);
+        pushBootConfig();
       }
 
       function selectByIndex(index) {
@@ -1145,8 +1188,20 @@
       function updateLastSaved() {
         if (!lastSavedEl) return;
         const now = new Date();
-        lastSavedEl.textContent = `Last saved: ${now.toLocaleTimeString()}`;
+        lastSavedEl.textContent = `Last saved: ${now.toLocaleString()}`;
+        localStorage.setItem('raidhos_last_saved', now.toISOString());
       }
+
+      function restoreLastSaved() {
+        if (!lastSavedEl) return;
+        const raw = localStorage.getItem('raidhos_last_saved');
+        if (!raw) return;
+        const date = new Date(raw);
+        if (isNaN(date.getTime())) return;
+        lastSavedEl.textContent = `Last saved: ${date.toLocaleString()}`;
+      }
+
+      restoreLastSaved();
     </script>
   </body>
 </html>
