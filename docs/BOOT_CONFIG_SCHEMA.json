@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RaidhOS Boot Config",
+  "type": "object",
+  "properties": {
+    "defaultEntry": { "type": ["string", "null"] },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "path": { "type": "string" },
+          "params": { "type": "string" },
+          "initrd": { "type": "string" },
+          "kargs": { "type": "string" }
+        },
+        "required": ["title", "path", "params", "initrd", "kargs"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["defaultEntry", "entries"],
+  "additionalProperties": false
+}

@@ -307,23 +307,21 @@ mod platform {
     }
 
     fn payload_copy(sink: &dyn ProgressSink, part1: &str, part2: &str) -> Result<()> {
-        let payload_dir = std::env::var("RAIDHOS_PAYLOAD_DIR").ok();
-        let Some(payload_dir) = payload_dir else {
-            sink.emit(ProgressEvent {
-                phase: "payload".to_string(),
-                message: "Payload copy skipped (RAIDHOS_PAYLOAD_DIR not set).".to_string(),
-                percent: Some(85),
-            });
-            return Ok(());
-        };
+        let payload_dir = std::env::var("RAIDHOS_PAYLOAD_DIR").map_err(|_| {
+            CoreError::Validation("RAIDHOS_PAYLOAD_DIR is not set".to_string())
+        })?;
         let payload = PathBuf::from(payload_dir);
         if !payload.exists() {
-            sink.emit(ProgressEvent {
-                phase: "payload".to_string(),
-                message: "Payload copy skipped (directory not found).".to_string(),
-                percent: Some(85),
-            });
-            return Ok(());
+            return Err(CoreError::Validation(
+                "RAIDHOS_PAYLOAD_DIR does not exist".to_string(),
+            ));
+        }
+        let esp_payload = payload.join("esp");
+        let data_payload = payload.join("data");
+        if !esp_payload.exists() || !data_payload.exists() {
+            return Err(CoreError::Validation(
+                "RAIDHOS_PAYLOAD_DIR must contain esp/ and data/ directories".to_string(),
+            ));
         }
 
         let esp_mount = PathBuf::from("/mnt/raidhos-esp");
@@ -340,16 +338,22 @@ mod platform {
             percent: Some(85),
         });
 
-        let esp_payload = payload.join("esp");
-        let data_payload = payload.join("data");
-        if esp_payload.exists() {
-            run("cp", &["-a", esp_payload.to_str().unwrap(), esp_mount.to_str().unwrap()])?;
-        }
-        if data_payload.exists() {
-            run("cp", &["-a", data_payload.to_str().unwrap(), data_mount.to_str().unwrap()])?;
-        } else {
-            run("cp", &["-a", payload.to_str().unwrap(), data_mount.to_str().unwrap()])?;
-        }
+        run(
+            "cp",
+            &[
+                "-a",
+                &format!("{}/.", esp_payload.to_string_lossy()),
+                esp_mount.to_str().unwrap(),
+            ],
+        )?;
+        run(
+            "cp",
+            &[
+                "-a",
+                &format!("{}/.", data_payload.to_string_lossy()),
+                data_mount.to_str().unwrap(),
+            ],
+        )?;
 
         let _ = run("umount", &[esp_mount.to_str().unwrap()]);
         let _ = run("umount", &[data_mount.to_str().unwrap()]);
