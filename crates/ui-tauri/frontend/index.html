@@ -247,6 +247,21 @@
         margin-top: var(--space-2);
       }
 
+      .entry-advanced {
+        margin-top: var(--space-3);
+      }
+
+      .entry-advanced summary {
+        cursor: pointer;
+        color: var(--muted);
+        font-size: var(--font-xs);
+        letter-spacing: 0.4px;
+      }
+
+      .entry-advanced input {
+        margin-top: var(--space-2);
+      }
+
       .progress {
         display: grid;
         gap: var(--space-2);
@@ -476,6 +491,13 @@
               <div><small>${entry.subtitle}</small></div>
               <div><small>Params:</small></div>
               <input class="entry-params" value="${entry.params}" />
+              <details class="entry-advanced">
+                <summary>Advanced options</summary>
+                <div><small>Initrd (optional)</small></div>
+                <input class="entry-initrd" value="${entry.initrd || ''}" />
+                <div><small>Kernel args (optional)</small></div>
+                <input class="entry-kargs" value="${entry.kargs || ''}" />
+              </details>
             </div>
             <div class="pill">${entry.tag}</div>
           `;
@@ -483,6 +505,21 @@
           if (paramsInput) {
             paramsInput.addEventListener('input', (ev) => {
               entry.params = ev.target.value;
+              persistEntryParams(entry);
+            });
+          }
+          const initrdInput = el.querySelector('.entry-initrd');
+          if (initrdInput) {
+            initrdInput.addEventListener('input', (ev) => {
+              entry.initrd = ev.target.value;
+              persistEntryParams(entry);
+            });
+          }
+          const kargsInput = el.querySelector('.entry-kargs');
+          if (kargsInput) {
+            kargsInput.addEventListener('input', (ev) => {
+              entry.kargs = ev.target.value;
+              persistEntryParams(entry);
             });
           }
           el.addEventListener('click', () => selectEntry(entry, el));
@@ -701,7 +738,11 @@
             subtitle: iso.path,
             tag: 'ISO',
             params: iso.params || 'quiet splash',
+            initrd: '',
+            kargs: '',
           }));
+          localStorage.setItem('raidhos_last_isos', JSON.stringify(entries));
+          hydrateEntryParams(entries);
           renderEntries(entries);
         } catch (err) {
           renderEntries([]);
@@ -718,6 +759,34 @@
         if (enableWrite) {
           enableWrite.checked = localStorage.getItem('raidhos_enable_write') === 'true';
         }
+      }
+
+      function entryKey(entry) {
+        return `raidhos_entry_${entry.path}`;
+      }
+
+      function persistEntryParams(entry) {
+        if (!entry || !entry.path) return;
+        const payload = {
+          params: entry.params || '',
+          initrd: entry.initrd || '',
+          kargs: entry.kargs || '',
+        };
+        localStorage.setItem(entryKey(entry), JSON.stringify(payload));
+      }
+
+      function hydrateEntryParams(entries) {
+        entries.forEach((entry) => {
+          const raw = localStorage.getItem(entryKey(entry));
+          if (!raw) return;
+          try {
+            const parsed = JSON.parse(raw);
+            entry.params = parsed.params || entry.params;
+            entry.initrd = parsed.initrd || entry.initrd;
+            entry.kargs = parsed.kargs || entry.kargs;
+          } catch (_err) {
+          }
+        });
       }
 
       function persistState() {
