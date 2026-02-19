@@ -29,8 +29,8 @@
         --space-7: 68px;
         --space-8: 110px;
         --radius-sm: var(--space-2);
-        --radius-md: var(--space-4);
-        --radius-lg: var(--space-5);
+        --radius-md: 0px;
+        --radius-lg: 0px;
         --icon-sm: var(--space-4);
         --icon-md: var(--space-5);
         --icon-lg: var(--space-6);
@@ -112,7 +112,7 @@
 
       .card {
         background: var(--card);
-        border-radius: var(--radius-lg);
+        border-radius: 0;
         border: 1px solid var(--stroke);
         padding: var(--space-5);
         box-shadow: var(--shadow);
@@ -126,7 +126,7 @@
 
       button {
         border: 0;
-        border-radius: var(--radius-md);
+        border-radius: 0;
         padding: var(--space-3) var(--space-4);
         min-height: var(--space-5);
         font-weight: 600;
@@ -165,7 +165,7 @@
         grid-template-columns: 1fr auto;
         align-items: center;
         padding: var(--space-4) var(--space-4);
-        border-radius: var(--radius-md);
+        border-radius: 0;
         border: 1px solid var(--stroke);
         background: var(--surface);
         transition: transform 160ms ease, box-shadow 160ms ease;
@@ -187,7 +187,7 @@
         bottom: 0;
         width: var(--space-1);
         background: var(--stroke-strong);
-        border-radius: var(--radius-md) 0 0 var(--radius-md);
+        border-radius: 0;
       }
 
       .disk:hover {
@@ -207,7 +207,7 @@
         padding: var(--space-2) var(--space-3);
         background: #232323;
         color: #eaeaea;
-        border-radius: 999px;
+        border-radius: 0;
         font-size: var(--font-xs);
         font-weight: 600;
         border: 1px solid var(--stroke-strong);
@@ -227,14 +227,14 @@
         display: grid;
         gap: var(--space-3);
         padding: var(--space-4);
-        border-radius: var(--radius-md);
+        border-radius: 0;
         border: 1px dashed var(--stroke);
         background: var(--surface);
       }
 
       input {
         width: 100%;
-        border-radius: var(--radius-md);
+        border-radius: 0;
         padding: var(--space-3) var(--space-4);
         border: 1px solid var(--stroke);
         font-size: var(--font-sm);
@@ -294,7 +294,7 @@
         justify-content: space-between;
         background: #222222;
         border: 1px solid var(--stroke);
-        border-radius: var(--radius-md);
+        border-radius: 0;
         padding: var(--space-2) var(--space-3);
         font-size: var(--font-sm);
       }
@@ -303,7 +303,7 @@
         height: var(--space-1);
         background: #1a1a1a;
         border: 1px solid var(--stroke);
-        border-radius: 999px;
+        border-radius: 0;
         overflow: hidden;
       }
 
