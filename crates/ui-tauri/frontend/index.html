@@ -81,13 +81,11 @@
       }
 
       .logo {
-        width: var(--icon-lg);
-        height: var(--icon-lg);
-        border-radius: var(--radius-lg);
-        background: #1f1f1f;
-        box-shadow: inset 0 0 0 1px rgba(224, 224, 224, 0.2);
-        display: grid;
-        place-items: center;
+        background: transparent;
+        box-shadow: none;
+        width: auto;
+        height: auto;
+        display: inline-block;
         color: #f0f0f0;
         font-weight: 700;
         letter-spacing: 1.2px;
@@ -256,6 +254,21 @@
         font-size: var(--font-sm);
       }
 
+      .boot-progress {
+        height: var(--space-1);
+        background: #1a1a1a;
+        border: 1px solid var(--stroke);
+        border-radius: 999px;
+        overflow: hidden;
+      }
+
+      .boot-progress-fill {
+        height: 100%;
+        width: 0%;
+        background: var(--stroke-strong);
+        transition: width 120ms linear;
+      }
+
       @keyframes fadeUp {
         from {
           opacity: 0;
@@ -356,7 +369,10 @@
 
       <section class="card">
         <h2>Boot Entries</h2>
-        <p class="subtitle">Use ↑/↓ to move. Enter to select. <span id="bootStatus"></span></p>
+        <p class="subtitle">Use ↑/↓ to move. Enter to select.</p>
+        <div class="boot-progress" id="bootProgress">
+          <div class="boot-progress-fill" id="bootProgressFill"></div>
+        </div>
         <div class="disks" id="disks"></div>
       </section>
 
@@ -387,7 +403,8 @@
       const confirmInput = document.getElementById('confirmInput');
       const installBtn = document.getElementById('installBtn');
       const progressEl = document.getElementById('progress');
-      const bootStatus = document.getElementById('bootStatus');
+      const bootProgress = document.getElementById('bootProgress');
+      const bootProgressFill = document.getElementById('bootProgressFill');
 
       let selectedDisk = null;
       let renderedDisks = [];
@@ -488,11 +505,14 @@
       }
 
       function updateBootStatus() {
-        if (!bootStatus) return;
+        if (!bootProgress || !bootProgressFill) return;
         if (bootTimer) {
-          bootStatus.textContent = `Auto-select in ${bootRemaining}s`;
+          bootProgress.style.opacity = '1';
+          const pct = Math.max(0, Math.min(1, (BOOT_TIMEOUT_SECONDS - bootRemaining) / BOOT_TIMEOUT_SECONDS));
+          bootProgressFill.style.width = `${pct * 100}%`;
         } else {
-          bootStatus.textContent = '';
+          bootProgress.style.opacity = '0';
+          bootProgressFill.style.width = '0%';
         }
       }
 
