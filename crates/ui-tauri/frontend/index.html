@@ -242,6 +242,11 @@
         color: var(--ink);
       }
 
+      .entry-params {
+        width: 100%;
+        margin-top: var(--space-2);
+      }
+
       .progress {
         display: grid;
         gap: var(--space-2);
@@ -399,6 +404,12 @@
               <input type="checkbox" id="acceptWrite" />
               I understand this will erase the selected device.
             </label>
+            <label>
+              <input type="checkbox" id="enableWrite" />
+              Enable actual write (not a dry-run).
+            </label>
+            <div><small>Type ERASE to proceed with actual write.</small></div>
+            <input id="confirmErase" placeholder="ERASE" />
           </div>
           <button class="primary" id="installBtn" disabled>Run Dry-Run Install</button>
         </div>
@@ -420,6 +431,8 @@
       const selectedEl = document.getElementById('selected');
       const confirmInput = document.getElementById('confirmInput');
       const acceptWrite = document.getElementById('acceptWrite');
+      const enableWrite = document.getElementById('enableWrite');
+      const confirmErase = document.getElementById('confirmErase');
       const scanPathsInput = document.getElementById('scanPaths');
       const scanBtn = document.getElementById('scanBtn');
       const installBtn = document.getElementById('installBtn');
@@ -461,10 +474,17 @@
             <div>
               <strong>${entry.title}</strong>
               <div><small>${entry.subtitle}</small></div>
-              <div><small>Params: ${entry.params}</small></div>
+              <div><small>Params:</small></div>
+              <input class="entry-params" value="${entry.params}" />
             </div>
             <div class="pill">${entry.tag}</div>
           `;
+          const paramsInput = el.querySelector('.entry-params');
+          if (paramsInput) {
+            paramsInput.addEventListener('input', (ev) => {
+              entry.params = ev.target.value;
+            });
+          }
           el.addEventListener('click', () => selectEntry(entry, el));
           entriesEl.appendChild(el);
         });
@@ -532,7 +552,18 @@
           && confirmInput.value.trim() === selectedDisk.id
           && acceptWrite
           && acceptWrite.checked;
+        const allowWriteOk = enableWrite && enableWrite.checked
+          ? (confirmErase && confirmErase.value.trim() === 'ERASE')
+          : true;
         installBtn.disabled = !ok;
+        if (installBtn) {
+          installBtn.textContent = enableWrite && enableWrite.checked && allowWriteOk
+            ? 'Run Install'
+            : 'Run Dry-Run Install';
+        }
+        if (enableWrite && enableWrite.checked && !allowWriteOk) {
+          installBtn.disabled = true;
+        }
       }
 
       async function listDisks() {
@@ -599,8 +630,8 @@
             device: selectedDisk.id,
             payloadVersion: '1.1.10',
             wipe: true,
-            dryRun: true,
-            allowWrite: acceptWrite ? acceptWrite.checked : false,
+            dryRun: !(enableWrite && enableWrite.checked),
+            allowWrite: (acceptWrite && acceptWrite.checked) && (enableWrite && enableWrite.checked) && (confirmErase && confirmErase.value.trim() === 'ERASE'),
           });
           renderProgress(events);
         } catch (err) {
@@ -629,6 +660,8 @@
 
       confirmInput.addEventListener('input', updateInstallState);
       if (acceptWrite) acceptWrite.addEventListener('change', updateInstallState);
+      if (enableWrite) enableWrite.addEventListener('change', updateInstallState);
+      if (confirmErase) confirmErase.addEventListener('input', updateInstallState);
       loadBtn.addEventListener('click', listDisks);
       refreshBtn.addEventListener('click', listDisks);
       installBtn.addEventListener('click', runInstall);
@@ -675,6 +708,36 @@
         }
       }
 
+      function restoreState() {
+        if (scanPathsInput) {
+          scanPathsInput.value = localStorage.getItem('raidhos_scan_paths') || '';
+        }
+        if (acceptWrite) {
+          acceptWrite.checked = localStorage.getItem('raidhos_accept_write') === 'true';
+        }
+        if (enableWrite) {
+          enableWrite.checked = localStorage.getItem('raidhos_enable_write') === 'true';
+        }
+      }
+
+      function persistState() {
+        if (scanPathsInput) {
+          localStorage.setItem('raidhos_scan_paths', scanPathsInput.value);
+        }
+        if (acceptWrite) {
+          localStorage.setItem('raidhos_accept_write', String(acceptWrite.checked));
+        }
+        if (enableWrite) {
+          localStorage.setItem('raidhos_enable_write', String(enableWrite.checked));
+        }
+      }
+
+      if (scanPathsInput) scanPathsInput.addEventListener('change', persistState);
+      if (acceptWrite) acceptWrite.addEventListener('change', persistState);
+      if (enableWrite) enableWrite.addEventListener('change', persistState);
+
+      restoreState();
+      updateInstallState();
       loadEntries();
       bootSequence();
     </script>
