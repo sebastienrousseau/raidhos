@@ -905,19 +905,27 @@
         progressEl.innerHTML = '';
         try {
           const { invoke } = window.__TAURI__.tauri;
-          const events = await invoke('install', {
-            device: selectedDisk.id,
-            payloadVersion: '1.1.10',
-            wipe: true,
-            dryRun: !(enableWrite && enableWrite.checked),
-            allowWrite: (acceptWrite && acceptWrite.checked) && (enableWrite && enableWrite.checked) && (confirmErase && confirmErase.value.trim() === 'ERASE'),
-          });
-          renderProgress(events);
-          if (enableWrite && enableWrite.checked) {
+          const isWrite = enableWrite && enableWrite.checked;
+          if (isWrite) {
+            showBanner('Elevating privileges...', false, true);
+            const output = await invoke('install_elevated', {
+              device: selectedDisk.id,
+              payloadVersion: '1.1.10',
+            });
+            progressEl.innerHTML = `<div class="progress-item">${String(output)}</div>`;
             await copyIsosToData();
             await writeConfigToTarget();
             await writeGrubCfgToEsp();
             progressEl.innerHTML += '<div class="progress-item">config: written to target</div>';
+          } else {
+            const events = await invoke('install', {
+              device: selectedDisk.id,
+              payloadVersion: '1.1.10',
+              wipe: true,
+              dryRun: true,
+              allowWrite: false,
+            });
+            renderProgress(events);
           }
         } catch (err) {
           progressEl.innerHTML = `<div class="progress-item">${String(err)}</div>`;

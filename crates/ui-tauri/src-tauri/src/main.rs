@@ -194,6 +194,106 @@ fn get_payload_version() -> Result<String, String> {
 }
 
 #[tauri::command]
+fn install_elevated(device: String, payload_version: String) -> Result<String, String> {
+    let current_exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let output = std::process::Command::new("pkexec")
+        .arg(current_exe)
+        .arg("internal-worker")
+        .arg("--task")
+        .arg("install")
+        .arg("--device")
+        .arg(device)
+        .arg("--payload-version")
+        .arg(payload_version)
+        .output()
+        .map_err(|e| format!("Failed to launch pkexec: {e}"))?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        let err = String::from_utf8_lossy(&output.stderr).to_string();
+        Err(if err.is_empty() { "Elevation failed or was cancelled by user".to_string() } else { err })
+    }
+}
+
+fn maybe_run_internal_worker() -> bool {
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(|s| s.as_str()) != Some("internal-worker") {
+        return false;
+    }
+
+    let mut task = String::new();
+    let mut device = String::new();
+    let mut payload_version = String::new();
+    let mut i = 2;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--task" => {
+                if let Some(v) = args.get(i + 1) { task = v.clone(); }
+                i += 2;
+            }
+            "--device" => {
+                if let Some(v) = args.get(i + 1) { device = v.clone(); }
+                i += 2;
+            }
+            "--payload-version" => {
+                if let Some(v) = args.get(i + 1) { payload_version = v.clone(); }
+                i += 2;
+            }
+            _ => i += 1,
+        }
+    }
+
+    if task == "install" && !device.is_empty() {
+        let res = run_worker_install(&device, &payload_version);
+        match res {
+            Ok(msg) => {
+                println!("{msg}");
+                std::process::exit(0);
+            }
+            Err(err) => {
+                eprintln!("{err}");
+                std::process::exit(1);
+            }
+        }
+    }
+
+    eprintln!("invalid internal-worker invocation");
+    std::process::exit(2);
+}
+
+fn run_worker_install(device: &str, payload_version: &str) -> Result<String, String> {
+    // attempt to unmount partitions
+    if let Ok(parts) = core::list_partitions(device.to_string()) {
+        for p in parts {
+            for mp in p.mountpoints {
+                let _ = std::process::Command::new("umount").arg(&mp).status();
+            }
+        }
+    }
+    let _ = std::process::Command::new("wipefs").args(["-a", device]).status();
+
+    struct StdoutSink;
+    impl core::ProgressSink for StdoutSink {
+        fn emit(&self, event: core::ProgressEvent) {
+            let pct = event.percent.map(|p| format!("{p}%")).unwrap_or_default();
+            println!("{} {} {}", event.phase, event.message, pct);
+        }
+    }
+
+    let req = core::InstallRequest {
+        device: device.to_string(),
+        payload_version: payload_version.to_string(),
+        wipe: true,
+        dry_run: false,
+        allow_write: true,
+    };
+
+    core::install(req, &StdoutSink).map_err(|e| e.to_string())?;
+    Ok("install complete".to_string())
+}
+
+#[tauri::command]
 fn write_grub_cfg_to_esp(esp_mount: String, config: BootConfig, data_label: String) -> Result<(), String> {
     let cfg = grub::render_grub_cfg(&config, &data_label);
     let path = std::path::Path::new(&esp_mount)
@@ -226,9 +326,24 @@ fn copy_isos_to_data(mount_path: String, sources: Vec<String>) -> Result<Vec<Str
 
 
 fn main() {
+    if maybe_run_internal_worker() {
+        return;
+    }
+
     tauri::Builder::default()
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![list_disks, install, scan_isos, save_boot_config, write_boot_config_to_device, get_payload_version, list_partitions, write_grub_cfg_to_esp, copy_isos_to_data])
+        .invoke_handler(tauri::generate_handler![
+            list_disks,
+            install,
+            scan_isos,
+            save_boot_config,
+            write_boot_config_to_device,
+            get_payload_version,
+            list_partitions,
+            write_grub_cfg_to_esp,
+            copy_isos_to_data,
+            install_elevated
+        ])
         .run(tauri::generate_context!())
         .expect("error while running RaidhOS");
 }
