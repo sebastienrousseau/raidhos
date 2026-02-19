@@ -231,65 +231,16 @@ mod platform {
     }
 
     pub fn install(req: InstallRequest, sink: &dyn ProgressSink) -> Result<()> {
-        if !req.device.starts_with("/dev/") {
-            return Err(CoreError::Validation(
-                "device must be an absolute /dev path".to_string(),
-            ));
-        }
-
-        sink.emit(ProgressEvent {
-            phase: "validate".to_string(),
-            message: format!("Validating target {}", req.device),
-            percent: Some(5),
-        });
-
-        if !req.wipe {
-            return Err(CoreError::Validation(
-                "wipe flag must be set for destructive install".to_string(),
-            ));
-        }
-
         let disks = list_disks()?;
-        let target = disks
-            .iter()
-            .find(|d| d.id == req.device)
-            .ok_or_else(|| CoreError::Validation("device not found".to_string()))?;
+        install_with_disks(req, sink, &disks)
+    }
 
-        if target.is_system {
-            return Err(CoreError::Validation(
-                "refusing to operate on system disk".to_string(),
-            ));
-        }
-
-        if !target.mountpoints.is_empty() {
-            return Err(CoreError::Validation(
-                "device has mounted partitions; unmount first".to_string(),
-            ));
-        }
-
-        sink.emit(ProgressEvent {
-            phase: "prepare".to_string(),
-            message: "Preparing partition layout".to_string(),
-            percent: Some(20),
-        });
-
-        sink.emit(ProgressEvent {
-            phase: "payload".to_string(),
-            message: format!("Staging Ventoy payload {}", req.payload_version),
-            percent: Some(45),
-        });
-
-        sink.emit(ProgressEvent {
-            phase: "write".to_string(),
-            message: "Writing boot structures".to_string(),
-            percent: Some(70),
-        });
-
-        sink.emit(ProgressEvent {
-            phase: "finalize".to_string(),
-            message: "Final checks".to_string(),
-            percent: Some(90),
-        });
+    fn install_with_disks(
+        req: InstallRequest,
+        sink: &dyn ProgressSink,
+        disks: &[DiskInfo],
+    ) -> Result<()> {
+        validate_install(&req, sink, disks)?;
 
         if req.dry_run {
             sink.emit(ProgressEvent {
@@ -371,6 +322,69 @@ mod platform {
             message: "Install complete.".to_string(),
             percent: Some(100),
         });
+        Ok(())
+    }
+
+    fn validate_install(req: &InstallRequest, sink: &dyn ProgressSink, disks: &[DiskInfo]) -> Result<()> {
+        if !req.device.starts_with("/dev/") {
+            return Err(CoreError::Validation(
+                "device must be an absolute /dev path".to_string(),
+            ));
+        }
+
+        sink.emit(ProgressEvent {
+            phase: "validate".to_string(),
+            message: format!("Validating target {}", req.device),
+            percent: Some(5),
+        });
+
+        if !req.wipe {
+            return Err(CoreError::Validation(
+                "wipe flag must be set for destructive install".to_string(),
+            ));
+        }
+
+        let target = disks
+            .iter()
+            .find(|d| d.id == req.device)
+            .ok_or_else(|| CoreError::Validation("device not found".to_string()))?;
+
+        if target.is_system {
+            return Err(CoreError::Validation(
+                "refusing to operate on system disk".to_string(),
+            ));
+        }
+
+        if !target.mountpoints.is_empty() {
+            return Err(CoreError::Validation(
+                "device has mounted partitions; unmount first".to_string(),
+            ));
+        }
+
+        sink.emit(ProgressEvent {
+            phase: "prepare".to_string(),
+            message: "Preparing partition layout".to_string(),
+            percent: Some(20),
+        });
+
+        sink.emit(ProgressEvent {
+            phase: "payload".to_string(),
+            message: format!("Staging payload {}", req.payload_version),
+            percent: Some(45),
+        });
+
+        sink.emit(ProgressEvent {
+            phase: "write".to_string(),
+            message: "Writing boot structures".to_string(),
+            percent: Some(70),
+        });
+
+        sink.emit(ProgressEvent {
+            phase: "finalize".to_string(),
+            message: "Final checks".to_string(),
+            percent: Some(90),
+        });
+
         Ok(())
     }
 
@@ -483,6 +497,7 @@ mod platform {
         }
     }
 
+    #[cfg(not(test))]
     fn run(cmd: &str, args: &[&str]) -> Result<()> {
         let status = Command::new(cmd)
             .args(args)
@@ -494,6 +509,12 @@ mod platform {
         Ok(())
     }
 
+    #[cfg(test)]
+    fn run(_cmd: &str, _args: &[&str]) -> Result<()> {
+        Ok(())
+    }
+
+    #[cfg(not(test))]
     fn has_cmd(cmd: &str) -> bool {
         Command::new("sh")
             .args(["-c", &format!("command -v {cmd} >/dev/null 2>&1")])
@@ -502,11 +523,93 @@ mod platform {
             .unwrap_or(false)
     }
 
+    #[cfg(test)]
+    fn has_cmd(_cmd: &str) -> bool {
+        true
+    }
+
     fn part_path(device: &str, idx: u8) -> String {
         if device.chars().last().map(|c| c.is_ascii_digit()).unwrap_or(false) {
             format!("{device}p{idx}")
         } else {
             format!("{device}{idx}")
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        struct Sink {
+            events: std::cell::RefCell<Vec<ProgressEvent>>,
+        }
+
+        impl ProgressSink for Sink {
+            fn emit(&self, event: ProgressEvent) {
+                self.events.borrow_mut().push(event);
+            }
+        }
+
+        fn disk(id: &str, mounts: Vec<&str>, is_system: bool) -> DiskInfo {
+            DiskInfo {
+                id: id.to_string(),
+                model: "Test".to_string(),
+                size_bytes: 128,
+                removable: true,
+                mountpoints: mounts.into_iter().map(|m| m.to_string()).collect(),
+                is_system,
+            }
+        }
+
+        fn req(device: &str, wipe: bool, dry_run: bool) -> InstallRequest {
+            InstallRequest {
+                device: device.to_string(),
+                payload_version: "0.1.0".to_string(),
+                wipe,
+                dry_run,
+                allow_write: false,
+            }
+        }
+
+        #[test]
+        fn validate_rejects_non_dev_path() {
+            let sink = Sink { events: std::cell::RefCell::new(Vec::new()) };
+            let disks = vec![disk("/dev/sdb", vec![], false)];
+            let err = validate_install(&req("sdb", true, true), &sink, &disks).unwrap_err();
+            assert!(format!("{err}").contains("device must be an absolute /dev path"));
+        }
+
+        #[test]
+        fn validate_rejects_without_wipe_flag() {
+            let sink = Sink { events: std::cell::RefCell::new(Vec::new()) };
+            let disks = vec![disk("/dev/sdb", vec![], false)];
+            let err = validate_install(&req("/dev/sdb", false, true), &sink, &disks).unwrap_err();
+            assert!(format!("{err}").contains("wipe flag"));
+        }
+
+        #[test]
+        fn validate_rejects_system_disk() {
+            let sink = Sink { events: std::cell::RefCell::new(Vec::new()) };
+            let disks = vec![disk("/dev/sda", vec!["/"], true)];
+            let err = validate_install(&req("/dev/sda", true, true), &sink, &disks).unwrap_err();
+            assert!(format!("{err}").contains("system disk"));
+        }
+
+        #[test]
+        fn validate_rejects_mounted_partitions() {
+            let sink = Sink { events: std::cell::RefCell::new(Vec::new()) };
+            let disks = vec![disk("/dev/sdb", vec!["/media/usb"], false)];
+            let err = validate_install(&req("/dev/sdb", true, true), &sink, &disks).unwrap_err();
+            assert!(format!("{err}").contains("mounted"));
+        }
+
+        #[test]
+        fn validate_accepts_safe_disk() {
+            let sink = Sink { events: std::cell::RefCell::new(Vec::new()) };
+            let disks = vec![disk("/dev/sdb", vec![], false)];
+            let ok = validate_install(&req("/dev/sdb", true, true), &sink, &disks);
+            assert!(ok.is_ok());
+            assert!(!sink.events.borrow().is_empty());
         }
     }
 }

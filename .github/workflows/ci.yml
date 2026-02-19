@@ -23,3 +23,15 @@ jobs:
 
       - name: Lint
         run: cargo clippy --workspace -- -D warnings
+
+      - name: Coverage (raidhos-core)
+        run: |
+          cargo install cargo-tarpaulin
+          cargo tarpaulin -p raidhos-core --fail-under 95
+
+  grub-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build GRUB EFI (Docker)
+        run: ./tools/grub/build_grub.sh

@@ -4,7 +4,7 @@ RaidhOS expects a payload directory with two subfolders:
 
 ```
 RAIDHOS_PAYLOAD_DIR/
-  esp/   # EFI partition contents
+  esp/   # EFI partition contents (must include EFI/BOOT/BOOTX64.EFI)
   data/  # Data partition contents
 ```
 
