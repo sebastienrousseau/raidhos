@@ -10,16 +10,16 @@
         --bg-2: #1a1a1a;
         --ink: #e0e0e0;
         --muted: #bdbdbd;
-        --accent: #705122;
-        --accent-2: #6a4f22;
-        --accent-3: #705225;
+        --accent: #2a2a2a;
+        --accent-2: #303030;
+        --accent-3: #262626;
         --card: #171717;
         --surface: #1f1f1f;
-        --surface-strong: #232323;
-        --stroke: #8a7a55;
-        --stroke-strong: #b5a985;
-        --glow: rgba(156, 122, 59, 0.22);
-        --shadow: 0 20px 60px rgba(0, 0, 0, 0.75);
+        --surface-strong: #262626;
+        --stroke: #707070;
+        --stroke-strong: #9a9a9a;
+        --glow: rgba(0, 0, 0, 0);
+        --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
         --space-1: 4px;
         --space-2: 6px;
         --space-3: 10px;
@@ -139,7 +139,7 @@
       }
 
       .primary {
-        background: #2b2416;
+        background: var(--accent);
         color: #f0f0f0;
         box-shadow: none;
       }
@@ -192,7 +192,7 @@
 
       .pill {
         padding: var(--space-2) var(--space-3);
-        background: #2b2416;
+        background: #232323;
         color: #eaeaea;
         border-radius: 999px;
         font-size: var(--font-xs);
@@ -237,7 +237,7 @@
       .progress-item {
         display: flex;
         justify-content: space-between;
-        background: #221c12;
+        background: #222222;
         border: 1px solid var(--stroke);
         border-radius: var(--radius-md);
         padding: var(--space-2) var(--space-3);
@@ -343,8 +343,8 @@
       </header>
 
       <section class="card">
-        <h2>Detected Devices</h2>
-        <p class="subtitle">Select a USB target. Destructive actions will require confirmation.</p>
+        <h2>Boot Entries</h2>
+        <p class="subtitle">Use ↑/↓ to move. Enter to select.</p>
         <div class="disks" id="disks"></div>
       </section>
 
@@ -377,6 +377,8 @@
       const progressEl = document.getElementById('progress');
 
       let selectedDisk = null;
+      let renderedDisks = [];
+      let selectedIndex = -1;
 
       function formatBytes(bytes) {
         if (!bytes || bytes === 0) return '0 B';
@@ -387,9 +389,11 @@
       }
 
       function renderDisks(disks) {
+        renderedDisks = disks;
+        selectedIndex = -1;
         disksEl.innerHTML = '';
         if (!disks.length) {
-          disksEl.innerHTML = '<div class="disk">No disks detected.</div>';
+          disksEl.innerHTML = '<div class="disk">No entries detected.</div>';
           return;
         }
         disks.forEach((disk) => {
@@ -405,6 +409,16 @@
           el.addEventListener('click', () => selectDisk(disk, el));
           disksEl.appendChild(el);
         });
+      }
+
+      function selectByIndex(index) {
+        if (!renderedDisks.length) return;
+        const clamped = Math.max(0, Math.min(index, renderedDisks.length - 1));
+        const disk = renderedDisks[clamped];
+        const el = disksEl.children[clamped];
+        if (!disk || !el) return;
+        selectedIndex = clamped;
+        selectDisk(disk, el);
       }
 
       function selectDisk(disk, el) {
@@ -482,6 +496,22 @@
       loadBtn.addEventListener('click', listDisks);
       refreshBtn.addEventListener('click', listDisks);
       installBtn.addEventListener('click', runInstall);
+      document.addEventListener('keydown', (event) => {
+        if (!renderedDisks.length) return;
+        if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          selectByIndex(selectedIndex + 1);
+        }
+        if (event.key === 'ArrowUp') {
+          event.preventDefault();
+          selectByIndex(selectedIndex - 1);
+        }
+        if (event.key === 'Enter') {
+          if (selectedDisk && confirmInput.value.trim() === selectedDisk.id) {
+            runInstall();
+          }
+        }
+      });
       bootSequence();
     </script>
   </body>
