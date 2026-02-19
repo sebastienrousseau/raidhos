@@ -4,7 +4,7 @@ RaidhOS is a cross-platform USB installer with a Rust core and a polished Tauri 
 
 ## Components
 
-- `crates/core` (raidhos-core)
+- `crates/core` (`raidhos-core`)
   - Device discovery, safety checks, and installer orchestration.
 - `crates/cli`
   - Developer-facing CLI wrapper around `raidhos-core`.
@@ -21,6 +21,11 @@ RaidhOS is a cross-platform USB installer with a Rust core and a polished Tauri 
 2. User selects target and confirms destructive action.
 3. UI invokes privileged helper for partition + format + payload install.
 4. Progress and logs stream back to UI.
+
+## Core API
+
+- `list_disks() -> Vec<DiskInfo>`
+- `install(req, sink)` (coming next)
 
 ## Safety Principles
 

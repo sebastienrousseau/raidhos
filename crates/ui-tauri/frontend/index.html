@@ -6,72 +6,245 @@
     <title>RaidhOS</title>
     <style>
       :root {
-        color-scheme: light;
-        font-family: "SF Pro Text", "Segoe UI", "Inter", system-ui, sans-serif;
+        --bg: #eef2f7;
+        --ink: #0f172a;
+        --muted: #5b6576;
+        --accent: #0d3b66;
+        --accent-2: #f4b740;
+        --card: rgba(255, 255, 255, 0.78);
+        --stroke: rgba(15, 23, 42, 0.08);
+        --glow: rgba(15, 23, 42, 0.08);
+        --radius: 18px;
+        --shadow: 0 22px 60px rgba(15, 23, 42, 0.12);
       }
+
+      * {
+        box-sizing: border-box;
+      }
+
       body {
         margin: 0;
-        padding: 32px;
-        background: radial-gradient(1200px 800px at 20% 10%, #f6f8fb, #eef1f6 60%, #e9edf4 100%);
-        color: #1b1e26;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(1200px 800px at 15% 10%, #f9fbff 0%, #eef2f7 55%, #e5eaf2 100%),
+          linear-gradient(120deg, #f2f5fb 0%, #edf1f7 100%);
+        color: var(--ink);
+        font-family: "Avenir Next", "SF Pro Display", "Segoe UI Variable", "Noto Sans", "Ubuntu", sans-serif;
+        letter-spacing: 0.2px;
       }
-      .card {
-        max-width: 720px;
-        background: #ffffffcc;
-        backdrop-filter: blur(12px);
-        border: 1px solid #e6eaf2;
-        border-radius: 16px;
-        padding: 24px;
-        box-shadow: 0 12px 40px rgba(30, 35, 60, 0.08);
+
+      .shell {
+        width: min(980px, 92vw);
+        display: grid;
+        gap: 20px;
       }
-      h1 {
-        margin: 0 0 8px 0;
-        font-size: 28px;
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
       }
-      p {
-        margin: 0 0 16px 0;
-        color: #4a5160;
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
       }
-      button {
-        background: #111827;
+
+      .logo {
+        width: 44px;
+        height: 44px;
+        border-radius: 14px;
+        background: linear-gradient(145deg, #0d3b66 0%, #163a5f 100%);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), 0 10px 24px rgba(13, 59, 102, 0.3);
+        display: grid;
+        place-items: center;
         color: #fff;
-        border: 0;
-        padding: 10px 14px;
-        border-radius: 10px;
-        cursor: pointer;
+        font-weight: 600;
+        letter-spacing: 1px;
       }
-      pre {
-        background: #0f172a;
-        color: #e2e8f0;
-        padding: 12px;
-        border-radius: 10px;
-        overflow: auto;
+
+      h1 {
+        font-size: 30px;
+        margin: 0;
+      }
+
+      .subtitle {
+        color: var(--muted);
+        margin: 4px 0 0 0;
+      }
+
+      .card {
+        background: var(--card);
+        border-radius: var(--radius);
+        border: 1px solid var(--stroke);
+        padding: 22px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(16px);
+      }
+
+      .actions {
+        display: flex;
+        gap: 12px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 12px;
+        padding: 10px 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 160ms ease, box-shadow 160ms ease;
+      }
+
+      .primary {
+        background: var(--accent);
+        color: #fff;
+        box-shadow: 0 14px 30px rgba(13, 59, 102, 0.25);
+      }
+
+      .primary:hover {
+        transform: translateY(-1px);
+      }
+
+      .ghost {
+        background: transparent;
+        border: 1px solid rgba(15, 23, 42, 0.15);
+      }
+
+      .disks {
+        display: grid;
+        gap: 12px;
+      }
+
+      .disk {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        padding: 14px 16px;
+        border-radius: 14px;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        background: rgba(255, 255, 255, 0.72);
+        transition: transform 160ms ease, box-shadow 160ms ease;
+      }
+
+      .disk:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 16px 40px var(--glow);
+      }
+
+      .disk strong {
+        font-size: 15px;
+      }
+
+      .disk small {
+        color: var(--muted);
+      }
+
+      .pill {
+        padding: 6px 10px;
+        background: rgba(13, 59, 102, 0.12);
+        color: var(--accent);
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .footer {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      @keyframes fadeUp {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .card {
+        animation: fadeUp 380ms ease both;
       }
     </style>
   </head>
   <body>
-    <div class="card">
-      <h1>RaidhOS</h1>
-      <p>UI scaffold placeholder. Tauri wiring is live and will call Rust commands next.</p>
-      <button id="load">List Disks</button>
-      <pre id="out">(output)</pre>
+    <div class="shell">
+      <header>
+        <div class="brand">
+          <div class="logo">R</div>
+          <div>
+            <h1>RaidhOS</h1>
+            <p class="subtitle">Sleek Ventoy-style USB creator</p>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="ghost" id="refresh">Refresh</button>
+          <button class="primary" id="load">List Disks</button>
+        </div>
+      </header>
+
+      <section class="card">
+        <h2>Detected Devices</h2>
+        <p class="subtitle">Select a USB target. Destructive actions will require confirmation.</p>
+        <div class="disks" id="disks"></div>
+      </section>
+
+      <section class="card footer">
+        Cross-platform core in Rust. UI powered by Tauri.
+      </section>
     </div>
 
     <script>
-      const out = document.getElementById('out');
-      const btn = document.getElementById('load');
+      const disksEl = document.getElementById('disks');
+      const loadBtn = document.getElementById('load');
+      const refreshBtn = document.getElementById('refresh');
+
+      function formatBytes(bytes) {
+        if (!bytes || bytes === 0) return '0 B';
+        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(1024));
+        const value = (bytes / Math.pow(1024, i)).toFixed(1);
+        return `${value} ${units[i]}`;
+      }
+
+      function renderDisks(disks) {
+        disksEl.innerHTML = '';
+        if (!disks.length) {
+          disksEl.innerHTML = '<div class="disk">No disks detected.</div>';
+          return;
+        }
+        disks.forEach((disk) => {
+          const el = document.createElement('div');
+          el.className = 'disk';
+          el.innerHTML = `
+            <div>
+              <strong>${disk.id}</strong>
+              <div><small>${disk.model || 'Unknown model'} · ${formatBytes(disk.size_bytes)}</small></div>
+            </div>
+            <div class="pill">${disk.removable ? 'Removable' : 'Fixed'}</div>
+          `;
+          disksEl.appendChild(el);
+        });
+      }
 
       async function listDisks() {
         try {
           const { invoke } = window.__TAURI__.tauri;
           const disks = await invoke('list_disks');
-          out.textContent = JSON.stringify(disks, null, 2);
+          renderDisks(disks);
         } catch (err) {
-          out.textContent = String(err);
+          disksEl.innerHTML = `<div class="disk">${String(err)}</div>`;
         }
       }
 
-      btn.addEventListener('click', listDisks);
+      loadBtn.addEventListener('click', listDisks);
+      refreshBtn.addEventListener('click', listDisks);
     </script>
   </body>
 </html>
