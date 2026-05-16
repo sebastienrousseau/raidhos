@@ -1,45 +1,23 @@
-use clap::{Parser, Subcommand};
+//! `raidhos-cli` — developer-facing CLI over `raidhos-core`. Same
+//! discovery and install pipeline as the Tauri UI, exposed as commands.
+
+use clap::Parser;
 use raidhos_core as core;
 
-#[derive(Parser)]
-#[command(name = "raidhos-cli", version, about = "RaidhOS CLI")]
-struct Cli {
-    #[command(subcommand)]
-    command: Commands,
-}
-
-#[derive(Subcommand)]
-enum Commands {
-    ListDisks,
-    ScanIsos {
-        #[arg(long, value_delimiter = ',', default_value = "/media,/mnt,/home")]
-        dirs: Vec<String>,
-    },
-    Install {
-        #[arg(long)]
-        device: String,
-        #[arg(long, default_value = "0.1.0")]
-        payload_version: String,
-        #[arg(long, default_value_t = true)]
-        wipe: bool,
-        #[arg(long, default_value_t = true)]
-        dry_run: bool,
-        #[arg(long, default_value_t = false)]
-        allow_write: bool,
-    },
-    WriteConfig {
-        #[arg(long)]
-        mount_path: String,
-        #[arg(long)]
-        config_path: String,
-    },
-}
+mod cli;
+use cli::{Cli, Commands};
 
 fn main() {
     let cli = Cli::parse();
     match cli.command {
         Commands::ListDisks => {
-            let disks = core::list_disks().expect("list_disks failed");
+            let disks = match core::list_disks() {
+                Ok(d) => d,
+                Err(e) => {
+                    eprintln!("list-disks failed: {e}");
+                    std::process::exit(1);
+                },
+            };
             for d in disks {
                 println!(
                     "{} {} {} removable={} system={} mounts={}",
@@ -51,13 +29,19 @@ fn main() {
                     d.mountpoints.join(",")
                 );
             }
-        }
+        },
         Commands::ScanIsos { dirs } => {
-            let entries = core::scan_isos(dirs).expect("scan_isos failed");
+            let entries = match core::scan_isos(dirs) {
+                Ok(e) => e,
+                Err(e) => {
+                    eprintln!("scan-isos failed: {e}");
+                    std::process::exit(1);
+                },
+            };
             for e in entries {
                 println!("{} {} {} {}", e.title, e.path, e.size_bytes, e.params);
             }
-        }
+        },
         Commands::Install {
             device,
             payload_version,
@@ -80,17 +64,32 @@ fn main() {
                 dry_run,
                 allow_write,
             };
-            core::install(req, &StdoutSink).expect("install failed");
-        }
+            if let Err(e) = core::install(req, &StdoutSink) {
+                eprintln!("install failed: {e}");
+                std::process::exit(1);
+            }
+        },
         Commands::WriteConfig {
             mount_path,
             config_path,
         } => {
-            let body = std::fs::read(&config_path).expect("read config");
+            let body = match std::fs::read(&config_path) {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("read {config_path}: {e}");
+                    std::process::exit(1);
+                },
+            };
             let dir = std::path::Path::new(&mount_path).join("raidhos");
-            std::fs::create_dir_all(&dir).expect("create dir");
+            if let Err(e) = std::fs::create_dir_all(&dir) {
+                eprintln!("create_dir_all {}: {e}", dir.display());
+                std::process::exit(1);
+            }
             let path = dir.join("boot.json");
-            std::fs::write(path, body).expect("write config");
-        }
+            if let Err(e) = std::fs::write(&path, body) {
+                eprintln!("write {}: {e}", path.display());
+                std::process::exit(1);
+            }
+        },
     }
 }

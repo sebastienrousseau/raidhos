@@ -1,0 +1,53 @@
+# cargo-fuzz harness for raidhos-core.
+#
+# Run a target locally with:
+#   cargo +nightly fuzz run validate_device_path
+#
+# The CI workflow (`.github/workflows/fuzz.yml`) runs short smoke
+# bursts. Long-running fuzzing is expected to happen on developer
+# machines and on OSS-Fuzz integration if/when we apply.
+
+[package]
+name = "raidhos-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+raidhos-core = { path = "../crates/core" }
+
+[[bin]]
+name = "validate_device_path"
+path = "fuzz_targets/validate_device_path.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_disks_plist"
+path = "fuzz_targets/parse_disks_plist.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_get_disk_json"
+path = "fuzz_targets/parse_get_disk_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_lsblk_disks"
+path = "fuzz_targets/parse_lsblk_disks.rs"
+test = false
+doc = false
+bench = false
+
+# Keep this workspace out of the parent workspace so `cargo build
+# --workspace` doesn't try to pull libfuzzer-sys on non-nightly hosts.
+[workspace]

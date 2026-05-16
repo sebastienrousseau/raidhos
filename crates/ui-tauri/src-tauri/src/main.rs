@@ -45,19 +45,19 @@ struct PartitionInfo {
     mountpoints: Vec<String>,
 }
 
-#[derive(Deserialize)]
-struct BootConfig {
-    entries: Vec<BootEntryConfig>,
-    default_entry: Option<String>,
+#[derive(Deserialize, Serialize)]
+pub struct BootConfig {
+    pub entries: Vec<BootEntryConfig>,
+    pub default_entry: Option<String>,
 }
 
-#[derive(Deserialize)]
-struct BootEntryConfig {
-    title: String,
-    path: String,
-    params: String,
-    initrd: String,
-    kargs: String,
+#[derive(Deserialize, Serialize)]
+pub struct BootEntryConfig {
+    pub title: String,
+    pub path: String,
+    pub params: String,
+    pub initrd: String,
+    pub kargs: String,
 }
 
 struct VecSink<'a> {
@@ -153,10 +153,15 @@ fn list_partitions(device: String) -> Result<Vec<PartitionInfo>, String> {
         .collect())
 }
 
+fn project_config_dir() -> Result<std::path::PathBuf, String> {
+    let dirs = directories::ProjectDirs::from("org", "raidhos", "raidhos")
+        .ok_or_else(|| "no project config directory available on this platform".to_string())?;
+    Ok(dirs.config_dir().to_path_buf())
+}
+
 #[tauri::command]
 fn save_boot_config(config: BootConfig) -> Result<(), String> {
-    let home = std::env::var("HOME").map_err(|_| "HOME not set".to_string())?;
-    let dir = std::path::Path::new(&home).join(".config").join("raidhos");
+    let dir = project_config_dir()?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let path = dir.join("boot.json");
     let body = serde_json::to_vec_pretty(&config).map_err(|e| e.to_string())?;
@@ -212,7 +217,11 @@ fn install_elevated(device: String, payload_version: String) -> Result<String, S
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     } else {
         let err = String::from_utf8_lossy(&output.stderr).to_string();
-        Err(if err.is_empty() { "Elevation failed or was cancelled by user".to_string() } else { err })
+        Err(if err.is_empty() {
+            "Elevation failed or was cancelled by user".to_string()
+        } else {
+            err
+        })
     }
 }
 
@@ -229,17 +238,23 @@ fn maybe_run_internal_worker() -> bool {
     while i < args.len() {
         match args[i].as_str() {
             "--task" => {
-                if let Some(v) = args.get(i + 1) { task = v.clone(); }
+                if let Some(v) = args.get(i + 1) {
+                    task = v.clone();
+                }
                 i += 2;
-            }
+            },
             "--device" => {
-                if let Some(v) = args.get(i + 1) { device = v.clone(); }
+                if let Some(v) = args.get(i + 1) {
+                    device = v.clone();
+                }
                 i += 2;
-            }
+            },
             "--payload-version" => {
-                if let Some(v) = args.get(i + 1) { payload_version = v.clone(); }
+                if let Some(v) = args.get(i + 1) {
+                    payload_version = v.clone();
+                }
                 i += 2;
-            }
+            },
             _ => i += 1,
         }
     }
@@ -250,11 +265,11 @@ fn maybe_run_internal_worker() -> bool {
             Ok(msg) => {
                 println!("{msg}");
                 std::process::exit(0);
-            }
+            },
             Err(err) => {
                 eprintln!("{err}");
                 std::process::exit(1);
-            }
+            },
         }
     }
 
@@ -271,7 +286,9 @@ fn run_worker_install(device: &str, payload_version: &str) -> Result<String, Str
             }
         }
     }
-    let _ = std::process::Command::new("wipefs").args(["-a", device]).status();
+    let _ = std::process::Command::new("wipefs")
+        .args(["-a", device])
+        .status();
 
     struct StdoutSink;
     impl core::ProgressSink for StdoutSink {
@@ -294,7 +311,11 @@ fn run_worker_install(device: &str, payload_version: &str) -> Result<String, Str
 }
 
 #[tauri::command]
-fn write_grub_cfg_to_esp(esp_mount: String, config: BootConfig, data_label: String) -> Result<(), String> {
+fn write_grub_cfg_to_esp(
+    esp_mount: String,
+    config: BootConfig,
+    data_label: String,
+) -> Result<(), String> {
     let cfg = grub::render_grub_cfg(&config, &data_label);
     let path = std::path::Path::new(&esp_mount)
         .join("EFI")
@@ -323,7 +344,6 @@ fn copy_isos_to_data(mount_path: String, sources: Vec<String>) -> Result<Vec<Str
     }
     Ok(copied)
 }
-
 
 fn main() {
     if maybe_run_internal_worker() {

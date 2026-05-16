@@ -35,7 +35,10 @@ fn menuentry(entry: &BootEntryConfig) -> String {
 
     let mut out = String::new();
     out.push_str(&format!("menuentry \"{}\" {{\n", title));
-    out.push_str(&format!("  set isofile=\"($root){}\"\n", path_prefix(&path)));
+    out.push_str(&format!(
+        "  set isofile=\"($root){}\"\n",
+        path_prefix(&path)
+    ));
     out.push_str("  loopback loop $isofile\n");
     out.push_str("  if [ -f (loop)/boot/grub/grub.cfg ]; then\n");
     out.push_str("    configfile (loop)/boot/grub/grub.cfg\n");

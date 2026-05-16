@@ -1,0 +1,464 @@
+      :root {
+        --bg: #121212;
+        --bg-2: #1a1a1a;
+        --ink: #e0e0e0;
+        --muted: #bdbdbd;
+        --accent: #2a2a2a;
+        --accent-2: #303030;
+        --accent-3: #262626;
+        --card: #171717;
+        --surface: #1f1f1f;
+        --surface-strong: #262626;
+        --stroke: #707070;
+        --stroke-strong: #9a9a9a;
+        --glow: rgba(0, 0, 0, 0);
+        --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+        --space-1: 4px;
+        --space-2: 6px;
+        --space-3: 10px;
+        --space-4: 16px;
+        --space-5: 26px;
+        --space-6: 42px;
+        --space-7: 68px;
+        --space-8: 110px;
+        --radius-sm: var(--space-2);
+        --radius-md: 0px;
+        --radius-lg: 0px;
+        --icon-sm: var(--space-4);
+        --icon-md: var(--space-5);
+        --icon-lg: var(--space-6);
+        --icon-xl: var(--space-7);
+        --icon-xxl: var(--space-8);
+        --font-xs: var(--space-3);
+        --font-sm: var(--space-4);
+        --font-md: var(--space-5);
+        --font-lg: var(--space-6);
+        --font-xl: var(--space-7);
+        --font-xxl: var(--space-8);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: radial-gradient(1200px 800px at 25% 10%, var(--bg-2), var(--bg) 60%);
+        color: var(--ink);
+        font-family: "Avenir Next", "SF Pro Display", "Segoe UI Variable", "Noto Sans", "Ubuntu", sans-serif;
+        letter-spacing: 0.4px;
+        line-height: 1.6;
+        font-size: var(--font-sm);
+        font-weight: 500;
+      }
+
+      .shell {
+        width: min(980px, 92vw);
+        display: grid;
+        gap: var(--space-5);
+      }
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: var(--space-4);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: var(--space-4);
+      }
+
+      .logo {
+        background: transparent;
+        box-shadow: none;
+        width: auto;
+        height: auto;
+        display: inline-block;
+        color: #f0f0f0;
+        font-weight: 700;
+        letter-spacing: 1.2px;
+        font-size: var(--font-md);
+        line-height: 1;
+      }
+
+      h1 {
+        font-size: var(--font-lg);
+        margin: 0;
+      }
+
+      h2 {
+        margin: 0 0 var(--space-2) 0;
+        font-size: var(--font-md);
+        font-weight: 600;
+      }
+
+      .subtitle {
+        color: var(--muted);
+        margin: var(--space-1) 0 0 0;
+      }
+
+      .card {
+        background: var(--card);
+        border-radius: 0;
+        border: 1px solid var(--stroke);
+        padding: var(--space-5);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(16px);
+      }
+
+      .actions {
+        display: flex;
+        gap: var(--space-3);
+      }
+
+      button {
+        border: 0;
+        border-radius: 0;
+        padding: var(--space-3) var(--space-4);
+        min-height: var(--space-5);
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 160ms ease, box-shadow 160ms ease;
+      }
+
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .primary {
+        background: var(--accent);
+        color: #f0f0f0;
+        box-shadow: none;
+      }
+
+      .primary:hover {
+        transform: translateY(-1px);
+      }
+
+      .ghost {
+        background: transparent;
+        border: 1px solid var(--stroke);
+        color: var(--ink);
+      }
+
+      .disks {
+        display: grid;
+        gap: var(--space-3);
+      }
+
+      .disk {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        padding: var(--space-4) var(--space-4);
+        border-radius: 0;
+        border: 1px solid var(--stroke);
+        background: var(--surface);
+        transition: transform 160ms ease, box-shadow 160ms ease;
+        cursor: pointer;
+        position: relative;
+      }
+
+      .disk.selected {
+        border-color: var(--stroke-strong);
+        background: var(--surface-strong);
+        box-shadow: none;
+      }
+
+      .disk.selected::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: var(--space-1);
+        background: var(--stroke-strong);
+        border-radius: 0;
+      }
+
+      .disk:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 16px 40px rgba(9, 97, 120, 0.22);
+      }
+
+      .disk strong {
+        font-size: 15px;
+      }
+
+      .disk small {
+        color: var(--muted);
+      }
+
+      .pill {
+        padding: var(--space-2) var(--space-3);
+        background: #232323;
+        color: #eaeaea;
+        border-radius: 0;
+        font-size: var(--font-xs);
+        font-weight: 600;
+        border: 1px solid var(--stroke-strong);
+      }
+
+      .footer {
+        color: var(--muted);
+        font-size: var(--font-xs);
+      }
+
+      .panel {
+        display: grid;
+        gap: var(--space-3);
+      }
+
+      .confirm {
+        display: grid;
+        gap: var(--space-3);
+        padding: var(--space-4);
+        border-radius: 0;
+        border: 1px dashed var(--stroke);
+        background: var(--surface);
+      }
+
+      input {
+        width: 100%;
+        border-radius: 0;
+        padding: var(--space-3) var(--space-4);
+        border: 1px solid var(--stroke);
+        font-size: var(--font-sm);
+        background: #141414;
+        color: var(--ink);
+      }
+
+      .entry-params {
+        width: 100%;
+        margin-top: var(--space-2);
+      }
+
+      .confirm label {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+        line-height: 1.4;
+      }
+
+      input[type="checkbox"] {
+        width: var(--space-4);
+        height: var(--space-4);
+        accent-color: var(--stroke-strong);
+      }
+
+      .entry-advanced {
+        margin-top: var(--space-3);
+      }
+
+      .entry-advanced summary {
+        cursor: pointer;
+        color: var(--muted);
+        font-size: var(--font-xs);
+        letter-spacing: 0.4px;
+      }
+
+      .entry-advanced input {
+        margin-top: var(--space-2);
+      }
+
+      .entry-default {
+        display: inline-flex;
+        gap: var(--space-2);
+        align-items: center;
+        margin-top: var(--space-2);
+        color: var(--muted);
+        font-size: var(--font-xs);
+      }
+
+      .progress {
+        display: grid;
+        gap: var(--space-2);
+      }
+
+      .progress-item {
+        display: flex;
+        justify-content: space-between;
+        background: #222222;
+        border: 1px solid var(--stroke);
+        border-radius: 0;
+        padding: var(--space-2) var(--space-3);
+        font-size: var(--font-sm);
+      }
+
+      .plan {
+        display: grid;
+        gap: var(--space-2);
+        font-size: var(--font-sm);
+        color: var(--muted);
+      }
+
+      .plan-item {
+        border: 1px solid var(--stroke);
+        padding: var(--space-2) var(--space-3);
+        background: #1d1d1d;
+      }
+
+      .banner {
+        display: none;
+        border: 1px solid var(--stroke);
+        padding: var(--space-2) var(--space-3);
+        background: #1a1a1a;
+        font-size: var(--font-sm);
+        color: var(--ink);
+      }
+
+      .banner.error {
+        border-color: #7a7a7a;
+      }
+
+      .spinner {
+        display: inline-block;
+        width: var(--space-3);
+        height: var(--space-3);
+        border: 2px solid var(--stroke);
+        border-top-color: transparent;
+        animation: spin 700ms linear infinite;
+        margin-right: var(--space-2);
+      }
+
+      .modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        display: none;
+        place-items: center;
+        z-index: 1000;
+      }
+
+      .modal.open {
+        display: grid;
+      }
+
+      .modal-card {
+        background: #1a1a1a;
+        border: 1px solid var(--stroke);
+        padding: var(--space-5);
+        width: min(420px, 90vw);
+      }
+
+      .modal-actions {
+        display: flex;
+        gap: var(--space-3);
+        margin-top: var(--space-4);
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .boot-progress {
+        height: var(--space-1);
+        background: #1a1a1a;
+        border: 1px solid var(--stroke);
+        border-radius: 0;
+        overflow: hidden;
+      }
+
+      .boot-progress-fill {
+        height: 100%;
+        width: 0%;
+        background: var(--stroke-strong);
+        transition: width 120ms linear;
+      }
+
+      @keyframes fadeUp {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .card {
+        animation: fadeUp 380ms ease both;
+      }
+
+      /* Boot splash */
+      .splash {
+        position: fixed;
+        inset: 0;
+        background: #121212;
+        display: grid;
+        place-items: center;
+        z-index: 999;
+        opacity: 1;
+        transition: opacity 420ms ease;
+      }
+
+      .splash.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .splash-logo {
+        display: grid;
+        place-items: center;
+        position: relative;
+      }
+
+      .splash-glyph {
+        font-size: var(--font-xxl);
+        color: #f0f0f0;
+        text-shadow: none;
+        z-index: 1;
+      }
+
+      .splash-text {
+        margin-top: var(--space-4);
+        font-size: var(--font-sm);
+        letter-spacing: 1.2px;
+        color: #9aa7b8;
+      }
+
+      @keyframes pulse {
+        0% {
+          opacity: 0.85;
+        }
+        50% {
+          opacity: 1;
+        }
+        100% {
+          opacity: 0.85;
+        }
+      }
+
+      .splash-logo {
+        animation: pulse 2.8s ease-in-out infinite;
+      }
+
+      .app {
+        opacity: 0;
+        transform: translateY(6px);
+        transition: opacity 420ms ease, transform 420ms ease;
+      }
+
+      .app.ready {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+/* Replacements for previously-inline style attributes so the CSP can
+   forbid 'unsafe-inline' for style-src. */
+.actions--mb-3 {
+  margin-bottom: var(--space-3);
+}
+.actions--mt-2 {
+  margin-top: var(--space-2);
+}

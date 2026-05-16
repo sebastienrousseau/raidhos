@@ -1,3 +1,21 @@
-target
-node_modules
+target/
+node_modules/
 .DS_Store
+
+# Build outputs
+build/
+BOOTX64.EFI
+dist/
+*.tar.gz
+*.zip
+*.sha256
+
+# Coverage
+cobertura.xml
+tarpaulin-report.html
+lcov.info
+
+# Editors
+.vscode/
+.idea/
+*.swp

@@ -19,7 +19,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self' ipc: tauri:; frame-ancestors 'none'; base-uri 'self'; form-action 'none'; object-src 'none'"
     }
   }
 }
