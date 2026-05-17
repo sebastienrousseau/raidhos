@@ -9,13 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Ventoy gap closures
 
-Eleven of the 25 gaps tracked in
+Twelve of the 25 gaps tracked in
 [`docs/VENTOY_COMPARISON.md`](docs/VENTOY_COMPARISON.md) are
 closed in v0.0.1; two are scaffolded with API surface +
 tooling, with the destructive paths deferred to v0.0.2.
 
 | Gap | Status | Surface |
 |---|---|---|
+| G6 IMG / raw disk image boot | closed | grub.cfg renderer detects `.img` / `.raw` and emits `loopback` + `chainloader (loop)` |
 | G7 .EFI binary chainload | closed | grub.cfg renderer detects `.efi` and emits `chainloader` |
 | G8 NTFS data partition | closed | `--data-fs ntfs` (Linux pipeline) |
 | G9 ext4 / Btrfs / XFS data partition | closed | `--data-fs ext4 \| btrfs \| xfs` (Linux pipeline) |
@@ -40,8 +41,8 @@ tooling, with the destructive paths deferred to v0.0.2.
   host's compile-time `target_os`. CI coverage gate raised from
   65% to 90%.
 - Test count: `raidhos-core` 201 unit + 26 doctest, `raidhos-ui`
-  55, `raidhos-cli` 14, `raidhos-priv-helper` 9 seccomp + 6 toctou
-  + 7 integration. Total: 318+ tests across the workspace.
+  61, `raidhos-cli` 14, `raidhos-priv-helper` 9 seccomp + 6 toctou
+  + 7 integration. Total: 324+ tests across the workspace.
 
 ### Added
 
@@ -85,6 +86,12 @@ tooling, with the destructive paths deferred to v0.0.2.
   `hidden = true` still suppresses entries inside submenus, and
   class names go through the same metachar filter as everything
   else. Closes Ventoy gap G20.
+- Raw disk image (`.img` / `.raw`) boot: the grub.cfg renderer
+  detects these extensions at the end of an entry's `path` and
+  emits `loopback loop $imgfile` followed by `chainloader
+  (loop)` instead of the ISO 9660 kernel-search flow. Suits
+  OpenWrt, floppy rescue images, and small embedded boot
+  images that ship their own MBR. Closes Ventoy gap G6.
 - `insmod udf` / `ntfs` / `ext2` / `btrfs` / `xfs` emitted by
   the grub.cfg renderer, and the same module list is embedded
   in the EFI binary via `tools/grub/build_grub.sh`. Closes

@@ -70,7 +70,14 @@ link to the section that documents what's needed.
   image directly. Not in our scope for v0.0.1; consider for
   v0.0.2 alongside WIM.
 
-- **G6. IMG / raw disk image boot** — Floppy and small embedded
+- **G6. IMG / raw disk image boot** — ✅ **Closed in v0.0.1.**
+  `.img` / `.raw` paths on a boot entry route to `loopback loop
+  $imgfile` + `chainloader (loop)` instead of the ISO 9660
+  kernel-search flow. Suits OpenWrt / floppy rescue / small
+  embedded images that ship their own MBR. See
+  `is_raw_disk_image()` in `crates/ui-tauri/src-tauri/src/grub.rs`.
+
+  *Original gap text:* Floppy and small embedded
   systems (DOS rescue images, BIOS firmware updaters). Ventoy
   exposes `memdisk` mode. RaidhOS does not.
 
@@ -291,6 +298,7 @@ priorities aligned to user impact and security risk:
 | G3 Secure Boot signed shim | P0 — security claim | v0.0.2 (scaffolded in v0.0.1: MOK keypair/sign/enrol scripts ship) |
 | G2 ARM64 UEFI | P1 — Raspberry Pi support | v0.1.0 |
 | G4 WIM boot | P1 — Windows installer ISOs | v0.0.2 |
+| **G6 IMG / raw disk image boot** | **P2 — OpenWrt / floppy** | **✅ closed in v0.0.1** (`.img` / `.raw` → loopback + chainload) |
 | **G7 .EFI binary boot** | **P2 — firmware tools** | **✅ closed in v0.0.1** |
 | **G10 UDF support** | **P3 — Blu-ray rescue** | **✅ closed in v0.0.1** (`insmod udf` + embedded in EFI) |
 | **G8 NTFS data partition** | **P1 — Windows-only hosts** | **✅ closed in v0.0.1** (`--data-fs ntfs`) |
@@ -308,7 +316,7 @@ priorities aligned to user impact and security risk:
 | **G24 User-supplied checksum** | **P3 — flexibility** | **✅ closed in v0.0.1** (`verify_iso_sha256` / companion file) |
 | G25 Tested ISO catalog growth | continuous | — |
 
-**v0.0.1 closed:** G7, G8, G9 (partial), G10, G11, G13, G17, G18, G19, G20, G24 — eleven gaps.
+**v0.0.1 closed:** G6, G7, G8, G9 (partial), G10, G11, G13, G17, G18, G19, G20, G24 — twelve gaps.
 **v0.0.1 scaffolded:** G1, G3 — two gaps with the API surface, validation, and tooling in place; the destructive write path or the third-party shim signing remain for v0.0.2.
 
 ---

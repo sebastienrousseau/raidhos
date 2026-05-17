@@ -141,6 +141,18 @@ fn menuentry(entry: &BootEntryConfig) -> String {
             "  chainloader \"($root){}\"\n",
             path_prefix(&path)
         ));
+    } else if is_raw_disk_image(&path) {
+        // Ventoy gap G6: `.img` / `.raw` raw disk image. Loopback-
+        // mount the image and chainload its embedded boot sector.
+        // Suits OpenWrt / floppy rescue / small embedded images
+        // that ship their own MBR. Persistence kargs don't apply
+        // — the image isn't a Linux live ISO.
+        out.push_str(&format!(
+            "  set imgfile=\"($root){}\"\n",
+            path_prefix(&path)
+        ));
+        out.push_str("  loopback loop $imgfile\n");
+        out.push_str("  chainloader (loop)\n");
     } else {
         out.push_str(&format!(
             "  set isofile=\"($root){}\"\n",
@@ -181,6 +193,15 @@ fn menuentry(entry: &BootEntryConfig) -> String {
 fn is_efi_binary(path: &str) -> bool {
     let lower = path.to_ascii_lowercase();
     lower.ends_with(".efi")
+}
+
+/// Heuristic: does the (already-sanitised) path look like a raw
+/// disk image rather than a Linux live ISO? Used by Ventoy gap G6
+/// to route `.img` / `.raw` through a `loopback` + `chainloader
+/// (loop)` boot rather than the kernel-search loopback flow.
+fn is_raw_disk_image(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower.ends_with(".img") || lower.ends_with(".raw")
 }
 
 /// Strip every character that has meaning to the GRUB scripting
@@ -989,6 +1010,105 @@ mod tests {
         );
         // The sanitised class name still flows through.
         assert!(out.contains("submenu \"linux echo bad\" {"));
+    }
+
+    // ---------------------------------------------------------------
+    // Ventoy gap G6: IMG / raw disk image boot
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn is_raw_disk_image_recognises_img_and_raw() {
+        assert!(is_raw_disk_image("openwrt.img"));
+        assert!(is_raw_disk_image("/boot/floppy.IMG"));
+        assert!(is_raw_disk_image("disk.raw"));
+        assert!(is_raw_disk_image("/x/Y.Raw"));
+    }
+
+    #[test]
+    fn is_raw_disk_image_rejects_iso_and_efi() {
+        assert!(!is_raw_disk_image("ubuntu.iso"));
+        assert!(!is_raw_disk_image("bootx64.efi"));
+        assert!(!is_raw_disk_image(""));
+        // Substring 'img' / 'raw' mustn't match — it must be an
+        // extension at the end of the path.
+        assert!(!is_raw_disk_image("/image/ubuntu.iso"));
+        assert!(!is_raw_disk_image("/braw/x.iso"));
+    }
+
+    #[test]
+    fn render_loopback_chainloads_img_entries() {
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![entry("OpenWrt", "/boot/isos/openwrt.img")],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+            tree_view: false,
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        // The img path goes through loopback + chainload-on-loop.
+        assert!(
+            out.contains("set imgfile=\"($root)/boot/isos/openwrt.img\""),
+            "missing imgfile: {out}",
+        );
+        assert!(out.contains("loopback loop $imgfile"));
+        assert!(out.contains("chainloader (loop)"));
+        // None of the ISO 9660 kernel-search boilerplate should appear.
+        assert!(!out.contains("(loop)/casper/vmlinuz"));
+        assert!(!out.contains("(loop)/live/vmlinuz"));
+        assert!(!out.contains("No known kernel path found"));
+    }
+
+    #[test]
+    fn render_keeps_iso_path_for_iso_entries_under_g6() {
+        // G6 must not regress G7's ISO routing.
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![entry("Ubuntu", "/boot/isos/ubuntu.iso")],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+            tree_view: false,
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        assert!(out.contains("set isofile="));
+        assert!(out.contains("(loop)/casper/vmlinuz"));
+        assert!(!out.contains("chainloader (loop)"));
+    }
+
+    #[test]
+    fn render_keeps_efi_path_for_efi_entries_under_g6() {
+        // G6 must not regress G7's EFI routing either.
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![entry("Memtest", "/memtest86.efi")],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+            tree_view: false,
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        assert!(out.contains("chainloader \"($root)/memtest86.efi\""));
+        assert!(!out.contains("loopback loop"));
+    }
+
+    #[test]
+    fn render_mixes_iso_efi_and_img_entries() {
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![
+                entry("Memtest", "/m.efi"),
+                entry("Ubuntu", "/u.iso"),
+                entry("OpenWrt", "/o.img"),
+            ],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+            tree_view: false,
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        assert!(out.contains("chainloader \"($root)/m.efi\""));
+        assert!(out.contains("set isofile=\"($root)/u.iso\""));
+        assert!(out.contains("set imgfile=\"($root)/o.img\""));
+        assert!(out.contains("chainloader (loop)"));
+        // Brace balance preserved across all three branches.
+        assert_eq!(out.matches('{').count(), out.matches('}').count());
     }
 
     // ---------------------------------------------------------------
