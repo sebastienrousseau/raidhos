@@ -142,18 +142,31 @@ fn main() {
         eprintln!("seccomp filter not installed: {e}");
     }
 
+    // Final exit code derived from whether the operation succeeded.
+    // Helper returns:
+    //   0 — `{ok: true}`
+    //   1 — `{ok: false, error: ...}`  (runtime / validation failure)
+    //   2 — clap parse failure (already exited above)
+    let mut ok = true;
+
     match cli.command {
         Command::ListDisks => {
             let resp = match core::list_disks() {
                 Ok(disks) => HelperResponse::ok(disks),
-                Err(err) => HelperResponse::<Vec<core::DiskInfo>>::err(err.to_string()),
+                Err(err) => {
+                    ok = false;
+                    HelperResponse::<Vec<core::DiskInfo>>::err(err.to_string())
+                }
             };
             print_response(&resp);
         }
         Command::ListPartitions { device } => {
             let resp = match core::list_partitions(device) {
                 Ok(parts) => HelperResponse::ok(parts),
-                Err(err) => HelperResponse::<Vec<core::PartitionInfo>>::err(err.to_string()),
+                Err(err) => {
+                    ok = false;
+                    HelperResponse::<Vec<core::PartitionInfo>>::err(err.to_string())
+                }
             };
             print_response(&resp);
         }
@@ -201,13 +214,23 @@ fn main() {
 
             let resp = match (install_result, persistence_result) {
                 (Ok(_), None) => HelperResponse::ok(()),
-                (Ok(_), Some(p_err)) => HelperResponse::<()>::err(format!(
-                    "install succeeded but persistence creation failed: {p_err}"
-                )),
-                (Err(e), _) => HelperResponse::<()>::err(e),
+                (Ok(_), Some(p_err)) => {
+                    ok = false;
+                    HelperResponse::<()>::err(format!(
+                        "install succeeded but persistence creation failed: {p_err}"
+                    ))
+                }
+                (Err(e), _) => {
+                    ok = false;
+                    HelperResponse::<()>::err(e)
+                }
             };
             print_response(&resp);
         }
+    }
+
+    if !ok {
+        std::process::exit(1);
     }
 }
 

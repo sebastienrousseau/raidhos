@@ -51,7 +51,7 @@ jobs:
       # Tracking target: 85% by v0.0.2, 95% by v0.1.0.
       - name: Tarpaulin
         run: |
-          cargo tarpaulin -p raidhos-core --fail-under 55 --out Xml
+          cargo tarpaulin -p raidhos-core --fail-under 70 --out Xml
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4

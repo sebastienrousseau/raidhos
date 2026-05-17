@@ -452,6 +452,47 @@ mod tests {
     }
 
     #[test]
+    fn hex_lower_matches_known_input() {
+        // sha2::Sha256::digest(b"") = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+        let hasher = sha2::Sha256::new();
+        let digest = hasher.finalize();
+        let s = hex_lower(&digest);
+        assert_eq!(
+            s,
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+    }
+
+    #[test]
+    fn hex_lower_renders_all_byte_values() {
+        let bytes: Vec<u8> = (0u8..16).collect();
+        assert_eq!(hex_lower(&bytes), "000102030405060708090a0b0c0d0e0f");
+    }
+
+    #[test]
+    fn sha256_of_file_returns_known_value() {
+        let tmp = std::env::temp_dir().join(format!(
+            "raidhos-sha-{}-{}",
+            std::process::id(),
+            rand_suffix()
+        ));
+        std::fs::write(&tmp, b"hello").unwrap();
+        let s = sha256_of_file(&tmp).unwrap();
+        let _ = std::fs::remove_file(&tmp);
+        // sha256("hello") = 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+        assert_eq!(
+            s,
+            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+        );
+    }
+
+    #[test]
+    fn sha256_of_file_errors_on_missing_path() {
+        let res = sha256_of_file(Path::new("/nonexistent/raidhos-sha-not-found"));
+        assert!(res.is_err());
+    }
+
+    #[test]
     fn load_catalog_from_reads_valid_file() {
         let tmp = std::env::temp_dir().join(format!(
             "raidhos-good-{}-{}",

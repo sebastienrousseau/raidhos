@@ -306,4 +306,77 @@ mod tests {
         assert!(matches!(res, Err(ManifestError::Manifest(_))));
         let _ = fs::remove_dir_all(&dir);
     }
+
+    #[test]
+    fn checksums_equal_is_case_insensitive() {
+        assert!(checksums_equal("DEADBEEF", "deadbeef"));
+        assert!(checksums_equal("  deadbeef  ", "deadbeef"));
+        assert!(checksums_equal("DEADbeef", "  DEADBEEF"));
+        assert!(!checksums_equal("deadbeef", "feedface"));
+        assert!(!checksums_equal("", "x"));
+    }
+
+    #[test]
+    fn manifest_path_for_returns_local_when_present() {
+        let dir = tmp_dir();
+        let local = dir.join("manifest.json");
+        write(&local, b"{}");
+        let p = manifest_path_for(&dir);
+        assert_eq!(p, local);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn manifest_path_for_falls_back_when_missing() {
+        let dir = tmp_dir();
+        let p = manifest_path_for(&dir);
+        assert!(p.to_string_lossy().contains("manifest.json"));
+        // Either repo-shipped fallback or the (missing) local path —
+        // both contain "manifest.json".
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn hex_lower_renders_zero_byte() {
+        assert_eq!(hex_lower(&[]), "");
+        assert_eq!(hex_lower(&[0xff]), "ff");
+        assert_eq!(hex_lower(&[0x00, 0xff, 0xa5]), "00ffa5");
+    }
+
+    #[test]
+    fn manifest_error_io_conversion() {
+        // From<io::Error> for ManifestError
+        let io_err = std::io::Error::new(std::io::ErrorKind::Other, "boom");
+        let m: ManifestError = io_err.into();
+        assert!(matches!(m, ManifestError::Io(_)));
+        // Round-trip through Display
+        assert!(m.to_string().contains("io"));
+    }
+
+    #[test]
+    fn manifest_error_variants_render() {
+        let cases = [
+            ManifestError::Manifest("bad parse".into()),
+            ManifestError::Unpinned,
+            ManifestError::Mismatch {
+                manifest: "a".into(),
+                computed: "b".into(),
+            },
+        ];
+        for c in cases {
+            assert!(!c.to_string().is_empty());
+        }
+    }
+
+    #[test]
+    fn hash_tree_handles_empty_dir() {
+        let dir = tmp_dir();
+        let h = hash_tree(&dir).unwrap();
+        // sha256("") = the empty-input digest
+        assert_eq!(
+            h,
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
 }
