@@ -463,7 +463,12 @@ mod response_tests {
 #[cfg(all(test, target_os = "linux"))]
 mod persistence_tests {
     use super::*;
-    use core::{MockOutcome, MockRuntime, Runtime};
+    // `core` is ambiguous here (both `::core` and the
+    // `raidhos_core as core` re-export from `super::*` exist), so
+    // import the runtime types via the full crate path. `Runtime`
+    // is needed at this scope because the test bodies call its
+    // trait methods on the mock.
+    use raidhos_core::{MockOutcome, MockRuntime};
 
     fn tmp_mount() -> std::path::PathBuf {
         let p = std::env::temp_dir().join(format!(
