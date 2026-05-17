@@ -10,9 +10,9 @@
 // regardless of the runner's OS.
 #![allow(dead_code)]
 
+use crate::parsers::{parse_lsblk_disks, parse_lsblk_partitions};
 #[cfg(target_os = "linux")]
 use crate::runtime::RealRuntime;
-use crate::parsers::{parse_lsblk_disks, parse_lsblk_partitions};
 use crate::runtime::Runtime;
 #[allow(unused_imports)]
 use crate::{

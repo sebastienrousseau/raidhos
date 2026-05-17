@@ -11,9 +11,9 @@
 
 #![allow(dead_code)]
 
+use crate::parsers::parse_disks_plist;
 #[cfg(target_os = "macos")]
 use crate::runtime::RealRuntime;
-use crate::parsers::parse_disks_plist;
 use crate::runtime::Runtime;
 #[allow(unused_imports)]
 use crate::{

@@ -76,7 +76,20 @@ jobs:
       # Never lower this without a CHANGELOG entry justifying why.
       - name: Tarpaulin
         run: |
-          cargo tarpaulin -p raidhos-core --fail-under 100 --out Xml
+          # `-p raidhos-core` selects the package, but tarpaulin still
+          # walks lines in any dev-dep / workspace binary it touches.
+          # Explicitly exclude the priv-helper main.rs (which is
+          # gated under its own dedicated coverage path elsewhere) and
+          # the fuzz harness so this gate is strictly about
+          # raidhos-core's library coverage.
+          cargo tarpaulin \
+            -p raidhos-core \
+            --exclude-files 'crates/priv-helper/**' \
+            --exclude-files 'crates/cli/**' \
+            --exclude-files 'crates/ui-tauri/**' \
+            --exclude-files 'fuzz/**' \
+            --fail-under 100 \
+            --out Xml
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4

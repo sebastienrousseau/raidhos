@@ -11,9 +11,9 @@
 
 #![allow(dead_code)]
 
+use crate::parsers::parse_get_disk_json;
 #[cfg(target_os = "windows")]
 use crate::runtime::RealRuntime;
-use crate::parsers::parse_get_disk_json;
 use crate::runtime::Runtime;
 #[allow(unused_imports)]
 use crate::{
