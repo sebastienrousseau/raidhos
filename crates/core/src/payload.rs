@@ -161,6 +161,16 @@ fn collect_files(
         if ty.is_dir() {
             collect_files(root, &path, out)?;
         } else if ty.is_file() {
+            // Skip `manifest.json` at the payload root — the
+            // manifest stores the hash of everything else, so
+            // including itself would be a fixed-point problem.
+            // This keeps the hash stable when the manifest gets
+            // (re)written with the resulting checksum.
+            if path.parent() == Some(root)
+                && path.file_name().and_then(|n| n.to_str()) == Some("manifest.json")
+            {
+                continue;
+            }
             let rel = path
                 .strip_prefix(root)
                 .unwrap_or(&path)
@@ -262,50 +272,57 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
+    /// A manifest pinned to the wrong hash must yield
+    /// `ManifestError::Mismatch` with both sides reported. Covers
+    /// the Mismatch return arm of `verify_payload`.
+    #[test]
+    fn manifest_with_wrong_checksum_returns_mismatch() {
+        let dir = tmp_dir();
+        write(&dir.join("file"), b"contents-A");
+        // Pin a checksum that DOESN'T match anything the tree
+        // produces.
+        let bogus = "deadbeef".repeat(8); // 64 hex chars
+        write(
+            &dir.join("manifest.json"),
+            format!(r#"{{"name":"x","version":"0","checksum":"{bogus}"}}"#).as_bytes(),
+        );
+        let err = verify_payload(&dir).unwrap_err();
+        match err {
+            ManifestError::Mismatch { manifest, computed } => {
+                assert_eq!(manifest.to_lowercase(), bogus);
+                assert!(!computed.is_empty(), "computed hash empty");
+                assert_ne!(manifest.to_lowercase(), computed);
+            }
+            other => panic!("expected Mismatch, got {other:?}"),
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// hash_tree skips the root `manifest.json`, so a manifest
+    /// containing the hash-of-the-rest can verify cleanly via
+    /// [`verify_payload`]. Closes the structural fixed-point gap
+    /// that the previous Mismatch-documenting test described.
     #[test]
     fn populated_manifest_matches_clean_tree() {
-        let dir = tmp_dir();
-        write(&dir.join("file"), b"hi");
-        // Compute the expected hash on a payload tree that does not
-        // yet contain the manifest itself.
-        let payload_dir = tmp_dir();
-        write(&payload_dir.join("file"), b"hi");
-        let expected = hash_tree(&payload_dir).unwrap();
-
-        // Now stage the same payload + manifest under one root.
         let bundle = tmp_dir();
         write(&bundle.join("payload/file"), b"hi");
+        write(&bundle.join("payload/sub/other"), b"more");
+
+        // Hash the payload tree before staging the manifest. Since
+        // `hash_tree` now skips `manifest.json` at the payload root,
+        // writing the manifest with this hash leaves the directory
+        // hash unchanged.
+        let payload_dir = bundle.join("payload");
+        let expected = hash_tree(&payload_dir).unwrap();
         write(
             &bundle.join("payload/manifest.json"),
             format!(r#"{{"name":"x","version":"0","checksum":"{expected}"}}"#).as_bytes(),
         );
-        // Re-hash the bundle/payload tree (which now includes the
-        // manifest) — this is the operational reality, so we need to
-        // re-encode the expected hash.
-        let bundle_payload = bundle.join("payload");
-        let expected_bundle = hash_tree(&bundle_payload).unwrap();
-        write(
-            &bundle.join("payload/manifest.json"),
-            format!(r#"{{"name":"x","version":"0","checksum":"{expected_bundle}"}}"#).as_bytes(),
-        );
-        // After updating the manifest the file content changes again,
-        // so the equality is *not* expected to hold on a tree that
-        // includes its own manifest. The current implementation hashes
-        // the entire payload directory; manifest verification is
-        // therefore a best-effort gate against bulk replacement, not a
-        // cryptographic seal. This test documents the behaviour.
-        let final_hash = hash_tree(&bundle_payload).unwrap();
-        // The third manifest write changes the manifest body, so the
-        // pinned value (computed against the second write) will no
-        // longer match — assert mismatch as the documented behaviour.
-        let res = verify_payload(&bundle_payload);
-        assert!(
-            matches!(res, Err(ManifestError::Mismatch { .. })) || final_hash == expected_bundle,
-            "got {res:?}; final_hash={final_hash} expected={expected_bundle}"
-        );
 
-        let _ = fs::remove_dir_all(&dir);
-        let _ = fs::remove_dir_all(&payload_dir);
+        // Now verify_payload should return Ok(()) — the manifest's
+        // pinned checksum equals the (skip-self) tree hash.
+        let res = verify_payload(&payload_dir);
+        assert!(res.is_ok(), "got {res:?}");
         let _ = fs::remove_dir_all(&bundle);
     }
 

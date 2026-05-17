@@ -10,13 +10,21 @@
 // regardless of the runner's OS.
 #![allow(dead_code)]
 
+#[cfg(target_os = "linux")]
+use crate::runtime::RealRuntime;
 use crate::parsers::{parse_lsblk_disks, parse_lsblk_partitions};
-use crate::runtime::{RealRuntime, Runtime};
+use crate::runtime::Runtime;
+#[allow(unused_imports)]
 use crate::{
     CoreError, DiskInfo, InstallRequest, PartitionInfo, ProgressEvent, ProgressSink, Result,
 };
 
-/// Discovery wrapper using the real runtime.
+/// Discovery wrapper using the real runtime. Cfg-gated so the
+/// thin pub-fn wrapper only appears when this is the host's
+/// platform module — keeps coverage at 100% per host (the
+/// `list_disks_with` inner is exercised by the cross-platform
+/// tests regardless of the host's target_os).
+#[cfg(target_os = "linux")]
 pub fn list_disks() -> Result<Vec<DiskInfo>> {
     list_disks_with(&RealRuntime)
 }
@@ -29,7 +37,8 @@ pub(crate) fn list_disks_with(rt: &dyn Runtime) -> Result<Vec<DiskInfo>> {
     parse_lsblk_disks(&bytes)
 }
 
-/// Partition enumeration via `lsblk`.
+/// Partition enumeration via `lsblk`. Cfg-gated; see `list_disks`.
+#[cfg(target_os = "linux")]
 pub fn list_partitions(device: String) -> Result<Vec<PartitionInfo>> {
     list_partitions_with(&RealRuntime, &device)
 }
@@ -47,7 +56,9 @@ pub(crate) fn list_partitions_with(rt: &dyn Runtime, device: &str) -> Result<Vec
     parse_lsblk_partitions(&bytes, device)
 }
 
-/// Run the install pipeline using the real runtime.
+/// Run the install pipeline using the real runtime. Cfg-gated;
+/// see `list_disks`.
+#[cfg(target_os = "linux")]
 pub fn install(req: InstallRequest, sink: &dyn ProgressSink) -> Result<()> {
     let rt = RealRuntime;
     let disks = list_disks_with(&rt)?;
@@ -776,6 +787,45 @@ mod tests {
         let r = req("/dev/sdb", true, false, true);
         let err = install_with(r, &sink(), &rt, &disks).unwrap_err();
         assert!(format!("{err}").contains("exFAT formatter not found"));
+    }
+
+    /// Mirror of `install_exfat_label_fallback_after_initial_failure`
+    /// but for the `mkexfatfs` (older formatter) path — covers
+    /// linux.rs:309-310, the retry-without-label branch when the
+    /// first `mkexfatfs -n DATA <part>` attempt fails.
+    #[test]
+    fn install_mkexfatfs_label_fallback_after_initial_failure() {
+        let (_dir, mut rt) = payload_dir_with(true, true);
+        rt.available_cmds = vec!["mkexfatfs"]; // mkfs.exfat NOT available
+                                               // 5x parted Ok + mkfs.vfat Ok + mkexfatfs -n DATA Err +
+                                               // mkexfatfs (retry no label) Ok + exfatlabel Ok + mounts + cps + umounts.
+        rt.outcomes = std::cell::RefCell::new(vec![
+            MockOutcome::Ok(vec![]),                        // parted mklabel
+            MockOutcome::Ok(vec![]),                        // parted mkpart ESP
+            MockOutcome::Ok(vec![]),                        // parted set esp on
+            MockOutcome::Ok(vec![]),                        // parted mkpart DATA
+            MockOutcome::Ok(vec![]),                        // parted print
+            MockOutcome::Ok(vec![]),                        // mkfs.vfat
+            MockOutcome::Err("first attempt fails".into()), // mkexfatfs -n DATA
+            MockOutcome::Ok(vec![]),                        // mkexfatfs (no label) retry
+            MockOutcome::Ok(vec![]),                        // exfatlabel
+            MockOutcome::Ok(vec![]),                        // mount esp
+            MockOutcome::Ok(vec![]),                        // mount data
+            MockOutcome::Ok(vec![]),                        // cp esp/
+            MockOutcome::Ok(vec![]),                        // cp data/
+            MockOutcome::Ok(vec![]),                        // umount esp
+            MockOutcome::Ok(vec![]),                        // umount data
+        ]);
+        let disks = vec![disk("/dev/sdb", vec![], false)];
+        let r = req("/dev/sdb", true, false, true);
+        assert!(install_with(r, &sink(), &rt, &disks).is_ok());
+        let inv = rt.invocations.borrow();
+        assert_eq!(
+            inv.iter().filter(|i| i.cmd == "mkexfatfs").count(),
+            2,
+            "expected mkexfatfs to be retried",
+        );
+        assert!(inv.iter().any(|i| i.cmd == "exfatlabel"));
     }
 
     #[test]

@@ -11,12 +11,16 @@
 
 #![allow(dead_code)]
 
+#[cfg(target_os = "windows")]
+use crate::runtime::RealRuntime;
 use crate::parsers::parse_get_disk_json;
-use crate::runtime::{RealRuntime, Runtime};
+use crate::runtime::Runtime;
+#[allow(unused_imports)]
 use crate::{
     CoreError, DiskInfo, InstallRequest, PartitionInfo, ProgressEvent, ProgressSink, Result,
 };
 
+#[cfg(target_os = "windows")]
 pub fn list_disks() -> Result<Vec<DiskInfo>> {
     list_disks_with(&RealRuntime)
 }
@@ -27,10 +31,12 @@ pub(crate) fn list_disks_with(rt: &dyn Runtime) -> Result<Vec<DiskInfo>> {
     parse_get_disk_json(&bytes)
 }
 
+#[cfg(target_os = "windows")]
 pub fn list_partitions(_device: String) -> Result<Vec<PartitionInfo>> {
     Ok(Vec::new())
 }
 
+#[cfg(target_os = "windows")]
 pub fn install(req: InstallRequest, sink: &dyn ProgressSink) -> Result<()> {
     let rt = RealRuntime;
     let disks = list_disks_with(&rt)?;
@@ -504,9 +510,86 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "windows")]
     fn list_partitions_returns_empty() {
         assert!(list_partitions("\\\\.\\PhysicalDrive1".into())
             .unwrap()
             .is_empty());
+    }
+
+    /// Cover lines 113 + 131 — `validate_install` short-circuits to
+    /// `Ok(())` when `simulator: true`, skipping the disk-inventory
+    /// check. The path-shape validator uses `"simulator"` as the
+    /// target string.
+    #[test]
+    fn validate_install_accepts_simulator_path() {
+        let req = InstallRequest {
+            device: "/tmp/raidhos-sim.img".into(),
+            payload_version: "0".into(),
+            wipe: true,
+            dry_run: true,
+            allow_write: false,
+            simulator: true,
+            bios_compat: false,
+            data_filesystem: Default::default(),
+        };
+        // Empty disk inventory — would normally fail "device not
+        // found", but the simulator branch short-circuits.
+        assert!(validate_install(&req, &NopSink, &[]).is_ok());
+    }
+
+    /// Cover lines 151-152 — `payload_copy` errors when
+    /// RAIDHOS_PAYLOAD_DIR points at a path that does not exist.
+    #[test]
+    fn payload_copy_errors_when_payload_dir_missing() {
+        let mut rt = MockRuntime::new();
+        rt.outcomes = std::cell::RefCell::new(vec![
+            MockOutcome::Ok(vec![]), // Clear-Disk
+            MockOutcome::Ok(vec![]), // Initialize-Disk
+            MockOutcome::Ok(vec![]), // ESP partition
+            MockOutcome::Ok(vec![]), // DATA partition
+        ]);
+        // Env var set, but path not in existing_paths.
+        rt.env.push((
+            "RAIDHOS_PAYLOAD_DIR".into(),
+            "/tmp/raidhos-does-not-exist-windows-xyz".into(),
+        ));
+        let disks = vec![disk("\\\\.\\PhysicalDrive1", false)];
+        let err = install_with(
+            req("\\\\.\\PhysicalDrive1", true, false, true),
+            &NopSink,
+            &rt,
+            &disks,
+        )
+        .unwrap_err();
+        assert!(format!("{err}").contains("RAIDHOS_PAYLOAD_DIR does not exist"));
+    }
+
+    /// Cover lines 212, 221 — the robocopy error branch. Under
+    /// `MockRuntime`, programming `run` to return Err for the
+    /// robocopy call makes the documented "this branch is
+    /// unreachable under MockRuntime" comment outdated — it's
+    /// reachable, just requires explicit setup.
+    #[test]
+    fn install_propagates_robocopy_failure() {
+        let mut rt = payload_mock(true, true);
+        rt.outcomes = std::cell::RefCell::new(vec![
+            MockOutcome::Ok(vec![]),                              // Clear-Disk
+            MockOutcome::Ok(vec![]),                              // Initialize-Disk
+            MockOutcome::Ok(vec![]),                              // ESP partition
+            MockOutcome::Ok(vec![]),                              // DATA partition
+            MockOutcome::Ok(b"E\n".to_vec()),                     // Get-Volume EFI
+            MockOutcome::Ok(b"F\n".to_vec()),                     // Get-Volume DATA
+            MockOutcome::Err("robocopy hit a fatal exit".into()), // robocopy esp
+        ]);
+        let disks = vec![disk("\\\\.\\PhysicalDrive1", false)];
+        let err = install_with(
+            req("\\\\.\\PhysicalDrive1", true, false, true),
+            &NopSink,
+            &rt,
+            &disks,
+        )
+        .unwrap_err();
+        assert!(format!("{err}").contains("robocopy"), "got: {err}");
     }
 }

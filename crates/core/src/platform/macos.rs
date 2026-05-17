@@ -11,13 +11,17 @@
 
 #![allow(dead_code)]
 
+#[cfg(target_os = "macos")]
+use crate::runtime::RealRuntime;
 use crate::parsers::parse_disks_plist;
-use crate::runtime::{RealRuntime, Runtime};
+use crate::runtime::Runtime;
+#[allow(unused_imports)]
 use crate::{
     CoreError, DiskInfo, InstallRequest, PartitionInfo, ProgressEvent, ProgressSink, Result,
 };
 use std::path::PathBuf;
 
+#[cfg(target_os = "macos")]
 pub fn list_disks() -> Result<Vec<DiskInfo>> {
     list_disks_with(&RealRuntime)
 }
@@ -27,10 +31,12 @@ pub(crate) fn list_disks_with(rt: &dyn Runtime) -> Result<Vec<DiskInfo>> {
     parse_disks_plist(&bytes)
 }
 
+#[cfg(target_os = "macos")]
 pub fn list_partitions(_device: String) -> Result<Vec<PartitionInfo>> {
     Ok(Vec::new())
 }
 
+#[cfg(target_os = "macos")]
 pub fn install(req: InstallRequest, sink: &dyn ProgressSink) -> Result<()> {
     let rt = RealRuntime;
     let disks = list_disks_with(&rt)?;
@@ -387,8 +393,47 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn list_partitions_returns_empty() {
         // macOS returns empty for now (per implementation note).
         assert!(list_partitions("/dev/disk2".into()).unwrap().is_empty());
+    }
+
+    /// Cover line 139 — `validate_install` short-circuits to `Ok(())`
+    /// when `simulator: true`, skipping the disk-inventory check.
+    /// The simulator path doesn't have to match a `/dev/diskN` in
+    /// the inventory because it points at a regular sparse file.
+    #[test]
+    fn validate_install_accepts_simulator_path() {
+        let req = InstallRequest {
+            device: "/tmp/raidhos-sim.img".into(),
+            payload_version: "0".into(),
+            wipe: true,
+            dry_run: true,
+            allow_write: false,
+            simulator: true,
+            bios_compat: false,
+            data_filesystem: Default::default(),
+        };
+        // Empty disk inventory — would normally fail "device not found",
+        // but the simulator branch short-circuits before that check.
+        let res = validate_install(&req, &NopSink, &[]);
+        assert!(res.is_ok(), "simulator validation should succeed: {res:?}");
+    }
+
+    /// Cover lines 164-165 — `payload_copy` errors when
+    /// RAIDHOS_PAYLOAD_DIR points at a path that does not exist.
+    #[test]
+    fn payload_copy_errors_when_payload_dir_missing() {
+        let mut rt = MockRuntime::new();
+        // Env var set, but the path is NOT in existing_paths.
+        rt.env.push((
+            "RAIDHOS_PAYLOAD_DIR".into(),
+            "/tmp/raidhos-does-not-exist-xyz".into(),
+        ));
+        let disks = vec![disk("/dev/disk2", vec![], false)];
+        let err =
+            install_with(req("/dev/disk2", true, false, true), &NopSink, &rt, &disks).unwrap_err();
+        assert!(format!("{err}").contains("RAIDHOS_PAYLOAD_DIR does not exist"));
     }
 }

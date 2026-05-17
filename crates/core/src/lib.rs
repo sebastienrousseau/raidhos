@@ -580,19 +580,29 @@ fn validate_device_path_common(device: &str) -> Result<()> {
 }
 
 fn validate_device_path_inner(device: &str, simulator: bool) -> Result<()> {
-    let target = if simulator {
-        "simulator"
-    } else if cfg!(target_os = "linux") {
-        "linux"
-    } else if cfg!(target_os = "macos") {
-        "macos"
-    } else if cfg!(target_os = "windows") {
-        "windows"
-    } else {
+    if simulator {
+        return validate_device_path_for_target(device, "simulator");
+    }
+    // Compile-time target selection so each host build only sees its
+    // own arm — keeps coverage at 100% per host (rather than running
+    // a `cfg!()` runtime check whose dead arms always show uncovered).
+    #[cfg(target_os = "linux")]
+    {
+        validate_device_path_for_target(device, "linux")
+    }
+    #[cfg(target_os = "macos")]
+    {
+        validate_device_path_for_target(device, "macos")
+    }
+    #[cfg(target_os = "windows")]
+    {
+        validate_device_path_for_target(device, "windows")
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
         // Unsupported host: only the common checks apply.
-        return validate_device_path_common(device);
-    };
-    validate_device_path_for_target(device, target)
+        validate_device_path_common(device)
+    }
 }
 
 #[cfg(test)]

@@ -118,7 +118,14 @@ pub fn load_catalog() -> Result<Vec<CatalogEntry>> {
         PathBuf::from("../catalog/catalog.json"),
         PathBuf::from("../../catalog/catalog.json"),
     ];
-    for path in &candidates {
+    load_catalog_from_candidates(&candidates)
+}
+
+/// Like [`load_catalog`] but with explicit search candidates. Public-
+/// to-the-crate so the "no candidate exists" failure path is
+/// unit-testable without mutating the process-wide working directory.
+pub(crate) fn load_catalog_from_candidates(candidates: &[PathBuf]) -> Result<Vec<CatalogEntry>> {
+    for path in candidates {
         if path.exists() {
             return load_catalog_from(path);
         }
@@ -1010,6 +1017,20 @@ mod tests {
         let _ = std::fs::remove_file(&tmp);
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].slug, "x");
+    }
+
+    /// Cover the "no candidate file exists" branch (catalog.rs:
+    /// the `Err(CoreError::Io("catalog.json not found"))` return).
+    /// Bypasses the cwd-search by passing an explicit candidate list
+    /// of paths we control.
+    #[test]
+    fn load_catalog_returns_not_found_when_no_candidate_exists() {
+        let candidates = [
+            PathBuf::from("/tmp/raidhos-no-such-catalog-a.json"),
+            PathBuf::from("/tmp/raidhos-no-such-catalog-b.json"),
+        ];
+        let err = load_catalog_from_candidates(&candidates).unwrap_err();
+        assert!(format!("{err}").contains("catalog.json not found"));
     }
 
     #[test]
