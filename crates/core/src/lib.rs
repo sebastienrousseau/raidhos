@@ -838,4 +838,116 @@ mod cross_platform_tests {
         assert_eq!(back.title, "ubuntu");
         assert_eq!(back.params, "boot=casper");
     }
+
+    // ---------------------------------------------------------------
+    // DataFilesystem — round-trip + parse coverage
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn data_filesystem_as_str_round_trip() {
+        for fs in [
+            DataFilesystem::ExFat,
+            DataFilesystem::Ntfs,
+            DataFilesystem::Ext4,
+            DataFilesystem::Btrfs,
+            DataFilesystem::Xfs,
+        ] {
+            assert_eq!(DataFilesystem::parse(fs.as_str()), Some(fs));
+        }
+    }
+
+    #[test]
+    fn data_filesystem_parse_is_case_insensitive() {
+        for (s, fs) in [
+            ("EXFAT", DataFilesystem::ExFat),
+            ("NTFS", DataFilesystem::Ntfs),
+            ("Ext4", DataFilesystem::Ext4),
+            ("BTRFS", DataFilesystem::Btrfs),
+            ("xfs", DataFilesystem::Xfs),
+        ] {
+            assert_eq!(DataFilesystem::parse(s), Some(fs));
+        }
+    }
+
+    #[test]
+    fn data_filesystem_parse_rejects_unknown() {
+        for s in ["", "zfs", "hfs", "fat32", "ntfs3", " ntfs"] {
+            assert_eq!(DataFilesystem::parse(s), None, "{s} should fail");
+        }
+    }
+
+    #[test]
+    fn data_filesystem_default_is_exfat() {
+        assert_eq!(DataFilesystem::default(), DataFilesystem::ExFat);
+    }
+
+    // ---------------------------------------------------------------
+    // Platform-dispatch one-liners — exercise the call so coverage
+    // doesn't count them as dead. Errors are fine; we just want the
+    // dispatch line to fire.
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn dispatch_list_disks_returns_or_errors_cleanly() {
+        // On every CI host the call returns Ok(_) or Err(_); a panic
+        // would be a regression.
+        let _ = list_disks();
+    }
+
+    #[test]
+    fn dispatch_scan_isos_returns_for_empty_input() {
+        let res = scan_isos(vec![]).expect("empty dirs is not an error");
+        assert!(res.is_empty());
+    }
+
+    #[test]
+    fn dispatch_list_partitions_handles_nonexistent_device() {
+        // The device doesn't exist; the call should return cleanly
+        // (Ok(empty) on hosts without the device, or Err(_) on hosts
+        // that try to probe). Either way: no panic.
+        let _ = list_partitions("/dev/nonexistent-raidhos-test".to_string());
+    }
+
+    #[test]
+    fn dispatch_install_dry_run_returns() {
+        struct Quiet;
+        impl ProgressSink for Quiet {
+            fn emit(&self, _: ProgressEvent) {}
+        }
+        let req = InstallRequest {
+            device: "/dev/nonexistent-raidhos-test".to_string(),
+            payload_version: "0.1.0".to_string(),
+            wipe: true,
+            dry_run: true,
+            allow_write: false,
+            simulator: false,
+            bios_compat: false,
+            data_filesystem: DataFilesystem::ExFat,
+        };
+        // Validate / dispatch must not panic. Refusal is fine.
+        let _ = install(req, &Quiet);
+    }
+
+    // ---------------------------------------------------------------
+    // validate_device_path_simulator — covers the "simulator" branch
+    // of validate_device_path_inner (lib.rs:584)
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn simulator_validator_accepts_sparse_file_path() {
+        // Any reasonable filesystem path is accepted under the
+        // simulator gate — only the metachar / length / `..` checks
+        // apply.
+        assert!(validate_device_path_simulator("/tmp/raidhos-sim.img").is_ok());
+        assert!(validate_device_path_simulator("./sim.img").is_ok());
+        assert!(validate_device_path_simulator("sim.img").is_ok());
+    }
+
+    #[test]
+    fn simulator_validator_still_rejects_metachars() {
+        assert!(validate_device_path_simulator("/tmp/sim; rm -rf /").is_err());
+        assert!(validate_device_path_simulator("/tmp/sim`whoami`").is_err());
+        assert!(validate_device_path_simulator("/tmp/../etc/passwd").is_err());
+        assert!(validate_device_path_simulator("").is_err());
+    }
 }

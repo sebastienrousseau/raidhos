@@ -327,6 +327,41 @@ mod tests {
         assert!(rt.run("false", &[]).is_err());
     }
 
+    /// Cover the non-zero-exit branch of `run_output` (lines 96-98)
+    /// — the failure-with-stderr path that the existing tests
+    /// skipped because they only hit `run`, not `run_output`.
+    #[test]
+    #[cfg(unix)]
+    fn real_runtime_run_output_propagates_stderr_on_failure() {
+        let rt = RealRuntime;
+        // `false` exits non-zero with no stdout/stderr — the error
+        // message will at least contain the cmd name.
+        let err = rt.run_output("false", &[]).unwrap_err();
+        assert!(err.to_string().contains("false"), "got: {err}");
+
+        // `sh -c "echo problem >&2; exit 3"` exits non-zero with a
+        // known stderr — the stderr must flow through to the error.
+        let err = rt
+            .run_output("sh", &["-c", "echo problem >&2; exit 3"])
+            .unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("sh"), "missing cmd name: {msg}");
+        assert!(msg.contains("problem"), "missing stderr: {msg}");
+    }
+
+    /// Cover the spawn-failure branch of `run_output` — when the
+    /// command itself doesn't exist on PATH.
+    #[test]
+    fn real_runtime_run_output_handles_spawn_failure() {
+        let rt = RealRuntime;
+        let err = rt
+            .run_output("absolutely-not-a-real-command-xyz", &[])
+            .unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("absolutely-not-a-real-command-xyz"));
+    }
+
     #[test]
     fn invocation_record_round_trips() {
         let inv = Invocation {

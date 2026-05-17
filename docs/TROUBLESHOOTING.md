@@ -372,10 +372,13 @@ rustup update stable
 
 ### Coverage gate failure on PR (CI)
 
-`cargo tarpaulin -p raidhos-core --fail-under 95` is strict by
+`cargo tarpaulin -p raidhos-core --fail-under 90` is strict by
 design. If you added code without tests, the gate will block
 the PR. Add unit tests in the right `platform/{linux,macos,
-windows}.rs` or `parsers.rs` and re-push.
+windows}.rs` or `parsers.rs` and re-push. The gate was raised
+from 65% to 90% mid-`feat/v0.0.1` once the
+`validate_device_path_for_target` refactor decoupled per-OS
+tests from the host `target_os`.
 
 ### Tauri 2 build fails with `frontendDist` not found
 

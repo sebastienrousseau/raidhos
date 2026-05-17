@@ -187,4 +187,20 @@ mod tests {
         assert_eq!(out[0].params, "quiet splash");
         let _ = fs::remove_dir_all(&root);
     }
+
+    /// Cover the `read_dir` error branch (line 18) by pointing
+    /// the scanner at a path that exists but is a *file*, not a
+    /// directory. `read_dir` on a file returns an OS error
+    /// ("Not a directory"), which the scanner surfaces as
+    /// `CoreError::Io`.
+    #[test]
+    fn scan_propagates_read_dir_errors() {
+        let root = temp_root();
+        let not_a_dir = root.join("just-a-file");
+        write_file(&not_a_dir, b"contents");
+        let err = scan_isos_fs(vec![not_a_dir.display().to_string()])
+            .expect_err("read_dir on a file must fail");
+        assert!(matches!(err, CoreError::Io(_)), "got {err:?}");
+        let _ = fs::remove_dir_all(&root);
+    }
 }

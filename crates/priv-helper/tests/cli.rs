@@ -85,3 +85,71 @@ fn argv_length_cap_rejects_huge_argv() {
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(text.contains("argv length"));
 }
+
+/// `list-partitions <DEVICE>` against a nonexistent device should
+/// produce a JSON `{ok: false, ...}` rather than a panic — exercises
+/// the error branch in main()'s ListPartitions arm.
+#[test]
+fn list_partitions_against_invalid_device_emits_json_error() {
+    let out = helper()
+        .args(["list-partitions", "/dev/this-is-not-real-xyz"])
+        .output()
+        .expect("spawn");
+    let text = String::from_utf8_lossy(&out.stdout);
+    // The shape is always a JSON object with an `ok` field; the
+    // exit code is 1 (runtime failure) when the device probe fails.
+    assert!(text.contains("\"ok\""), "missing ok field: {text}");
+    // Either OK (empty list) on hosts where the probe gracefully
+    // returns empty, or false with an error on hosts where it fails.
+    // Both are valid; what matters is that we got a JSON object on
+    // stdout, no panic, no garbage.
+}
+
+/// `--help` and `--version` both exit 0 with clap's text on stdout
+/// (not wrapped in JSON). The existing tests cover `--version` and
+/// `--help`; this one ensures the `install --help` subcommand-level
+/// help works too — exercises the clap help-display path in main().
+#[test]
+fn install_help_subcommand_exits_zero() {
+    let out = helper()
+        .args(["install", "--help"])
+        .output()
+        .expect("spawn");
+    assert!(out.status.success(), "got: {:?}", out.status);
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(text.contains("--device"));
+    assert!(text.contains("--data-fs"));
+    assert!(text.contains("--bios-compat"));
+}
+
+/// `install --data-fs <unknown>` must be rejected with exit 1
+/// (runtime validation), not panic or accept silently.
+#[test]
+fn install_unknown_data_fs_fails_cleanly() {
+    let out = helper()
+        .args([
+            "install",
+            "--device",
+            "/dev/this-is-not-real-xyz",
+            "--data-fs",
+            "hfsplus",
+            "--dry-run",
+        ])
+        .output()
+        .expect("spawn");
+    assert!(!out.status.success(), "expected non-zero exit");
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    // Either clap rejected the value (if data_fs becomes an enum)
+    // or the runtime parser rejected it. Either way, the message
+    // must mention the offending value or "data-fs".
+    assert!(
+        combined.to_lowercase().contains("hfsplus")
+            || combined.to_lowercase().contains("data-fs")
+            || combined.contains("\"ok\": false"),
+        "no rejection message: {combined}",
+    );
+}

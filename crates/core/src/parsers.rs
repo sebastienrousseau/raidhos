@@ -347,6 +347,58 @@ mod tests {
     }
 
     #[test]
+    fn extract_plist_string_returns_none_when_close_before_open() {
+        // The </string> appears BEFORE the <string> — pathological
+        // ordering. Should refuse rather than panic or slice
+        // backwards.
+        let weird = "<key>K</key></string><string>";
+        assert!(extract_plist_string(weird, "K").is_none());
+    }
+
+    #[test]
+    fn extract_plist_string_returns_none_when_missing_close() {
+        let no_close = "<key>K</key><string>val";
+        assert!(extract_plist_string(no_close, "K").is_none());
+    }
+
+    #[test]
+    fn extract_plist_integer_returns_none_when_close_before_open() {
+        let weird = "<key>Size</key></integer><integer>";
+        assert!(extract_plist_integer(weird, "Size").is_none());
+    }
+
+    #[test]
+    fn extract_plist_integer_returns_none_when_missing_close() {
+        let no_close = "<key>Size</key><integer>42";
+        assert!(extract_plist_integer(no_close, "Size").is_none());
+    }
+
+    #[test]
+    fn extract_plist_bool_returns_none_when_both_missing() {
+        // Key present but neither <true/> nor <false/> follows
+        // it — should be None, not unwrap or pick a default.
+        let neither = "<key>Removable</key><integer>0</integer>";
+        assert!(extract_plist_bool(neither, "Removable").is_none());
+    }
+
+    #[test]
+    fn extract_plist_bool_prefers_first_marker() {
+        // Both markers present — pick whichever appears first.
+        let true_first = "<key>K</key><true/><false/>";
+        assert_eq!(extract_plist_bool(true_first, "K"), Some(true));
+        let false_first = "<key>K</key><false/><true/>";
+        assert_eq!(extract_plist_bool(false_first, "K"), Some(false));
+    }
+
+    #[test]
+    fn extract_plist_helpers_return_none_for_missing_key() {
+        let no_key = "<plist><dict><key>Other</key><string>v</string></dict></plist>";
+        assert!(extract_plist_string(no_key, "K").is_none());
+        assert!(extract_plist_integer(no_key, "K").is_none());
+        assert!(extract_plist_bool(no_key, "K").is_none());
+    }
+
+    #[test]
     fn getdisk_parses_array() {
         let raw = r#"[{"Number":1,"FriendlyName":"SanDisk USB","Size":16000000000,"BusType":"USB","IsBoot":false,"IsSystem":false},
                       {"Number":0,"FriendlyName":"NVMe SSD","Size":512000000000,"BusType":"NVMe","IsBoot":true,"IsSystem":true}]"#;
