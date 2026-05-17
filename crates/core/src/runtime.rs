@@ -294,19 +294,19 @@ mod tests {
     #[test]
     fn real_runtime_has_cmd_finds_sh() {
         let rt = RealRuntime;
-        // `sh` is almost certainly on PATH on any Unix-like host.
-        // On Windows the helper isn't compiled anyway.
         #[cfg(unix)]
-        assert!(rt.has_cmd("sh"));
+        {
+            // `sh` is on PATH on any Unix-like host.
+            assert!(rt.has_cmd("sh"));
+        }
         assert!(!rt.has_cmd("absolutely-not-a-real-command-xyz"));
     }
 
     #[test]
+    #[cfg(unix)]
     fn real_runtime_run_succeeds_on_true() {
         let rt = RealRuntime;
-        #[cfg(unix)]
         assert!(rt.run("true", &[]).is_ok());
-        #[cfg(unix)]
         assert!(rt.run("false", &[]).is_err());
     }
 

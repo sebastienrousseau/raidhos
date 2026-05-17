@@ -80,7 +80,7 @@ pub fn assert_matches(handle: &DeviceHandle, path: &str) -> Result<(), String> {
 /// listing one device but a different one being substituted before
 /// we open it.
 pub fn assert_disk_identity(
-    handle: &DeviceHandle,
+    _handle: &DeviceHandle,
     target: &DiskInfo,
     path: &str,
 ) -> Result<(), String> {
