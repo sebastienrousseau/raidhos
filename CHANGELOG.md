@@ -52,16 +52,28 @@ the destructive paths deferred to v0.0.2.
   83, `raidhos-cli` 14 unit + 19 integration, `raidhos-priv-helper`
   9 seccomp + 6 toctou + 10 integration. Total: 378+ tests across
   the workspace.
-- **All three Rust crates gated at 100% line coverage** in CI:
-    - `raidhos-core` 940/940 (`--fail-under 100`)
-    - `raidhos-cli` 126/126 (`--fail-under 100`)
-    - `raidhos-priv-helper` 70/70 (`--fail-under 100`)
-  Workspace coverage (excluding the Tauri UI bin and the fuzz
-  harness): **100.00%, 1136/1136 lines covered**. The path to
-  100% required refactoring binary entry points
-  (`main()` in each crate) so the response-building / output-
-  formatter logic moved into pure functions exercised by unit
-  tests with synthetic fixtures, and gating platform pub-fn
+- **Coverage gates in CI:**
+    - `raidhos-core` **`--fail-under 100`** — 940/940 lines on
+      the host target.
+    - `raidhos-cli` **`--fail-under 100`** — 126/126 lines, via
+      `tarpaulin --engine llvm` so coverage from the integration
+      tests' spawned binary flows back into `main.rs`.
+    - `raidhos-priv-helper` **`--fail-under 90`** — ~198/220
+      lines on Linux CI after refactoring `create_persistence`
+      into a Runtime-trait-driven `create_persistence_with` and
+      adding 8 unit tests for every reachable arm (blkid empty
+      / errors, mount fails, dd fails, mkfs.ext4 fails,
+      persistence.conf write fails, create_dir_all fails on a
+      file). The remaining ~22 lines are production-only
+      privileged paths (`allow_write && !dry_run` install arms,
+      the `RealRuntime` shim, seccomp-install-failed branch)
+      that need real root + block devices.
+  macOS dev host shows 100% on all three crates because the
+  Linux-only modules (seccomp.rs, toctou.rs, persistence_tests)
+  don't compile there.
+  The 100% gate on core + cli was achieved by refactoring
+  binary entry points so response-building / output-formatter
+  logic moved into pure functions, and gating platform pub-fn
   wrappers with `#[cfg(target_os = ...)]` so each host build
   only contains its own arm.
 

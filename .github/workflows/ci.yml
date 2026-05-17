@@ -103,26 +103,28 @@ jobs:
             --exclude-files 'crates/cli/tests/**' \
             --exclude-files 'fuzz/**' \
             --fail-under 100
-      - name: Tarpaulin (raidhos-priv-helper, 70%)
+      - name: Tarpaulin (raidhos-priv-helper, 90%)
         run: |
-          # priv-helper's Linux-only modules (seccomp.rs, toctou.rs,
-          # and `create_persistence` in main.rs) shell to `dd`,
-          # `mkfs.ext4`, `mount`, `blkid` directly via
-          # `std::process::Command` rather than through the
-          # Runtime trait that the rest of the workspace uses. Full
-          # 100% coverage on Linux therefore needs either root +
-          # real hardware (out of scope for CI without a privileged
-          # runner) or a v0.0.2 refactor introducing Runtime to
-          # priv-helper.
+          # Linux CI: 90% with the Runtime-refactored
+          # `create_persistence_with` + targeted unit tests
+          # covering the cfg-conditional arms of seccomp.rs
+          # and toctou.rs. The remaining 10% (≈22 lines) is
+          # the production-only privileged path:
+          #   - `Command::Install` arms gated on
+          #     `allow_write && !dry_run` (TOCTOU fd pin path
+          #     + persistence-overlay enable branch).
+          #   - The thin `create_persistence` shim that plugs
+          #     `RealRuntime` into the testable
+          #     `create_persistence_with`.
+          #   - Lines that fire only when seccomp fails to
+          #     install on the host kernel.
+          # Reaching those needs a privileged runner with real
+          # block devices; tracked for v0.0.2 hardware-validation
+          # CI.
           #
-          # macOS dev host shows 100% (70/70) because those
-          # Linux-only modules don't compile there.
-          # Linux CI: ~75% with the current Runtime-less impl
-          # plus targeted unit tests for the cfg-conditional arms
-          # of seccomp.rs and toctou.rs. Floor here catches
-          # regressions without lying about achievable coverage.
-          # Tracking: raise to 100% after the v0.0.2 Runtime
-          # refactor of create_persistence.
+          # macOS dev host shows 100% (70/70) because the Linux-
+          # only modules (seccomp.rs, toctou.rs, persistence_tests)
+          # don't compile there.
           cargo tarpaulin \
             -p raidhos-priv-helper \
             --engine llvm \
@@ -131,7 +133,7 @@ jobs:
             --exclude-files 'crates/ui-tauri/**' \
             --exclude-files 'crates/priv-helper/tests/**' \
             --exclude-files 'fuzz/**' \
-            --fail-under 70
+            --fail-under 90
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4

@@ -35,13 +35,24 @@ deciding whether to tag from it.
   9 seccomp + 6 toctou + 10 integration.
 - **`cargo fmt --check`, `cargo clippy --all-targets -D warnings`**
   both clean across the workspace.
-- **Coverage gate.** All three Rust crates gated at
-  `--fail-under 100` in CI:
-    - `raidhos-core`: 100% (940/940 lines on the host target)
-    - `raidhos-cli`: 100% (126/126 lines)
-    - `raidhos-priv-helper`: 100% (70/70 lines)
-    - **Workspace** (excluding the Tauri UI bin and the fuzz
-      harness): **100.00%, 1136/1136 lines covered**
+- **Coverage gates in CI:**
+    - `raidhos-core`: **`--fail-under 100`** (940/940 lines on
+      the host target — Linux CI numbers are the gate-of-record).
+    - `raidhos-cli`: **`--fail-under 100`** (126/126 lines, via
+      `--engine llvm` so the integration tests that spawn the
+      built binary count toward main.rs coverage).
+    - `raidhos-priv-helper`: **`--fail-under 90`** on Linux CI
+      (≈198/220 lines after the `create_persistence_with`
+      Runtime-trait refactor + 8 unit tests for the Linux-only
+      persistence pipeline). The remaining ≈22 lines are the
+      production-only privileged path (`allow_write && !dry_run`
+      install arms, the thin `create_persistence` shim that wires
+      `RealRuntime`, and the seccomp-install-failed branch) which
+      need real root + block devices to fire. **macOS dev host
+      shows 100% (70/70)** — the Linux-only modules don't compile
+      there.
+    - **Workspace** (excl. Tauri UI bin + fuzz harness):
+      **≈98% on Linux CI, 100% on macOS dev host**.
 
   Targeted refactors that made this achievable:
   - `validate_device_path_inner` switched from runtime `cfg!()`
