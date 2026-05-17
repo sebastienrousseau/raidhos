@@ -146,3 +146,99 @@ fn aarch64_syscall(name: &str) -> Option<i64> {
         _ => return None,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn denylist_contains_expected_kernel_primitives() {
+        let denied = denied_syscalls();
+        for must in ["ptrace", "bpf", "kexec_load", "init_module"] {
+            assert!(
+                denied.contains(&must),
+                "denylist missing critical syscall {must}",
+            );
+        }
+    }
+
+    #[test]
+    fn denylist_is_non_empty_and_unique() {
+        let denied = denied_syscalls();
+        assert!(!denied.is_empty());
+        let mut sorted = denied.to_vec();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(sorted.len(), denied.len(), "duplicate in denylist");
+    }
+
+    #[test]
+    fn x86_64_syscall_resolves_every_denied_name() {
+        for name in denied_syscalls() {
+            // Every name in denied_syscalls() must resolve on x86_64.
+            assert!(
+                x86_64_syscall(name).is_some(),
+                "x86_64 mapping missing for {name}",
+            );
+        }
+    }
+
+    #[test]
+    fn x86_64_syscall_returns_none_for_unknown_name() {
+        assert_eq!(x86_64_syscall("definitely-not-a-syscall"), None);
+        assert_eq!(x86_64_syscall(""), None);
+    }
+
+    #[test]
+    fn aarch64_syscall_resolves_most_denied_names() {
+        // aarch64 generic ABI doesn't have create_module or modify_ldt,
+        // which is fine — install_denylist skips them. Every other
+        // denied name must resolve.
+        let absent_on_aarch64 = ["create_module", "modify_ldt"];
+        for name in denied_syscalls() {
+            if absent_on_aarch64.contains(name) {
+                assert!(
+                    aarch64_syscall(name).is_none(),
+                    "{name} should not be mapped on aarch64",
+                );
+                continue;
+            }
+            assert!(
+                aarch64_syscall(name).is_some(),
+                "aarch64 mapping missing for {name}",
+            );
+        }
+    }
+
+    #[test]
+    fn x86_64_syscall_numbers_are_unique() {
+        let mut seen = std::collections::BTreeSet::new();
+        for name in denied_syscalls() {
+            if let Some(num) = x86_64_syscall(name) {
+                assert!(seen.insert(num), "duplicate x86_64 syscall number {num}");
+            }
+        }
+    }
+
+    #[test]
+    fn lookup_syscall_dispatches_per_arch() {
+        // ptrace: x86_64 = 101, aarch64 = 117
+        assert_eq!(lookup_syscall("ptrace", TargetArch::x86_64), Some(101));
+        assert_eq!(lookup_syscall("ptrace", TargetArch::aarch64), Some(117));
+    }
+
+    #[test]
+    fn install_denylist_does_not_panic() {
+        // We don't assert success — in containerised CI the kernel may
+        // reject the filter — but install_denylist() must never panic
+        // and must return a Result either way.
+        let _ = install_denylist();
+    }
+
+    #[test]
+    fn target_arch_returns_supported_arch_on_test_host() {
+        // CI runs on x86_64 / aarch64. target_arch() returns Ok on both.
+        let arch = target_arch();
+        assert!(arch.is_ok(), "unexpected unsupported arch in test");
+    }
+}
