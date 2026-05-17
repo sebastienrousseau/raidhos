@@ -66,15 +66,14 @@ jobs:
           if ! command -v cargo-tarpaulin >/dev/null 2>&1; then
             cargo install --locked cargo-tarpaulin
           fi
-      # Coverage floor is set to a realistic value. Platform-cfg-gated
-      # install paths (linux.rs:install, macos.rs:install, windows.rs:install)
-      # call subprocess commands that need a real or loop-back device to
-      # exercise. We raise the floor each release as we add integration
-      # tests that run against loop devices / sparse images.
-      # Tracking target: 85% by v0.0.2, 95% by v0.1.0.
+      # Coverage floor. Set to 70% after the Runtime-mock refactor
+      # made every platform install path unit-testable via mocks.
+      # Tracking target: 85% by v0.0.2, 95% by v0.1.0. Raise this
+      # number whenever you add measurable test surface; never lower
+      # it without a CHANGELOG entry justifying why.
       - name: Tarpaulin
         run: |
-          cargo tarpaulin -p raidhos-core --fail-under 65 --out Xml
+          cargo tarpaulin -p raidhos-core --fail-under 70 --out Xml
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4
