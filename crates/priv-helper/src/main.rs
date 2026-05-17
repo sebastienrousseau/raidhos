@@ -283,61 +283,63 @@ fn main() {
 
 #[cfg(target_os = "linux")]
 fn create_persistence(size_mb: u64) -> Result<(), String> {
-    use std::process::Command;
+    create_persistence_with(
+        &core::RealRuntime,
+        size_mb,
+        std::path::Path::new("/mnt/raidhos-data-persist"),
+    )
+}
 
-    // After install, the DATA partition is unmounted (per
-    // payload_copy). Find it again by label and remount.
-    let mount = std::path::Path::new("/mnt/raidhos-data-persist");
-    std::fs::create_dir_all(mount)
+/// Persistence-overlay builder, parametric on the runtime so unit
+/// tests can drive every subprocess call through a `MockRuntime`
+/// without actually invoking `dd` / `mkfs.ext4` / `mount` / `umount`.
+/// The `mount` path is also a parameter so tests can point at a
+/// scratch directory instead of `/mnt/raidhos-data-persist`.
+#[cfg(target_os = "linux")]
+pub(crate) fn create_persistence_with(
+    rt: &dyn core::Runtime,
+    size_mb: u64,
+    mount: &std::path::Path,
+) -> Result<(), String> {
+    rt.create_dir_all(mount)
         .map_err(|e| format!("create_dir_all {}: {e}", mount.display()))?;
 
-    let dev = Command::new("blkid")
-        .args(["-L", "DATA"])
-        .output()
+    let dev_bytes = rt
+        .run_output("blkid", &["-L", "DATA"])
         .map_err(|e| format!("blkid: {e}"))?;
-    if !dev.status.success() {
+    let dev = String::from_utf8_lossy(&dev_bytes).trim().to_string();
+    if dev.is_empty() {
         return Err("blkid: DATA label not found".to_string());
     }
-    let dev = String::from_utf8_lossy(&dev.stdout).trim().to_string();
 
-    let status = Command::new("mount")
-        .args([&dev, mount.to_str().unwrap()])
-        .status()
+    let mount_str = mount.to_string_lossy().into_owned();
+    rt.run("mount", &[&dev, &mount_str])
         .map_err(|e| format!("mount {dev}: {e}"))?;
-    if !status.success() {
-        return Err(format!("mount {dev} failed"));
-    }
 
     let overlay = mount.join("persistence");
-    let status = Command::new("dd")
-        .args([
-            "if=/dev/zero",
-            &format!("of={}", overlay.to_string_lossy()),
-            "bs=1M",
-            &format!("count={size_mb}"),
-            "status=none",
-        ])
-        .status()
-        .map_err(|e| format!("dd: {e}"))?;
-    if !status.success() {
-        let _ = Command::new("umount").arg(mount).status();
-        return Err("dd failed".to_string());
+    let overlay_str = overlay.to_string_lossy().into_owned();
+    let count_arg = format!("count={size_mb}");
+    let of_arg = format!("of={overlay_str}");
+    if let Err(e) = rt.run(
+        "dd",
+        &["if=/dev/zero", &of_arg, "bs=1M", &count_arg, "status=none"],
+    ) {
+        let _ = rt.run("umount", &[&mount_str]);
+        return Err(format!("dd failed: {e}"));
     }
 
-    let status = Command::new("mkfs.ext4")
-        .args(["-F", "-L", "persistence", overlay.to_str().unwrap()])
-        .status()
-        .map_err(|e| format!("mkfs.ext4: {e}"))?;
-    if !status.success() {
-        let _ = Command::new("umount").arg(mount).status();
-        return Err("mkfs.ext4 failed".to_string());
+    if let Err(e) = rt.run("mkfs.ext4", &["-F", "-L", "persistence", &overlay_str]) {
+        let _ = rt.run("umount", &[&mount_str]);
+        return Err(format!("mkfs.ext4 failed: {e}"));
     }
 
-    // Write the persistence.conf that live-build expects.
+    // Write the persistence.conf that live-build expects. The path
+    // is real even under MockRuntime — tests pass a tmp dir as the
+    // `mount` parameter so this write lands somewhere writable.
     std::fs::write(mount.join("persistence.conf"), "/ union\n")
         .map_err(|e| format!("write persistence.conf: {e}"))?;
 
-    let _ = Command::new("umount").arg(mount).status();
+    let _ = rt.run("umount", &[&mount_str]);
     Ok(())
 }
 
@@ -455,5 +457,165 @@ mod response_tests {
         let s = serde_json::to_string(&resp).unwrap();
         assert!(s.contains("\"ok\":false"));
         assert!(s.contains("\"error\":\"boom\""));
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod persistence_tests {
+    use super::*;
+    use core::{MockOutcome, MockRuntime, Runtime};
+
+    fn tmp_mount() -> std::path::PathBuf {
+        let p = std::env::temp_dir().join(format!(
+            "raidhos-persist-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    /// Happy path: blkid finds DATA, mount succeeds, dd succeeds,
+    /// mkfs.ext4 succeeds, persistence.conf gets written, umount
+    /// fires. Verifies every recorded invocation in order.
+    #[test]
+    fn create_persistence_happy_path() {
+        let mount = tmp_mount();
+        let rt = MockRuntime::new();
+        rt.push_outcome(MockOutcome::Ok(b"/dev/sdb2\n".to_vec())); // blkid
+        rt.push_outcome(MockOutcome::Ok(vec![])); // mount
+        rt.push_outcome(MockOutcome::Ok(vec![])); // dd
+        rt.push_outcome(MockOutcome::Ok(vec![])); // mkfs.ext4
+        rt.push_outcome(MockOutcome::Ok(vec![])); // umount (fire-and-forget)
+
+        let res = create_persistence_with(&rt, 256, &mount);
+        assert!(res.is_ok(), "got: {res:?}");
+
+        // persistence.conf must land in the mount dir.
+        let conf = mount.join("persistence.conf");
+        assert!(conf.exists(), "persistence.conf not written");
+        let body = std::fs::read_to_string(&conf).unwrap();
+        assert_eq!(body, "/ union\n");
+
+        let inv = rt.invocations.borrow();
+        let cmds: Vec<_> = inv.iter().map(|i| i.cmd.as_str()).collect();
+        assert!(cmds.contains(&"blkid"));
+        assert!(cmds.contains(&"mount"));
+        assert!(cmds.contains(&"dd"));
+        assert!(cmds.contains(&"mkfs.ext4"));
+        assert!(cmds.contains(&"umount"));
+
+        let _ = std::fs::remove_dir_all(&mount);
+    }
+
+    /// blkid stdout is empty → "DATA label not found".
+    #[test]
+    fn create_persistence_errors_when_blkid_empty() {
+        let mount = tmp_mount();
+        let rt = MockRuntime::new();
+        rt.push_outcome(MockOutcome::Ok(vec![])); // blkid stdout empty
+        let err = create_persistence_with(&rt, 256, &mount).unwrap_err();
+        assert!(err.contains("DATA label not found"), "got: {err}");
+        let _ = std::fs::remove_dir_all(&mount);
+    }
+
+    /// blkid itself errors → propagates as "blkid: ...".
+    #[test]
+    fn create_persistence_errors_when_blkid_fails() {
+        let mount = tmp_mount();
+        let rt = MockRuntime::new();
+        rt.push_outcome(MockOutcome::Err("not installed".into()));
+        let err = create_persistence_with(&rt, 256, &mount).unwrap_err();
+        assert!(err.contains("blkid"), "got: {err}");
+        let _ = std::fs::remove_dir_all(&mount);
+    }
+
+    /// mount fails → propagates as "mount /dev/sdb2: ...".
+    #[test]
+    fn create_persistence_errors_when_mount_fails() {
+        let mount = tmp_mount();
+        let rt = MockRuntime::new();
+        rt.push_outcome(MockOutcome::Ok(b"/dev/sdb2\n".to_vec())); // blkid
+        rt.push_outcome(MockOutcome::Err("EBUSY".into())); // mount
+        let err = create_persistence_with(&rt, 256, &mount).unwrap_err();
+        assert!(err.contains("mount /dev/sdb2"), "got: {err}");
+        let _ = std::fs::remove_dir_all(&mount);
+    }
+
+    /// dd fails → umount is fired in cleanup before the error
+    /// propagates.
+    #[test]
+    fn create_persistence_errors_when_dd_fails() {
+        let mount = tmp_mount();
+        let rt = MockRuntime::new();
+        rt.push_outcome(MockOutcome::Ok(b"/dev/sdb2\n".to_vec())); // blkid
+        rt.push_outcome(MockOutcome::Ok(vec![])); // mount
+        rt.push_outcome(MockOutcome::Err("no space".into())); // dd
+        rt.push_outcome(MockOutcome::Ok(vec![])); // umount (cleanup)
+        let err = create_persistence_with(&rt, 256, &mount).unwrap_err();
+        assert!(err.contains("dd failed"), "got: {err}");
+        assert!(rt.invocations.borrow().iter().any(|i| i.cmd == "umount"));
+        let _ = std::fs::remove_dir_all(&mount);
+    }
+
+    /// mkfs.ext4 fails → umount cleanup also fires.
+    #[test]
+    fn create_persistence_errors_when_mkfs_fails() {
+        let mount = tmp_mount();
+        let rt = MockRuntime::new();
+        rt.push_outcome(MockOutcome::Ok(b"/dev/sdb2\n".to_vec())); // blkid
+        rt.push_outcome(MockOutcome::Ok(vec![])); // mount
+        rt.push_outcome(MockOutcome::Ok(vec![])); // dd
+        rt.push_outcome(MockOutcome::Err("bad fs".into())); // mkfs.ext4
+        rt.push_outcome(MockOutcome::Ok(vec![])); // umount (cleanup)
+        let err = create_persistence_with(&rt, 256, &mount).unwrap_err();
+        assert!(err.contains("mkfs.ext4 failed"), "got: {err}");
+        let _ = std::fs::remove_dir_all(&mount);
+    }
+
+    /// persistence.conf write fails when the mount dir doesn't
+    /// exist. We pass a mount path that we never create — the
+    /// `rt.create_dir_all` call goes through MockRuntime (which is
+    /// `fake_mkdir = true` by default and does no real I/O), so the
+    /// dir really doesn't exist on disk when fs::write tries it.
+    #[test]
+    fn create_persistence_errors_when_conf_write_fails() {
+        let mount = std::path::PathBuf::from("/dev/null-this-is-not-a-real-directory-raidhos-test");
+        let rt = MockRuntime::new();
+        rt.push_outcome(MockOutcome::Ok(b"/dev/sdb2\n".to_vec()));
+        rt.push_outcome(MockOutcome::Ok(vec![]));
+        rt.push_outcome(MockOutcome::Ok(vec![]));
+        rt.push_outcome(MockOutcome::Ok(vec![]));
+        let err = create_persistence_with(&rt, 256, &mount).unwrap_err();
+        assert!(err.contains("write persistence.conf"), "got: {err}");
+    }
+
+    /// create_dir_all failure (e.g. backing path is a file) →
+    /// propagates with the mount path in the error.
+    #[test]
+    fn create_persistence_errors_when_mkdir_fails() {
+        // Real-filesystem-backed mock so create_dir_all hits the
+        // OS. Point at a path that exists as a regular file so
+        // mkdir refuses.
+        use std::cell::RefCell;
+        let scratch = std::env::temp_dir().join(format!(
+            "raidhos-persist-mkdir-fail-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::write(&scratch, b"this is a file").unwrap();
+
+        let mut rt = MockRuntime::new();
+        rt.fake_mkdir = false; // route create_dir_all through the real fs
+        rt.outcomes = RefCell::new(vec![]); // no subprocess calls expected
+        let err = create_persistence_with(&rt, 256, &scratch).unwrap_err();
+        assert!(err.contains("create_dir_all"), "got: {err}");
+        let _ = std::fs::remove_file(&scratch);
     }
 }
