@@ -598,6 +598,47 @@ mod cross_platform_tests {
     }
 
     #[test]
+    fn validate_device_path_for_target_linux_accepts_dev_path() {
+        assert!(validate_device_path_for_target("/dev/sdb", "linux").is_ok());
+        assert!(validate_device_path_for_target("/dev/nvme0n1", "linux").is_ok());
+        assert!(validate_device_path_for_target("sdb", "linux").is_err());
+    }
+
+    #[test]
+    fn validate_device_path_for_target_macos_accepts_dev_disk() {
+        assert!(validate_device_path_for_target("/dev/disk2", "macos").is_ok());
+        assert!(validate_device_path_for_target("/dev/sdb", "macos").is_err());
+        assert!(validate_device_path_for_target("/Users/me/x", "macos").is_err());
+    }
+
+    #[test]
+    fn validate_device_path_for_target_windows_accepts_physicaldrive() {
+        assert!(validate_device_path_for_target("\\\\.\\PhysicalDrive1", "windows").is_ok());
+        assert!(validate_device_path_for_target("\\\\.\\physicaldrive9", "windows").is_ok());
+        assert!(validate_device_path_for_target("/dev/sdb", "windows").is_err());
+        assert!(validate_device_path_for_target("C:\\Windows", "windows").is_err());
+    }
+
+    #[test]
+    fn validate_device_path_for_target_simulator_accepts_anything_safe() {
+        assert!(validate_device_path_for_target("/tmp/raidhos.img", "simulator").is_ok());
+        assert!(validate_device_path_for_target("./out/test.img", "simulator").is_ok());
+        // Even simulator mode rejects shell metachars.
+        assert!(validate_device_path_for_target("/tmp/a;rm", "simulator").is_err());
+        assert!(validate_device_path_for_target("/tmp/../etc", "simulator").is_err());
+        assert!(validate_device_path_for_target("", "simulator").is_err());
+    }
+
+    #[test]
+    fn validate_device_path_for_target_rejects_unknown_target_string() {
+        let err = validate_device_path_for_target("/dev/sdb", "freebsd").unwrap_err();
+        assert!(
+            matches!(&err, CoreError::Validation(s) if s.contains("unknown validation target")),
+            "got: {err:?}",
+        );
+    }
+
+    #[test]
     fn coreerror_display_renders_each_variant() {
         // Lock in the wire-stable text so the CLI / UI grep paths keep
         // matching across releases.
