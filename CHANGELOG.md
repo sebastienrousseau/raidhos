@@ -7,65 +7,174 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- `docs/USER_GUIDE.md` — end-user walkthrough for first install.
-- `docs/TROUBLESHOOTING.md` — common failures (pkexec, missing payload,
-  Secure Boot) and how to recover.
-- `docs/FAQ.md` — short answers to the questions that surface in issues.
-- `docs/THREAT_MODEL.md` — explicit attacker model and which controls
-  address each capability.
-- `docs/HARDENING.md` — every shipping security control, with `file:line`
-  citations into the source tree.
-- `docs/SECURE_BOOT.md` — current state, why Secure Boot fails today, and
-  the path to signed boot.
-- `docs/V0_0_1_STATUS.md` — honest tracker of what is and is not in this
-  release.
-- `CODE_OF_CONDUCT.md` — Contributor Covenant 2.1.
-- `CHANGELOG.md` — this file.
-- Platform abstraction (`crates/core/src/platform/`) splitting Linux,
-  macOS, and Windows backends behind a single trait.
-- `thiserror`-based `CoreError` with `#[source]` preservation, replacing
-  the hand-rolled enum. Wire format (JSON) is unchanged.
-- `directories` crate for cross-platform user config (Linux `~/.config`,
-  macOS `~/Library/Application Support`, Windows `%APPDATA%`).
-- Payload integrity verification: `payload/manifest.json` carries a
-  SHA-256 over the payload tree and is checked before any write.
-- `clap`-based parsing in `raidhos-priv-helper` with
-  `deny_unknown_fields`-equivalent strictness and a 64 KiB input cap.
-- `clap_mangen` + `clap_complete` build artifacts: man pages and
-  bash/zsh/fish/PowerShell completions.
-- Fuzz scaffold (`fuzz/`) with targets for `validate_device_path`, the
-  `lsblk`/`diskutil`/`Get-Disk` parsers, and the GRUB config renderer.
-- `.github/workflows/release.yml` — multi-platform builds on tag push,
-  cosign keyless signing, SLSA provenance, GitHub Releases upload.
-- `.github/workflows/codeql.yml` — Rust + Actions static analysis.
-- CycloneDX SBOM generation on every release.
-- Strict CSP in `tauri.conf.json` — `'unsafe-inline'` removed from
-  `style-src`; inline styles extracted to `frontend/styles.css`.
-- `#![warn(missing_docs)]` on `raidhos-core` with rustdoc on every
-  public item.
+## [0.0.1] — 2026-05-17 (release candidate)
+
+First public preview. The discovery surface, validation surface,
+and install pipeline are all working end-to-end on Linux; macOS
+and Windows have the same code path with platform-specific
+subprocesses, validated by the virtual-disk install workflow.
+
+### Added — workspace
+
+- Three production crates plus the UI:
+  `raidhos-core` (library), `raidhos-cli` (CLI binary),
+  `raidhos-priv-helper` (the only binary intended to run
+  elevated), `raidhos-ui` (Tauri 2 desktop app).
+- Platform abstraction in `crates/core/src/platform/`
+  (Linux, macOS, Windows, unsupported fallback) gated by
+  `#[cfg(target_os = "…")]`.
+- `Runtime` trait abstraction over `std::process::Command`,
+  `std::env`, and `std::fs`. `RealRuntime` ships in production;
+  `MockRuntime` makes every install path unit-testable on every
+  host.
+- `directories` crate for cross-platform user-config locations
+  (`~/.config`, `~/Library/Application Support`, `%APPDATA%`).
+- `thiserror`-based `CoreError` and `CatalogError` with
+  `Display`-stable strings the CLI / UI / helper can match on.
+
+### Added — install pipeline
+
+- **Linux** install pipeline: `parted` GPT,
+  `mkfs.vfat` ESP, `mkfs.exfat` (or `mkexfatfs`) DATA, payload
+  copy, persistence image (`--persistence-mb`).
+- **macOS** install pipeline: `diskutil partitionDisk` + mount +
+  payload copy + `bless` for boot loader entry.
+- **Windows** install pipeline: PowerShell `Clear-Disk` /
+  `Initialize-Disk` / `New-Partition` / `Format-Volume`,
+  `robocopy` for the payload tree.
+
+### Added — safety / hardening
+
+- `validate_device_path()` per-OS shape check, plus
+  shell-metachar / `..` / length / empty rejection.
+- Double opt-in for destructive installs: both `wipe == true`
+  and `allow_write == true` are required.
+- System / mounted / removable-false disk refusal in every
+  platform's `validate_install()`.
+- Payload SHA-256 walk against `manifest.json` before write.
+- seccomp-bpf denylist on Linux (ptrace / bpf / kexec /
+  init_module / perf_event_open / userfaultfd / process_vm_*).
+- TOCTOU-safe device fd open: open the device once, snapshot
+  `rdev` via `fstat`, hold the fd for the install lifetime.
+- 64 KiB argv-length cap in the priv-helper before clap parses.
+- `pkexec` (Linux), `osascript with administrator privileges`
+  (macOS), and `Start-Process -Verb RunAs` (Windows) elevation
+  wrappers — the helper is never setuid.
+- polkit policy
+  (`packaging/polkit/org.raidhos.priv.policy`) shipped with
+  Debian/AppImage packages.
+
+### Added — ISO catalog
+
+- `catalog/catalog.json` curated distro list with per-entry
+  GPG fingerprint pin and SHA256SUMS layout.
+- `catalog/keys/` bundled keyring (offline GPG verification).
+- `verify_iso` / `verify_iso_with(rt)` GPG-then-SHA256
+  verification flow, fully testable via `MockRuntime`.
+
+### Added — UI
+
+- Tauri 2 migration from Tauri 1 (capabilities model, strict
+  CSP, no `'unsafe-inline'`).
+- WCAG 2.2 AA accessibility pass: skip-to-main, focus ring,
+  `prefers-color-scheme` / `prefers-contrast` /
+  `prefers-reduced-motion` media-query support, keyboard-only
+  flow, drag-and-drop ISO management with a click-fallback.
+- `raidhos://progress` typed event stream replacing the prior
+  `Mutex<Vec<…>>` polling loop.
+- Three-step beginner wizard alongside the power-user
+  dashboard.
+- `frontend/`: zero npm, zero bundler. Plain HTML + plain JS
+  served by Tauri.
+
+### Added — supply chain / CI
+
+- `cargo deny check` (advisories + licenses + bans + sources)
+  gating every PR, with `[advisories].ignore` for unmaintained
+  transitives we don't control.
+- `cargo audit --deny unsound` with mirrored
+  `--ignore` flags.
+- CodeQL (Rust + Actions) + OpenSSF Scorecards.
+- cosign keyless signing + SLSA L3 provenance + CycloneDX SBOM
+  on every release.
+- Reproducible Docker GRUB build pipeline (digest-pinned
+  base image + retry-with-mirror fallback).
+- Virtual-disk install workflow exercising the Linux loop
+  device, macOS `hdiutil` sparse image, and Windows VHD code
+  paths end-to-end.
+- Fuzz harness (`fuzz/`) targeting `parse_lsblk_disks`,
+  `parse_disks_plist`, `parse_get_disk_json`, and
+  `sha256sums_lookup`.
+- Tarpaulin coverage gate.
+
+### Added — packaging
+
+- Homebrew tap formula.
+- winget manifest.
+- Debian `.deb` build script + polkit install.
+- AppImage build script.
+- macOS `.dmg` build script.
+- Windows `.msi` build script.
+
+### Added — docs
+
+- Noyalib-style per-crate READMEs with badges, contents TOC,
+  install / quick-start / reference / operational sections.
+- `crates/*/doc/` folders: USAGE, ARCHITECTURE, SECURITY,
+  HARDENING, COMMANDS, ACCESSIBILITY (one per crate as
+  appropriate).
+- `crates/*/examples/` runnable examples (Rust `.rs` for
+  raidhos-core, shell scripts for cli / priv-helper, HTML/JS
+  pages for ui-tauri).
+- `docs/USER_GUIDE.md`, `docs/TROUBLESHOOTING.md`,
+  `docs/FAQ.md`, `docs/THREAT_MODEL.md`, `docs/HARDENING.md`,
+  `docs/SECURE_BOOT.md`, `docs/V0_0_1_STATUS.md`,
+  `docs/ARCHITECTURE.md`, `docs/PAYLOAD.md`, `docs/CATALOG.md`,
+  `docs/TAURI_NOTES.md`, `docs/DESIGN_NOTES.md`.
+- `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1).
+- `CONTRIBUTING.md` with per-OS dev workflows.
+- `SECURITY.md` reporting policy.
+- `.github/dependabot.yml`, `.github/ISSUE_TEMPLATE/`,
+  `.github/PULL_REQUEST_TEMPLATE.md`.
+- Workspace-wide Mermaid diagrams using the neutral theme.
+
+### Added — tests
+
+- 121+ `raidhos-core` unit tests covering every public function
+  and every error variant.
+- 22+ rustdoc doctest examples on every public item.
+- 9 `raidhos-priv-helper` seccomp filter unit tests.
+- 6 `raidhos-priv-helper` toctou unit tests.
+- 7 `raidhos-priv-helper` integration tests (spawn the real
+  binary).
+- 12 `raidhos-cli` clap-schema unit tests.
+- 20 `raidhos-ui` unit tests (13 grub + 7 main.rs).
+- Fuzz parser targets activated via `__fuzz_api` re-exports.
+- Virtual-disk install workflow on Linux / macOS / Windows
+  hosted runners.
 
 ### Changed
-- `crates/core/src/lib.rs` reduced to public API surface; platform code
-  moved to `platform/{linux,macos,windows}.rs`.
-- README rewritten with hero copy, screenshot placeholder, badges, and
-  install paths (cargo + future signed binaries).
 
-### Not yet shipped (tracked for next milestones)
-- macOS install pipeline — discovery works; the destructive path is
-  stubbed (`NotImplemented`).
-- Windows install pipeline — discovery works; the destructive path is
-  stubbed (`NotImplemented`).
-- Tauri 2 migration.
-- Secure Boot (signed shim + MOK enrolment).
-- BIOS / legacy boot path.
-- Persistence images.
-- Curated ISO catalog with GPG signature verification.
-- Drag-and-drop ISO management in the UI.
-- seccomp-bpf restriction of `raidhos-priv-helper`.
-- Frontend rewrite to a real framework (Svelte/Solid) with strict-CSP
-  bundling.
+- `crates/core/src/lib.rs` slimmed to the public-API surface;
+  platform-specific code moved to `platform/{linux,macos,windows}.rs`.
+- README rewritten to noyalib visual style (centred header,
+  badges, contents TOC, quick start, reference sections).
+- Coverage gate set to a realistic 65% floor; tracking 85% by
+  v0.0.2 and 95% by v0.1.0.
+- Mermaid diagrams: `%%{init: {'theme':'neutral'}}%%` everywhere
+  to drop yellow / improve print contrast.
 
-See `docs/V0_0_1_STATUS.md` for the detailed breakdown.
+### Fixed
 
-[Unreleased]: https://github.com/sebastienrousseau/raidhos/compare/main...HEAD
+- `validate_device_path`: removed `\\` from FORBIDDEN so
+  legitimate Windows `\\.\PhysicalDriveN` paths pass.
+- Coverage tooling: re-gated platform modules so tarpaulin on
+  Linux sees only the active backend.
+- `cargo-audit`: passes the same `--ignore` set as `cargo-deny`
+  so the audit workflow doesn't trip on unmaintained transitives.
+- GRUB Docker build: switched from `mawk` to `gawk` for
+  `asorti`, with a 3× retry + GitHub-mirror fallback on
+  savannah's transient outages.
+
+[Unreleased]: https://github.com/sebastienrousseau/raidhos/compare/v0.0.1...HEAD
+[0.0.1]: https://github.com/sebastienrousseau/raidhos/releases/tag/v0.0.1
