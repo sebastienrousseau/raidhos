@@ -37,6 +37,20 @@
               Save config only after install
             </label>
           </div>
+          <details class="boot-global">
+            <summary>Global menu settings</summary>
+            <div class="boot-global-row">
+              <label class="entry-default">
+                <input type="checkbox" id="globalTreeView" />
+                Group entries by class (TreeView)
+              </label>
+              <div><small>GRUB superuser (optional, sanitised)</small></div>
+              <input id="globalGrubSuperuser" placeholder="admin" aria-label="GRUB superuser name" />
+              <div><small>GRUB PBKDF2 password hash (output of <code>grub-mkpasswd-pbkdf2</code>)</small></div>
+              <input id="globalGrubPasswordPbkdf2" placeholder="grub.pbkdf2.sha512.…" aria-label="GRUB PBKDF2 password hash" />
+              <div class="subtitle"><small>Plaintext is rejected; both fields must be set together for the password gate to activate.</small></div>
+            </div>
+          </details>
           <div class="disks" id="entriesConfig"></div>
         </details>
       </section>

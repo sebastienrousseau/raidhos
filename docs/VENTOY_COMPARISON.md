@@ -170,9 +170,16 @@ link to the section that documents what's needed.
   just the USB. Useful for laptops without an optical drive
   and large libraries.
 
-- **G23. GUI plugin configurator (`VentoyPlugson`)** — Ventoy
-  ships a separate GUI to edit `ventoy.json`. Our Tauri UI
-  edits `boot.json` directly; we could subsume both.
+- **G23. GUI plugin configurator (`VentoyPlugson`)** — ✅
+  **Closed in v0.0.1.** The Tauri UI now exposes every BootConfig
+  field that the gap-closure work introduced: TreeView toggle,
+  GRUB superuser + PBKDF2 hash (G13), and per-entry menu class,
+  tip, hidden, and persistence backend path (G11 / G17 / G18).
+  Settings persist in `localStorage` and round-trip through
+  `save_boot_config` / `write_boot_config_to_device`. A backend
+  test (`boot_config_round_trips_frontend_json_shape`) pins the
+  JSON shape so frontend/backend drift is caught at unit-test
+  time.
 
 ### Verification
 
@@ -313,10 +320,11 @@ priorities aligned to user impact and security risk:
 | **G20 ListView/TreeView** | **P2 — UX** | **✅ closed in v0.0.1** (`BootConfig.tree_view`) |
 | G21 Multi-language menu | P2 — i18n | v0.1.0 |
 | G22 Browse local disk | P3 — convenience | v0.2.0 |
+| **G23 GUI plugin configurator** | **P3 — UX** | **✅ closed in v0.0.1** (Tauri UI surfaces every BootConfig field) |
 | **G24 User-supplied checksum** | **P3 — flexibility** | **✅ closed in v0.0.1** (`verify_iso_sha256` / companion file) |
 | G25 Tested ISO catalog growth | continuous | — |
 
-**v0.0.1 closed:** G6, G7, G8, G9 (partial), G10, G11, G13, G17, G18, G19, G20, G24 — twelve gaps.
+**v0.0.1 closed:** G6, G7, G8, G9 (partial), G10, G11, G13, G17, G18, G19, G20, G23, G24 — thirteen gaps.
 **v0.0.1 scaffolded:** G1, G3 — two gaps with the API surface, validation, and tooling in place; the destructive write path or the third-party shim signing remain for v0.0.2.
 
 ---

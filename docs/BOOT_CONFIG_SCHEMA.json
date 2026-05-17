@@ -4,7 +4,7 @@
   "description": "Schema for the boot.json file persisted by the RaidhOS UI / CLI and rendered into grub.cfg by raidhos-ui::grub::render_grub_cfg. All non-core fields are optional and additive — older configs continue to load.",
   "type": "object",
   "properties": {
-    "defaultEntry": {
+    "default_entry": {
       "type": ["string", "null"],
       "description": "Path of the entry that should boot by default. Matched against BootEntryConfig.path (sanitised before emission to grub.cfg)."
     },
@@ -29,7 +29,7 @@
       "description": "Ventoy gap G20. When true, entries with a non-empty `class` are grouped into `submenu \"<class>\" { … }` blocks. Classless entries float to the top level so power-user entries stay one keypress from boot."
     }
   },
-  "required": ["defaultEntry", "entries"],
+  "required": ["default_entry", "entries"],
   "additionalProperties": true,
   "$defs": {
     "BootEntryConfig": {

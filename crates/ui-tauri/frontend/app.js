@@ -37,6 +37,9 @@
       const resetModal = document.getElementById('resetModal');
       const cancelReset = document.getElementById('cancelReset');
       const confirmReset = document.getElementById('confirmReset');
+      const globalTreeView = document.getElementById('globalTreeView');
+      const globalGrubSuperuser = document.getElementById('globalGrubSuperuser');
+      const globalGrubPasswordPbkdf2 = document.getElementById('globalGrubPasswordPbkdf2');
 
       let selectedDisk = null;
       let selectedEspMount = null;
@@ -118,6 +121,16 @@
                 <input class="entry-initrd" value="${entry.initrd || ''}" />
                 <div><small>Kernel args (optional)</small></div>
                 <input class="entry-kargs" value="${entry.kargs || ''}" />
+                <div><small>Menu class (e.g. linux, windows)</small></div>
+                <input class="entry-class" value="${entry.class || ''}" />
+                <div><small>Tip / hint shown above the entry</small></div>
+                <input class="entry-tip" value="${entry.tip || ''}" />
+                <div><small>Persistence backend path (e.g. /persistence/ubuntu.dat)</small></div>
+                <input class="entry-persistence" value="${entry.persistence_backend || ''}" />
+                <label class="entry-default">
+                  <input type="checkbox" class="entry-hidden" ${entry.hidden ? 'checked' : ''} />
+                  Hide this entry from the boot menu
+                </label>
               </details>
             </div>
             <div class="pill">${entry.tag}</div>
@@ -150,6 +163,38 @@
           if (kargsInput) {
             kargsInput.addEventListener('input', (ev) => {
               entry.kargs = ev.target.value;
+              persistEntryParams(entry);
+              pushBootConfig();
+            });
+          }
+          const classInput = el.querySelector('.entry-class');
+          if (classInput) {
+            classInput.addEventListener('input', (ev) => {
+              entry.class = ev.target.value;
+              persistEntryParams(entry);
+              pushBootConfig();
+            });
+          }
+          const tipInput = el.querySelector('.entry-tip');
+          if (tipInput) {
+            tipInput.addEventListener('input', (ev) => {
+              entry.tip = ev.target.value;
+              persistEntryParams(entry);
+              pushBootConfig();
+            });
+          }
+          const persistenceInput = el.querySelector('.entry-persistence');
+          if (persistenceInput) {
+            persistenceInput.addEventListener('input', (ev) => {
+              entry.persistence_backend = ev.target.value;
+              persistEntryParams(entry);
+              pushBootConfig();
+            });
+          }
+          const hiddenInput = el.querySelector('.entry-hidden');
+          if (hiddenInput) {
+            hiddenInput.addEventListener('change', (ev) => {
+              entry.hidden = ev.target.checked;
               persistEntryParams(entry);
               pushBootConfig();
             });
@@ -596,6 +641,15 @@
         if (saveOnInstallOnly) {
           saveOnInstallOnly.checked = localStorage.getItem('raidhos_save_on_install_only') === 'true';
         }
+        if (globalTreeView) {
+          globalTreeView.checked = localStorage.getItem('raidhos_tree_view') === 'true';
+        }
+        if (globalGrubSuperuser) {
+          globalGrubSuperuser.value = localStorage.getItem('raidhos_grub_superuser') || '';
+        }
+        if (globalGrubPasswordPbkdf2) {
+          globalGrubPasswordPbkdf2.value = localStorage.getItem('raidhos_grub_password_pbkdf2') || '';
+        }
       }
 
       function entryKey(entry) {
@@ -608,6 +662,10 @@
           params: entry.params || '',
           initrd: entry.initrd || '',
           kargs: entry.kargs || '',
+          class: entry.class || '',
+          tip: entry.tip || '',
+          persistence_backend: entry.persistence_backend || '',
+          hidden: !!entry.hidden,
         };
         localStorage.setItem(entryKey(entry), JSON.stringify(payload));
       }
@@ -621,6 +679,11 @@
             entry.params = parsed.params || entry.params;
             entry.initrd = parsed.initrd || entry.initrd;
             entry.kargs = parsed.kargs || entry.kargs;
+            entry.class = parsed.class || entry.class || '';
+            entry.tip = parsed.tip || entry.tip || '';
+            entry.persistence_backend =
+              parsed.persistence_backend || entry.persistence_backend || '';
+            entry.hidden = !!parsed.hidden;
           } catch (_err) {
           }
         });
@@ -631,14 +694,23 @@
           const { invoke } = window.__TAURI__.tauri;
           const defaultEntry = localStorage.getItem('raidhos_default_entry');
           const payload = {
-            defaultEntry: defaultEntry || null,
+            default_entry: defaultEntry || null,
             entries: renderedEntries.map((entry) => ({
               title: entry.title,
               path: entry.path || mapEntryPath(entry),
               params: entry.params || '',
               initrd: entry.initrd || '',
               kargs: entry.kargs || '',
+              class: entry.class || '',
+              tip: entry.tip || '',
+              hidden: !!entry.hidden,
+              persistence_backend: entry.persistence_backend || '',
             })),
+            tree_view: !!(globalTreeView && globalTreeView.checked),
+            grub_superuser:
+              (globalGrubSuperuser && globalGrubSuperuser.value) || '',
+            grub_password_pbkdf2:
+              (globalGrubPasswordPbkdf2 && globalGrubPasswordPbkdf2.value) || '',
           };
           await invoke('save_boot_config', { config: payload });
         } catch (_err) {
@@ -657,14 +729,23 @@
           const { invoke } = window.__TAURI__.tauri;
           const defaultEntry = localStorage.getItem('raidhos_default_entry');
           const payload = {
-            defaultEntry: defaultEntry || null,
+            default_entry: defaultEntry || null,
             entries: renderedEntries.map((entry) => ({
               title: entry.title,
               path: entry.subtitle || entry.path,
               params: entry.params || '',
               initrd: entry.initrd || '',
               kargs: entry.kargs || '',
+              class: entry.class || '',
+              tip: entry.tip || '',
+              hidden: !!entry.hidden,
+              persistence_backend: entry.persistence_backend || '',
             })),
+            tree_view: !!(globalTreeView && globalTreeView.checked),
+            grub_superuser:
+              (globalGrubSuperuser && globalGrubSuperuser.value) || '',
+            grub_password_pbkdf2:
+              (globalGrubPasswordPbkdf2 && globalGrubPasswordPbkdf2.value) || '',
           };
           await invoke('write_boot_config_to_device', { mountPath: mount, config: payload });
           showBanner('Config written to target.', false, false);
@@ -682,7 +763,7 @@
           const { invoke } = window.__TAURI__.tauri;
           const defaultEntry = localStorage.getItem('raidhos_default_entry');
           const payload = {
-            defaultEntry: defaultEntry || null,
+            default_entry: defaultEntry || null,
             entries: renderedEntries.map((entry) => ({
               title: entry.title,
               path: entry.path || mapEntryPath(entry),
@@ -710,12 +791,39 @@
         if (saveOnInstallOnly) {
           localStorage.setItem('raidhos_save_on_install_only', String(saveOnInstallOnly.checked));
         }
+        if (globalTreeView) {
+          localStorage.setItem('raidhos_tree_view', String(globalTreeView.checked));
+        }
+        if (globalGrubSuperuser) {
+          localStorage.setItem('raidhos_grub_superuser', globalGrubSuperuser.value || '');
+        }
+        if (globalGrubPasswordPbkdf2) {
+          localStorage.setItem('raidhos_grub_password_pbkdf2', globalGrubPasswordPbkdf2.value || '');
+        }
       }
 
       if (scanPathsInput) scanPathsInput.addEventListener('change', persistState);
       if (acceptWrite) acceptWrite.addEventListener('change', persistState);
       if (enableWrite) enableWrite.addEventListener('change', persistState);
       if (saveOnInstallOnly) saveOnInstallOnly.addEventListener('change', persistState);
+      if (globalTreeView) {
+        globalTreeView.addEventListener('change', () => {
+          persistState();
+          pushBootConfig();
+        });
+      }
+      if (globalGrubSuperuser) {
+        globalGrubSuperuser.addEventListener('input', () => {
+          persistState();
+          pushBootConfig();
+        });
+      }
+      if (globalGrubPasswordPbkdf2) {
+        globalGrubPasswordPbkdf2.addEventListener('input', () => {
+          persistState();
+          pushBootConfig();
+        });
+      }
 
       restoreState();
       updateInstallPlan();

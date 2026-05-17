@@ -546,4 +546,67 @@ mod tests {
         assert!(body.contains("ubuntu"));
         let _ = std::fs::remove_dir_all(&scratch);
     }
+
+    /// Round-trip the JSON shape that the Tauri frontend sends to
+    /// `save_boot_config` (Ventoy gap G23). Any drift between
+    /// `crates/ui-tauri/frontend/app.js` and the Rust struct field
+    /// names will fail this — caught at unit-test time rather than
+    /// silently dropping fields in production.
+    #[test]
+    fn boot_config_round_trips_frontend_json_shape() {
+        let frontend_payload = serde_json::json!({
+            "default_entry": "/u.iso",
+            "entries": [
+                {
+                    "title": "Ubuntu 24.04",
+                    "path": "/u.iso",
+                    "params": "quiet splash",
+                    "initrd": "",
+                    "kargs": "",
+                    "class": "linux",
+                    "tip": "LTS desktop",
+                    "hidden": false,
+                    "persistence_backend": "/persistence/ubuntu.dat"
+                }
+            ],
+            "tree_view": true,
+            "grub_superuser": "admin",
+            "grub_password_pbkdf2": "grub.pbkdf2.sha512.10000.deadbeef.cafef00d"
+        });
+        let cfg: BootConfig = serde_json::from_value(frontend_payload).expect("deserialise");
+        assert_eq!(cfg.default_entry.as_deref(), Some("/u.iso"));
+        assert_eq!(cfg.entries.len(), 1);
+        assert_eq!(cfg.entries[0].class, "linux");
+        assert_eq!(cfg.entries[0].tip, "LTS desktop");
+        assert!(!cfg.entries[0].hidden);
+        assert_eq!(
+            cfg.entries[0].persistence_backend,
+            "/persistence/ubuntu.dat"
+        );
+        assert!(cfg.tree_view);
+        assert_eq!(cfg.grub_superuser, "admin");
+        assert_eq!(
+            cfg.grub_password_pbkdf2,
+            "grub.pbkdf2.sha512.10000.deadbeef.cafef00d"
+        );
+    }
+
+    /// A boot.json written by an older client (pre-v0.0.1 gap
+    /// closures) must still deserialise without error. The new
+    /// fields all use `#[serde(default)]`.
+    #[test]
+    fn boot_config_legacy_payload_back_compat() {
+        let legacy = serde_json::json!({
+            "default_entry": null,
+            "entries": [
+                {"title": "X", "path": "/x.iso", "params": "", "initrd": "", "kargs": ""}
+            ]
+        });
+        let cfg: BootConfig = serde_json::from_value(legacy).expect("deserialise");
+        assert_eq!(cfg.entries.len(), 1);
+        assert_eq!(cfg.entries[0].class, "");
+        assert!(!cfg.entries[0].hidden);
+        assert!(!cfg.tree_view);
+        assert_eq!(cfg.grub_superuser, "");
+    }
 }
