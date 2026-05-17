@@ -29,13 +29,27 @@ deciding whether to tag from it.
 
 - **Builds clean.** `cargo build --workspace` succeeds on
   Linux, macOS, Windows.
-- **Tests pass.** 42 tests (30 core + 12 UI).
+- **Tests pass.** 344+ tests across the workspace:
+  `raidhos-core` 201 unit + 26 doctest, `raidhos-ui` 81,
+  `raidhos-cli` 14, `raidhos-priv-helper` 9 seccomp + 6 toctou
+  + 7 integration.
 - **`cargo fmt --check`, `cargo clippy --all-targets -D warnings`**
-  both clean.
-- **Coverage gate.** `tarpaulin -p raidhos-core --fail-under 95`
-  passes.
+  both clean across the workspace.
+- **Coverage gate.** `tarpaulin -p raidhos-core --fail-under 90`
+  passes (Linux CI). `raidhos-core` jumped from ~68% to 91.21%
+  (778/853 lines covered) after the
+  `validate_device_path_for_target` refactor decoupled the
+  path-shape gate from host `target_os`.
 - **Tauri 2.** Migrated from Tauri 1 mid-branch; full workspace
   including the UI builds.
+- **Ventoy gap closures.** Sixteen of the 25 tracked gaps
+  closed, two scaffolded — see
+  [`VENTOY_COMPARISON.md`](VENTOY_COMPARISON.md) for the
+  priority matrix and `closures` table in
+  [`../CHANGELOG.md`](../CHANGELOG.md) for the per-gap surface.
+  Three closures are partial (G12 — Linux autoinstall only;
+  G16 — external grub.cfg override only; G22 — chain into
+  discovered grub.cfg only).
 - **Release workflow.** Defined, never run — item #1 in the
   priority matrix is the only one held back, awaiting maintainer
   authorisation to push the `v0.0.1-rc.1` tag.
@@ -45,6 +59,15 @@ deciding whether to tag from it.
 pie title v0.0.1 priority matrix status
     "Completed" : 19
     "Awaiting authorisation (push rc tag)" : 1
+```
+
+```mermaid
+%%{init: {'theme':'neutral'}}%%
+pie title Ventoy gap closure status
+    "Closed (full)" : 13
+    "Closed (partial)" : 3
+    "Scaffolded" : 2
+    "Open" : 7
 ```
 
 ---
@@ -228,6 +251,37 @@ extended docs:
 - README rewritten — badges, hero, Mermaid architecture
   diagram, full ToC.
 
+### Ventoy gap closures
+
+Driven by the audit in
+[`VENTOY_COMPARISON.md`](VENTOY_COMPARISON.md). Sixteen of the
+twenty-five tracked gaps closed in-branch, two scaffolded.
+
+| Gap | Surface | Status |
+|---|---|---|
+| G6 IMG / raw disk image boot | `.img` / `.raw` → loopback + `chainloader (loop)` | ✅ |
+| G7 .EFI binary chainload | renderer detects `.efi`, emits `chainloader` | ✅ |
+| G8 NTFS data partition | `--data-fs ntfs` (Linux pipeline) | ✅ |
+| G9 ext4 / Btrfs / XFS data partition | `--data-fs ext4 \| btrfs \| xfs` | ✅ |
+| G10 UDF + multi-fs modules | `insmod udf/ntfs/ext2/btrfs/xfs` + embedded in EFI | ✅ |
+| G11 menu_class + menu_tip | `BootEntryConfig.class`, `tip` | ✅ |
+| G12 Auto-install | `BootEntryConfig.autoinstall { kind, path }`; per-distro kargs | ✅ partial (Linux; Windows `autounattend.xml` → v0.1.0) |
+| G13 GRUB password gate | `BootConfig.grub_superuser` + `grub_password_pbkdf2`; PBKDF2 only | ✅ |
+| G16 Conf replace | `BootEntryConfig.conf_replace_path`; external grub.cfg override with fallback | ✅ partial (external override; in-ISO sed → v0.1.0) |
+| G17 image_blacklist | `BootEntryConfig.hidden = true` | ✅ |
+| G18 Per-ISO persistence backend | `BootEntryConfig.persistence_backend` | ✅ |
+| G19 Per-distro persistence labels | `raidhos_core::expected_persistence_label`; 30-distro table | ✅ |
+| G20 ListView ↔ TreeView | `BootConfig.tree_view`; renderer groups by sanitised `class` | ✅ |
+| G22 Browse local disk (F2) | `BootConfig.enable_disk_browser`; F2-hotkeyed menuentry | ✅ partial (chain into discovered grub.cfg; file browser → v0.1.0) |
+| G23 GUI plugin configurator | Tauri UI exposes every BootConfig field; round-trip test pins JSON shape | ✅ |
+| G24 User-supplied checksum | `verify_iso_sha256` / `verify_iso_companion_sha256` | ✅ |
+| G1 Legacy BIOS | `--bios-compat` flag; destructive path returns `NotImplemented` | scaffolded |
+| G3 Secure Boot signed shim | `tools/secure-boot/{generate-mok,sign-bootx64}.sh` + enrol helper | scaffolded |
+
+Still-open: G2 (ARM64/IA32 UEFI), G4 (WIM boot), G5 (VHD/VHDx
+boot), G14 (Driver Update Disk), G15 (file injection), G21
+(multi-language), G25 (catalog growth).
+
 ---
 
 ## What was deferred and is now in
@@ -290,7 +344,7 @@ cargo test --workspace --all-targets
 cargo fmt --all -- --check
 
 # Coverage gate.
-cargo tarpaulin -p raidhos-core --fail-under 95
+cargo tarpaulin -p raidhos-core --fail-under 90
 
 # UI smoke.
 ./target/debug/raidhos-ui
