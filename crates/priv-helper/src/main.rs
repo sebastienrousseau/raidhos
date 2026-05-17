@@ -74,6 +74,10 @@ struct InstallArgs {
     /// embedding is v0.0.2 work.
     #[arg(long, default_value_t = false)]
     bios_compat: bool,
+    /// Filesystem to format the DATA partition with. Ventoy gap G8
+    /// (NTFS) + G9 (ext4/Btrfs/XFS).
+    #[arg(long, default_value = "exfat")]
+    data_fs: String,
 }
 
 #[derive(Serialize)]
@@ -205,6 +209,8 @@ fn main() {
                 // solely to write real block devices behind pkexec.
                 simulator: false,
                 bios_compat: args.bios_compat,
+                data_filesystem: core::DataFilesystem::parse(&args.data_fs)
+                    .unwrap_or(core::DataFilesystem::ExFat),
             };
             let sink = StderrSink;
             let install_result = core::install(req, &sink).map_err(|e| e.to_string());

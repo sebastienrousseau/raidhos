@@ -68,6 +68,14 @@ pub enum Commands {
         /// `--allow-write=true` yields a documented NotImplemented.
         #[arg(long, default_value_t = false)]
         bios_compat: bool,
+        /// Filesystem to format the DATA partition with. One of:
+        /// exfat (default, cross-platform), ntfs, ext4, btrfs, xfs.
+        /// Closes Ventoy gap G8 (NTFS) and the lower half of G9
+        /// (ext4/Btrfs/XFS). Linux-only formatters today; macOS and
+        /// Windows install pipelines still use the platform-native
+        /// equivalents.
+        #[arg(long, default_value = "exfat")]
+        data_fs: String,
     },
     /// Write a previously-saved boot.json into a mounted partition.
     WriteConfig {

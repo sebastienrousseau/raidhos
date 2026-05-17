@@ -281,6 +281,7 @@ mod tests {
             allow_write: allow,
             simulator: false,
             bios_compat: false,
+            data_filesystem: Default::default(),
         }
     }
 

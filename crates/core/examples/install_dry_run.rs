@@ -33,6 +33,7 @@ fn main() {
         allow_write: false,
         simulator: false,
         bios_compat: false,
+        data_filesystem: Default::default(),
     };
 
     match core::install(req, &StdoutSink) {

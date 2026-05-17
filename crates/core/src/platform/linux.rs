@@ -134,20 +134,14 @@ pub(crate) fn install_with(
     let part2 = part_path(&req.device, 2);
     rt.run("mkfs.vfat", &["-F", "32", "-n", "RAIDHOS_EFI", &part1])?;
 
-    if rt.has_cmd("mkfs.exfat") {
-        if rt.run("mkfs.exfat", &["-n", "DATA", &part2]).is_err() {
-            rt.run("mkfs.exfat", &[&part2])?;
-            let _ = rt.run("exfatlabel", &[&part2, "DATA"]);
-        }
-    } else if rt.has_cmd("mkexfatfs") {
-        if rt.run("mkexfatfs", &["-n", "DATA", &part2]).is_err() {
-            rt.run("mkexfatfs", &[&part2])?;
-            let _ = rt.run("exfatlabel", &[&part2, "DATA"]);
-        }
-    } else {
-        return Err(CoreError::Io(
-            "exFAT formatter not found (mkfs.exfat or mkexfatfs)".to_string(),
-        ));
+    // Ventoy gap G8 + lower half of G9: per-request DATA filesystem
+    // choice. Each variant has a different formatter binary on Linux.
+    match req.data_filesystem {
+        crate::DataFilesystem::ExFat => format_exfat(rt, &part2)?,
+        crate::DataFilesystem::Ntfs => format_ntfs(rt, &part2)?,
+        crate::DataFilesystem::Ext4 => format_ext4(rt, &part2)?,
+        crate::DataFilesystem::Btrfs => format_btrfs(rt, &part2)?,
+        crate::DataFilesystem::Xfs => format_xfs(rt, &part2)?,
     }
 
     payload_copy(sink, rt, &part1, &part2)?;
@@ -303,6 +297,62 @@ fn payload_copy(sink: &dyn ProgressSink, rt: &dyn Runtime, part1: &str, part2: &
     Ok(())
 }
 
+fn format_exfat(rt: &dyn Runtime, part: &str) -> Result<()> {
+    if rt.has_cmd("mkfs.exfat") {
+        if rt.run("mkfs.exfat", &["-n", "DATA", part]).is_err() {
+            rt.run("mkfs.exfat", &[part])?;
+            let _ = rt.run("exfatlabel", &[part, "DATA"]);
+        }
+        Ok(())
+    } else if rt.has_cmd("mkexfatfs") {
+        if rt.run("mkexfatfs", &["-n", "DATA", part]).is_err() {
+            rt.run("mkexfatfs", &[part])?;
+            let _ = rt.run("exfatlabel", &[part, "DATA"]);
+        }
+        Ok(())
+    } else {
+        Err(CoreError::Io(
+            "exFAT formatter not found (mkfs.exfat or mkexfatfs)".to_string(),
+        ))
+    }
+}
+
+fn format_ntfs(rt: &dyn Runtime, part: &str) -> Result<()> {
+    if !rt.has_cmd("mkfs.ntfs") {
+        return Err(CoreError::Io(
+            "mkfs.ntfs not found — install ntfs-3g".to_string(),
+        ));
+    }
+    rt.run("mkfs.ntfs", &["-Q", "-L", "DATA", part])
+}
+
+fn format_ext4(rt: &dyn Runtime, part: &str) -> Result<()> {
+    if !rt.has_cmd("mkfs.ext4") {
+        return Err(CoreError::Io(
+            "mkfs.ext4 not found — install e2fsprogs".to_string(),
+        ));
+    }
+    rt.run("mkfs.ext4", &["-F", "-L", "DATA", part])
+}
+
+fn format_btrfs(rt: &dyn Runtime, part: &str) -> Result<()> {
+    if !rt.has_cmd("mkfs.btrfs") {
+        return Err(CoreError::Io(
+            "mkfs.btrfs not found — install btrfs-progs".to_string(),
+        ));
+    }
+    rt.run("mkfs.btrfs", &["-f", "-L", "DATA", part])
+}
+
+fn format_xfs(rt: &dyn Runtime, part: &str) -> Result<()> {
+    if !rt.has_cmd("mkfs.xfs") {
+        return Err(CoreError::Io(
+            "mkfs.xfs not found — install xfsprogs".to_string(),
+        ));
+    }
+    rt.run("mkfs.xfs", &["-f", "-L", "DATA", part])
+}
+
 pub(crate) fn part_path(device: &str, idx: u8) -> String {
     if device
         .chars()
@@ -363,6 +413,7 @@ mod tests {
             allow_write: allow,
             simulator: false,
             bios_compat: false,
+            data_filesystem: Default::default(),
         }
     }
 
@@ -388,6 +439,146 @@ mod tests {
             res.is_ok(),
             "dry-run with bios_compat should succeed: {res:?}"
         );
+    }
+
+    fn req_with_fs(device: &str, fs: crate::DataFilesystem) -> InstallRequest {
+        let mut r = req(device, true, false, true);
+        r.data_filesystem = fs;
+        r
+    }
+
+    fn payload_dir_with_fs(fs: crate::DataFilesystem) -> (std::path::PathBuf, MockRuntime) {
+        // Reuse the existing helper but override the queued
+        // outcomes' shape based on filesystem (we add one extra
+        // mkfs.<fs> outcome compared to mkfs.exfat).
+        let (payload, mut rt) = payload_dir_with(true, true);
+        // Pre-seed: the call ordering is parted (5), mkfs.vfat (1),
+        // then the chosen filesystem (1 — or 2 with a fallback for
+        // exfat). Replace outcomes with the right count.
+        let count = match fs {
+            crate::DataFilesystem::ExFat => 8, // parted x5 + mkfs.vfat + mkfs.exfat (success on first try)
+            _ => 7,                            // parted x5 + mkfs.vfat + mkfs.<fs>
+        };
+        rt.outcomes = std::cell::RefCell::new(
+            std::iter::repeat_with(|| MockOutcome::Ok(vec![]))
+                .take(count)
+                .collect(),
+        );
+        // Pre-mark the filesystem's formatter as present.
+        let formatter = match fs {
+            crate::DataFilesystem::ExFat => "mkfs.exfat",
+            crate::DataFilesystem::Ntfs => "mkfs.ntfs",
+            crate::DataFilesystem::Ext4 => "mkfs.ext4",
+            crate::DataFilesystem::Btrfs => "mkfs.btrfs",
+            crate::DataFilesystem::Xfs => "mkfs.xfs",
+        };
+        rt.available_cmds.push(formatter);
+        (payload, rt)
+    }
+
+    #[test]
+    fn install_uses_mkfs_ntfs_when_data_filesystem_is_ntfs() {
+        let (payload, rt) = payload_dir_with_fs(crate::DataFilesystem::Ntfs);
+        std::env::set_var("RAIDHOS_PAYLOAD_DIR", &payload);
+        let disks = vec![disk("/dev/sdb", vec![], false)];
+        let res = install_with(
+            req_with_fs("/dev/sdb", crate::DataFilesystem::Ntfs),
+            &sink(),
+            &rt,
+            &disks,
+        );
+        std::env::remove_var("RAIDHOS_PAYLOAD_DIR");
+        let _ = std::fs::remove_dir_all(&payload);
+        assert!(res.is_ok(), "got {res:?}");
+        let inv = rt.invocations.borrow();
+        assert!(
+            inv.iter().any(|i| i.cmd == "mkfs.ntfs"),
+            "no mkfs.ntfs in {inv:?}",
+        );
+        assert!(
+            !inv.iter().any(|i| i.cmd == "mkfs.exfat"),
+            "mkfs.exfat called by mistake",
+        );
+    }
+
+    #[test]
+    fn install_uses_mkfs_ext4_when_data_filesystem_is_ext4() {
+        let (payload, rt) = payload_dir_with_fs(crate::DataFilesystem::Ext4);
+        std::env::set_var("RAIDHOS_PAYLOAD_DIR", &payload);
+        let disks = vec![disk("/dev/sdb", vec![], false)];
+        let res = install_with(
+            req_with_fs("/dev/sdb", crate::DataFilesystem::Ext4),
+            &sink(),
+            &rt,
+            &disks,
+        );
+        std::env::remove_var("RAIDHOS_PAYLOAD_DIR");
+        let _ = std::fs::remove_dir_all(&payload);
+        assert!(res.is_ok(), "got {res:?}");
+        assert!(rt.invocations.borrow().iter().any(|i| i.cmd == "mkfs.ext4"));
+    }
+
+    #[test]
+    fn install_uses_mkfs_btrfs_when_data_filesystem_is_btrfs() {
+        let (payload, rt) = payload_dir_with_fs(crate::DataFilesystem::Btrfs);
+        std::env::set_var("RAIDHOS_PAYLOAD_DIR", &payload);
+        let disks = vec![disk("/dev/sdb", vec![], false)];
+        let res = install_with(
+            req_with_fs("/dev/sdb", crate::DataFilesystem::Btrfs),
+            &sink(),
+            &rt,
+            &disks,
+        );
+        std::env::remove_var("RAIDHOS_PAYLOAD_DIR");
+        let _ = std::fs::remove_dir_all(&payload);
+        assert!(res.is_ok(), "got {res:?}");
+        assert!(rt
+            .invocations
+            .borrow()
+            .iter()
+            .any(|i| i.cmd == "mkfs.btrfs"));
+    }
+
+    #[test]
+    fn install_uses_mkfs_xfs_when_data_filesystem_is_xfs() {
+        let (payload, rt) = payload_dir_with_fs(crate::DataFilesystem::Xfs);
+        std::env::set_var("RAIDHOS_PAYLOAD_DIR", &payload);
+        let disks = vec![disk("/dev/sdb", vec![], false)];
+        let res = install_with(
+            req_with_fs("/dev/sdb", crate::DataFilesystem::Xfs),
+            &sink(),
+            &rt,
+            &disks,
+        );
+        std::env::remove_var("RAIDHOS_PAYLOAD_DIR");
+        let _ = std::fs::remove_dir_all(&payload);
+        assert!(res.is_ok(), "got {res:?}");
+        assert!(rt.invocations.borrow().iter().any(|i| i.cmd == "mkfs.xfs"));
+    }
+
+    #[test]
+    fn install_errors_when_chosen_formatter_is_missing() {
+        let (payload, mut rt) = payload_dir_with(true, true);
+        rt.outcomes = std::cell::RefCell::new(
+            std::iter::repeat_with(|| MockOutcome::Ok(vec![]))
+                .take(7)
+                .collect(),
+        );
+        // Note: do NOT register mkfs.ntfs as present — that's the test.
+        std::env::set_var("RAIDHOS_PAYLOAD_DIR", &payload);
+        let disks = vec![disk("/dev/sdb", vec![], false)];
+        let res = install_with(
+            req_with_fs("/dev/sdb", crate::DataFilesystem::Ntfs),
+            &sink(),
+            &rt,
+            &disks,
+        );
+        std::env::remove_var("RAIDHOS_PAYLOAD_DIR");
+        let _ = std::fs::remove_dir_all(&payload);
+        let err = res.unwrap_err();
+        let s = format!("{err}");
+        assert!(s.contains("mkfs.ntfs"), "got: {s}");
+        assert!(s.contains("ntfs-3g"), "got: {s}");
     }
 
     #[test]

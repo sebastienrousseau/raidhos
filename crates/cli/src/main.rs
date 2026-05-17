@@ -90,6 +90,7 @@ fn main() {
             dry_run,
             allow_write,
             bios_compat,
+            data_fs,
         } => {
             struct StdoutSink;
             impl core::ProgressSink for StdoutSink {
@@ -120,6 +121,15 @@ fn main() {
                 }
             };
 
+            let data_filesystem = match core::DataFilesystem::parse(&data_fs) {
+                Some(fs) => fs,
+                None => {
+                    eprintln!(
+                        "unknown --data-fs value: {data_fs} (try exfat, ntfs, ext4, btrfs, xfs)",
+                    );
+                    std::process::exit(2);
+                }
+            };
             let req = core::InstallRequest {
                 device: device_path,
                 payload_version,
@@ -128,6 +138,7 @@ fn main() {
                 allow_write,
                 simulator: simulator_mode,
                 bios_compat,
+                data_filesystem,
             };
             if let Err(e) = core::install(req, &StdoutSink) {
                 eprintln!("install failed: {e}");

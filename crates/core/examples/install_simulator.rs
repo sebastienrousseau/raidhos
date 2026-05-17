@@ -55,6 +55,7 @@ fn main() {
         allow_write: true, // safe because simulator mode bypasses /dev/* targeting
         simulator: true,
         bios_compat: false,
+        data_filesystem: Default::default(),
     };
 
     println!("Running install pipeline against {path} ({size_mb} MiB sparse)…");

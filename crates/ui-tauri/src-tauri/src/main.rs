@@ -156,6 +156,7 @@ fn install(window: Window, args: InstallArgs) -> Result<(), String> {
         // --simulator …` from a terminal.
         simulator: false,
         bios_compat: false,
+        data_filesystem: Default::default(),
     };
     core::install(req, &sink).map_err(|e| e.to_string())?;
     Ok(())

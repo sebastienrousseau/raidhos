@@ -49,6 +49,7 @@
 //!     allow_write: false,
 //!     simulator: false,
 //!     bios_compat: false,
+//!     data_filesystem: Default::default(),
 //! };
 //! let _ = raidhos_core::install(req, &StdoutSink);
 //! ```
@@ -199,6 +200,7 @@ pub struct PartitionInfo {
 ///     allow_write: false,
 ///     simulator: false,
 ///     bios_compat: false,
+///     data_filesystem: Default::default(),
 /// };
 /// assert!(req.dry_run && !req.allow_write);
 /// ```
@@ -234,6 +236,91 @@ pub struct InstallRequest {
     /// `CoreError::NotImplemented` when `dry_run` is false.
     #[serde(default)]
     pub bios_compat: bool,
+    /// Filesystem to use on the DATA partition. Default `ExFat`
+    /// matches v0.0.1 behaviour and the v0.0.1 GRUB build's loaded
+    /// modules. Closes Ventoy gap G8 (NTFS) and the lower halves
+    /// of G9 (ext4, Btrfs, XFS).
+    ///
+    /// Per-platform support, refused at validate time when the
+    /// platform's install pipeline can't create the filesystem
+    /// requested (e.g. `Ntfs` on macOS without ntfs-3g installed).
+    #[serde(default)]
+    pub data_filesystem: DataFilesystem,
+}
+
+/// Filesystem options for the DATA partition.
+///
+/// `ExFat` is the v0.0.1 default — readable read/write from Linux,
+/// macOS, and Windows out of the box, and supports > 4 GiB files
+/// (unlike FAT32). Other variants close Ventoy gaps G8 and G9 for
+/// users with specific compatibility needs.
+///
+/// Wire form is lowercase (`"exfat"`, `"ntfs"`, …) so the JSON
+/// stays human-friendly.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DataFilesystem {
+    /// exFAT — default. Cross-platform, > 4 GiB files supported.
+    #[default]
+    ExFat,
+    /// NTFS — read/write on Windows native; readable on macOS via
+    /// 3rd-party drivers; ntfs-3g on Linux. Closes Ventoy gap G8.
+    Ntfs,
+    /// ext4 — Linux-native, mountable read-write only on Linux.
+    Ext4,
+    /// Btrfs — Linux-native, supports snapshots and compression.
+    Btrfs,
+    /// XFS — Linux-native, optimised for large files.
+    Xfs,
+}
+
+impl DataFilesystem {
+    /// Lowercase wire-format name (`"exfat"`, `"ntfs"`, …).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use raidhos_core::DataFilesystem;
+    /// assert_eq!(DataFilesystem::ExFat.as_str(), "exfat");
+    /// assert_eq!(DataFilesystem::Ntfs.as_str(), "ntfs");
+    /// ```
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DataFilesystem::ExFat => "exfat",
+            DataFilesystem::Ntfs => "ntfs",
+            DataFilesystem::Ext4 => "ext4",
+            DataFilesystem::Btrfs => "btrfs",
+            DataFilesystem::Xfs => "xfs",
+        }
+    }
+
+    /// Parse from a case-insensitive string. Used by the CLI's
+    /// `--data-fs` flag and by JSON deserialisation.
+    ///
+    /// Named `parse` rather than `from_str` to avoid shadowing the
+    /// `std::str::FromStr::from_str` trait method.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use raidhos_core::DataFilesystem;
+    /// assert_eq!(DataFilesystem::parse("ExFAT"), Some(DataFilesystem::ExFat));
+    /// assert_eq!(DataFilesystem::parse("NTFS"),  Some(DataFilesystem::Ntfs));
+    /// assert_eq!(DataFilesystem::parse("ext4"),  Some(DataFilesystem::Ext4));
+    /// assert_eq!(DataFilesystem::parse("btrfs"), Some(DataFilesystem::Btrfs));
+    /// assert_eq!(DataFilesystem::parse("xfs"),   Some(DataFilesystem::Xfs));
+    /// assert_eq!(DataFilesystem::parse("zfs"),   None);
+    /// ```
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "exfat" => Some(DataFilesystem::ExFat),
+            "ntfs" => Some(DataFilesystem::Ntfs),
+            "ext4" => Some(DataFilesystem::Ext4),
+            "btrfs" => Some(DataFilesystem::Btrfs),
+            "xfs" => Some(DataFilesystem::Xfs),
+            _ => None,
+        }
+    }
 }
 
 /// Progress event emitted by the install pipeline.
@@ -338,6 +425,7 @@ pub fn list_disks() -> Result<Vec<DiskInfo>> {
 ///     allow_write: false,
 ///     simulator: false,
 ///     bios_compat: false,
+///     data_filesystem: Default::default(),
 /// };
 /// let _ = raidhos_core::install(req, &Quiet);
 /// ```
@@ -697,6 +785,7 @@ mod cross_platform_tests {
             allow_write: false,
             simulator: false,
             bios_compat: false,
+            data_filesystem: Default::default(),
         };
         let json = serde_json::to_string(&req).unwrap();
         let back: InstallRequest = serde_json::from_str(&json).unwrap();
