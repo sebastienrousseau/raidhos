@@ -87,20 +87,31 @@ jobs:
             --out Xml
       - name: Tarpaulin (raidhos-cli, 100%)
         run: |
+          # `--follow-exec` is needed on Linux: tarpaulin's default
+          # ptrace engine doesn't trace into spawned child processes,
+          # which means the cli integration tests (which spawn the
+          # built binary) wouldn't contribute coverage to main.rs.
+          # Also exclude the integration-test files themselves so the
+          # gate is strictly about the cli's source, not the test
+          # scaffolding.
           cargo tarpaulin \
             -p raidhos-cli \
+            --follow-exec \
             --exclude-files 'crates/core/**' \
             --exclude-files 'crates/priv-helper/**' \
             --exclude-files 'crates/ui-tauri/**' \
+            --exclude-files 'crates/cli/tests/**' \
             --exclude-files 'fuzz/**' \
             --fail-under 100
       - name: Tarpaulin (raidhos-priv-helper, 100%)
         run: |
           cargo tarpaulin \
             -p raidhos-priv-helper \
+            --follow-exec \
             --exclude-files 'crates/core/**' \
             --exclude-files 'crates/cli/**' \
             --exclude-files 'crates/ui-tauri/**' \
+            --exclude-files 'crates/priv-helper/tests/**' \
             --exclude-files 'fuzz/**' \
             --fail-under 100
       - name: Upload coverage report
