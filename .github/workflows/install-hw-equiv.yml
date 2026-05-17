@@ -97,7 +97,11 @@ jobs:
 
       - name: Create a 256 MiB sparse image and attach as a virtual disk
         run: |
-          hdiutil create -size 256m -type SPARSE -fs free \
+          # No `-fs` — we create an empty sparse image, no filesystem.
+          # The install pipeline will lay down GPT + FAT32 + exFAT on
+          # top.
+          hdiutil create -size 256m -type SPARSE \
+              -layout NONE \
               -volname RAIDHOS_TEST /tmp/raidhos-disk
           # `attach -nomount` exposes the image as a /dev/disk* node
           # without auto-mounting, so the install pipeline sees a raw

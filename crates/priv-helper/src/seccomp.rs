@@ -70,7 +70,7 @@ pub fn install_denylist() -> Result<(), String> {
 
     let prog: BpfProgram = filter
         .try_into()
-        .map_err(|e: seccompiler::Error| format!("compile seccomp BPF: {e}"))?;
+        .map_err(|e: seccompiler::BackendError| format!("compile seccomp BPF: {e}"))?;
 
     seccompiler::apply_filter(&prog).map_err(|e| format!("apply seccomp BPF: {e}"))?;
     Ok(())
@@ -102,6 +102,10 @@ fn lookup_syscall(name: &str, arch: TargetArch) -> Option<i64> {
     match arch {
         TargetArch::x86_64 => x86_64_syscall(name),
         TargetArch::aarch64 => aarch64_syscall(name),
+        // Any other target_arch supported by seccompiler — currently
+        // riscv64 — isn't a primary build target for RaidhOS. Skip;
+        // the filter just won't apply on those hosts.
+        _ => None,
     }
 }
 

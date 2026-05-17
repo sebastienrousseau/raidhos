@@ -287,8 +287,13 @@ pub fn validate_device_path(device: &str) -> Result<()> {
         ));
     }
 
+    // `\\` is *not* in this list because Windows device paths
+    // legitimately contain backslashes (`\\.\PhysicalDriveN`). The
+    // per-OS shape check below still rejects malformed paths on every
+    // platform — see e.g. the `starts_with("\\\\.\\PhysicalDrive")`
+    // check in the Windows branch.
     const FORBIDDEN: &[char] = &[
-        ';', '|', '&', '$', '`', '\n', '\r', '\t', '<', '>', '"', '\'', '*', '?', '(', ')', '\\',
+        ';', '|', '&', '$', '`', '\n', '\r', '\t', '<', '>', '"', '\'', '*', '?', '(', ')',
     ];
     if device.chars().any(|c| FORBIDDEN.contains(&c)) {
         return Err(CoreError::Validation(
