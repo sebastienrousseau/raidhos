@@ -112,6 +112,62 @@ jobs:
               sudo parted -m "$LOOP_DEVICE" print || true
           fi
 
+      - name: Exercise new CLI flags (--data-fs variants, --bios-compat)
+        run: |
+          # Each flag-variant dry-run must EITHER complete cleanly or
+          # refuse via a known safety check. A clap parse error, panic,
+          # or unknown-flag exit would mean the flag wiring broke.
+          for fs in exfat ntfs ext4 btrfs xfs; do
+              set +e
+              ./target/release/raidhos-cli install \
+                  --device "$LOOP_DEVICE" --data-fs "$fs" --dry-run \
+                  2>&1 | tee "/tmp/dryfs-${fs}.log"
+              rc=$?
+              set -e
+              if [ "$rc" -eq 0 ]; then
+                  echo "--data-fs $fs dry-run: OK"
+              elif grep -qiE "device not found|system disk|removable|mounted" "/tmp/dryfs-${fs}.log"; then
+                  echo "--data-fs $fs dry-run: refused (safety check)"
+              else
+                  echo "--data-fs $fs dry-run failed unexpectedly" >&2
+                  tail -5 "/tmp/dryfs-${fs}.log" >&2
+                  exit 1
+              fi
+          done
+          # --bios-compat: scaffolded for G1. Dry-run must accept the
+          # flag; the destructive path would return NotImplemented in
+          # v0.0.1, but dry-run never reaches that branch.
+          set +e
+          ./target/release/raidhos-cli install \
+              --device "$LOOP_DEVICE" --bios-compat --dry-run \
+              2>&1 | tee /tmp/dry-bios.log
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then
+              echo "--bios-compat dry-run: OK"
+          elif grep -qiE "device not found|system disk|removable|mounted|not.?implemented" /tmp/dry-bios.log; then
+              echo "--bios-compat dry-run: refused / NotImplemented"
+          else
+              echo "--bios-compat dry-run failed unexpectedly" >&2
+              tail -5 /tmp/dry-bios.log >&2
+              exit 1
+          fi
+          # An unknown --data-fs value should fail at clap-parse time
+          # (exit 2) — never reach the validate / install path.
+          set +e
+          ./target/release/raidhos-cli install \
+              --device "$LOOP_DEVICE" --data-fs hfsplus --dry-run \
+              2>&1 | tee /tmp/dry-bad.log
+          rc=$?
+          set -e
+          if [ "$rc" -eq 2 ] || grep -qiE "invalid value|unknown.*data-fs|hfsplus" /tmp/dry-bad.log; then
+              echo "--data-fs hfsplus: rejected (as expected)"
+          else
+              echo "--data-fs hfsplus accepted unexpectedly (rc=$rc)" >&2
+              tail -5 /tmp/dry-bad.log >&2
+              exit 1
+          fi
+
       - name: Detach loop device
         if: always()
         run: sudo losetup -d "$LOOP_DEVICE" || true
