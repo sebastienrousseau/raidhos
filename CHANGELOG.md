@@ -9,10 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Ventoy gap closures
 
-Thirteen of the 25 gaps tracked in
+Fourteen of the 25 gaps tracked in
 [`docs/VENTOY_COMPARISON.md`](docs/VENTOY_COMPARISON.md) are
-closed in v0.0.1; two are scaffolded with API surface +
-tooling, with the destructive paths deferred to v0.0.2.
+closed in v0.0.1 (G22 is partial — chain into discovered
+grub.cfg works, full file browser deferred to v0.1.0); two
+are scaffolded with API surface + tooling, with the destructive
+paths deferred to v0.0.2.
 
 | Gap | Status | Surface |
 |---|---|---|
@@ -27,6 +29,7 @@ tooling, with the destructive paths deferred to v0.0.2.
 | G18 per-ISO persistence backend | closed | `BootEntryConfig.persistence_backend` |
 | G19 per-distro persistence labels | closed | `raidhos_core::expected_persistence_label` (30-distro table) |
 | G20 ListView ↔ TreeView toggle | closed | `BootConfig.tree_view`; renderer groups by sanitised `class` into `submenu` blocks |
+| G22 Browse local disk (F2) | partial | `BootConfig.enable_disk_browser`; F2-hotkeyed menuentry chains into discovered local `grub.cfg` |
 | G23 GUI plugin configurator | closed | Tauri UI exposes every new BootConfig field; round-trip test pins JSON shape |
 | G24 user-supplied checksum | closed | `verify_iso_sha256` / `verify_iso_companion_sha256` |
 | G1 Legacy BIOS layout | scaffolded | `--bios-compat` flag; destructive path returns `NotImplemented` |
@@ -42,8 +45,8 @@ tooling, with the destructive paths deferred to v0.0.2.
   host's compile-time `target_os`. CI coverage gate raised from
   65% to 90%.
 - Test count: `raidhos-core` 201 unit + 26 doctest, `raidhos-ui`
-  63, `raidhos-cli` 14, `raidhos-priv-helper` 9 seccomp + 6 toctou
-  + 7 integration. Total: 326+ tests across the workspace.
+  67, `raidhos-cli` 14, `raidhos-priv-helper` 9 seccomp + 6 toctou
+  + 7 integration. Total: 330+ tests across the workspace.
 
 ### Added
 
@@ -87,6 +90,14 @@ tooling, with the destructive paths deferred to v0.0.2.
   `hidden = true` still suppresses entries inside submenus, and
   class names go through the same metachar filter as everything
   else. Closes Ventoy gap G20.
+- `BootConfig.enable_disk_browser` — when set, the grub.cfg
+  renderer appends an F2-hotkeyed `menuentry "Browse local
+  disks (F2)"` that walks `(hd*,*)` and chains into any
+  discovered `/boot/grub/grub.cfg` or `/EFI/BOOT/grub.cfg`.
+  Lets users boot ISOs that live on an internal drive rather
+  than on the USB. Surfaced in the Tauri UI. Partially closes
+  Ventoy gap G22 — full interactive file browser is deferred
+  to v0.1.0.
 - Frontend exposure of every BootConfig field that the gap-
   closure work introduced: TreeView toggle, GRUB superuser +
   PBKDF2 hash, and per-entry menu class, tip, hidden, and

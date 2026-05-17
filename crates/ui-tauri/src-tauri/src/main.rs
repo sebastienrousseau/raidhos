@@ -62,6 +62,13 @@ pub struct BootConfig {
     /// gap G20 (ListView ↔ TreeView toggle).
     #[serde(default)]
     pub tree_view: bool,
+    /// If `true`, the renderer appends an F2-hotkeyed "Browse
+    /// local disks" menu entry that walks (hd*,*) and chains
+    /// into any discovered `/boot/grub/grub.cfg`. Lets users
+    /// boot ISOs that live on an internal drive rather than on
+    /// the USB. Closes Ventoy gap G22.
+    #[serde(default)]
+    pub enable_disk_browser: bool,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -536,6 +543,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: false,
+            enable_disk_browser: false,
         };
         let res = write_grub_cfg_to_esp(scratch.display().to_string(), cfg, "DATA".into());
         assert!(res.is_ok(), "got {res:?}");
@@ -570,6 +578,7 @@ mod tests {
                 }
             ],
             "tree_view": true,
+            "enable_disk_browser": true,
             "grub_superuser": "admin",
             "grub_password_pbkdf2": "grub.pbkdf2.sha512.10000.deadbeef.cafef00d"
         });
@@ -584,6 +593,7 @@ mod tests {
             "/persistence/ubuntu.dat"
         );
         assert!(cfg.tree_view);
+        assert!(cfg.enable_disk_browser);
         assert_eq!(cfg.grub_superuser, "admin");
         assert_eq!(
             cfg.grub_password_pbkdf2,
@@ -607,6 +617,7 @@ mod tests {
         assert_eq!(cfg.entries[0].class, "");
         assert!(!cfg.entries[0].hidden);
         assert!(!cfg.tree_view);
+        assert!(!cfg.enable_disk_browser);
         assert_eq!(cfg.grub_superuser, "");
     }
 }

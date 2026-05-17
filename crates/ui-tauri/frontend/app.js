@@ -38,6 +38,7 @@
       const cancelReset = document.getElementById('cancelReset');
       const confirmReset = document.getElementById('confirmReset');
       const globalTreeView = document.getElementById('globalTreeView');
+      const globalEnableDiskBrowser = document.getElementById('globalEnableDiskBrowser');
       const globalGrubSuperuser = document.getElementById('globalGrubSuperuser');
       const globalGrubPasswordPbkdf2 = document.getElementById('globalGrubPasswordPbkdf2');
 
@@ -644,6 +645,10 @@
         if (globalTreeView) {
           globalTreeView.checked = localStorage.getItem('raidhos_tree_view') === 'true';
         }
+        if (globalEnableDiskBrowser) {
+          globalEnableDiskBrowser.checked =
+            localStorage.getItem('raidhos_enable_disk_browser') === 'true';
+        }
         if (globalGrubSuperuser) {
           globalGrubSuperuser.value = localStorage.getItem('raidhos_grub_superuser') || '';
         }
@@ -707,6 +712,8 @@
               persistence_backend: entry.persistence_backend || '',
             })),
             tree_view: !!(globalTreeView && globalTreeView.checked),
+            enable_disk_browser:
+              !!(globalEnableDiskBrowser && globalEnableDiskBrowser.checked),
             grub_superuser:
               (globalGrubSuperuser && globalGrubSuperuser.value) || '',
             grub_password_pbkdf2:
@@ -742,6 +749,8 @@
               persistence_backend: entry.persistence_backend || '',
             })),
             tree_view: !!(globalTreeView && globalTreeView.checked),
+            enable_disk_browser:
+              !!(globalEnableDiskBrowser && globalEnableDiskBrowser.checked),
             grub_superuser:
               (globalGrubSuperuser && globalGrubSuperuser.value) || '',
             grub_password_pbkdf2:
@@ -794,6 +803,9 @@
         if (globalTreeView) {
           localStorage.setItem('raidhos_tree_view', String(globalTreeView.checked));
         }
+        if (globalEnableDiskBrowser) {
+          localStorage.setItem('raidhos_enable_disk_browser', String(globalEnableDiskBrowser.checked));
+        }
         if (globalGrubSuperuser) {
           localStorage.setItem('raidhos_grub_superuser', globalGrubSuperuser.value || '');
         }
@@ -808,6 +820,12 @@
       if (saveOnInstallOnly) saveOnInstallOnly.addEventListener('change', persistState);
       if (globalTreeView) {
         globalTreeView.addEventListener('change', () => {
+          persistState();
+          pushBootConfig();
+        });
+      }
+      if (globalEnableDiskBrowser) {
+        globalEnableDiskBrowser.addEventListener('change', () => {
           persistState();
           pushBootConfig();
         });

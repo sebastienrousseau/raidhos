@@ -165,10 +165,14 @@ link to the section that documents what's needed.
   English-only. The Tauri GUI is English-only too (gettext
   not wired).
 
-- **G22. Browse files in local disk (F2)** — Ventoy lets the
-  user pick an ISO from an internal drive at boot time, not
-  just the USB. Useful for laptops without an optical drive
-  and large libraries.
+- **G22. Browse files in local disk (F2)** — ✅ **Partially
+  closed in v0.0.1.** `BootConfig.enable_disk_browser = true`
+  emits an F2-hotkeyed `menuentry "Browse local disks (F2)"`
+  that walks `(hd*,*)` and chains into any discovered
+  `/boot/grub/grub.cfg` or `/EFI/BOOT/grub.cfg`. Ventoy's
+  interactive file picker is not implemented — for that,
+  manual `configfile <path>` from the GRUB shell is still the
+  fallback. v0.1.0 may add a true file browser.
 
 - **G23. GUI plugin configurator (`VentoyPlugson`)** — ✅
   **Closed in v0.0.1.** The Tauri UI now exposes every BootConfig
@@ -319,12 +323,12 @@ priorities aligned to user impact and security risk:
 | **G19 Per-distro persistence labels** | **P2 — power users** | **✅ closed in v0.0.1** (`expected_persistence_label`) |
 | **G20 ListView/TreeView** | **P2 — UX** | **✅ closed in v0.0.1** (`BootConfig.tree_view`) |
 | G21 Multi-language menu | P2 — i18n | v0.1.0 |
-| G22 Browse local disk | P3 — convenience | v0.2.0 |
+| **G22 Browse local disk** | **P3 — convenience** | **✅ partial in v0.0.1** (F2-hotkeyed chain into local `grub.cfg`; full file picker → v0.1.0) |
 | **G23 GUI plugin configurator** | **P3 — UX** | **✅ closed in v0.0.1** (Tauri UI surfaces every BootConfig field) |
 | **G24 User-supplied checksum** | **P3 — flexibility** | **✅ closed in v0.0.1** (`verify_iso_sha256` / companion file) |
 | G25 Tested ISO catalog growth | continuous | — |
 
-**v0.0.1 closed:** G6, G7, G8, G9 (partial), G10, G11, G13, G17, G18, G19, G20, G23, G24 — thirteen gaps.
+**v0.0.1 closed:** G6, G7, G8, G9 (partial), G10, G11, G13, G17, G18, G19, G20, G22 (partial), G23, G24 — fourteen gaps.
 **v0.0.1 scaffolded:** G1, G3 — two gaps with the API surface, validation, and tooling in place; the destructive write path or the third-party shim signing remain for v0.0.2.
 
 ---

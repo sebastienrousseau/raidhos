@@ -102,6 +102,37 @@ pub fn render_grub_cfg(config: &BootConfig, data_label: &str) -> String {
             out.push_str(&menuentry(entry));
         }
     }
+    if config.enable_disk_browser {
+        out.push_str(&disk_browser_menuentry());
+    }
+    out
+}
+
+/// Ventoy gap G22 — F2-hotkeyed "Browse local disks" menuentry.
+/// Walks every detected `(hd*,*)` partition, looks for a
+/// `/boot/grub/grub.cfg` (or `/EFI/BOOT/grub.cfg`) on each, and
+/// chains into the first match. Lets users boot ISOs that live
+/// on an internal drive rather than on the USB.
+///
+/// All literal strings here are static; nothing user-controlled is
+/// interpolated, so no sanitisation is needed in this function.
+fn disk_browser_menuentry() -> String {
+    let mut out = String::new();
+    out.push_str("menuentry \"Browse local disks (F2)\" --hotkey=f2 {\n");
+    out.push_str("  insmod regexp\n");
+    out.push_str("  for dev in (hd*,*); do\n");
+    out.push_str("    if [ -f $dev/boot/grub/grub.cfg ]; then\n");
+    out.push_str("      echo \"Chaining into $dev/boot/grub/grub.cfg\"\n");
+    out.push_str("      configfile $dev/boot/grub/grub.cfg\n");
+    out.push_str("    elif [ -f $dev/EFI/BOOT/grub.cfg ]; then\n");
+    out.push_str("      echo \"Chaining into $dev/EFI/BOOT/grub.cfg\"\n");
+    out.push_str("      configfile $dev/EFI/BOOT/grub.cfg\n");
+    out.push_str("    fi\n");
+    out.push_str("  done\n");
+    out.push_str("  echo \"No bootable grub.cfg found on local disks.\"\n");
+    out.push_str("  echo \"Press any key to return to the menu.\"\n");
+    out.push_str("  read\n");
+    out.push_str("}\n");
     out
 }
 
@@ -361,6 +392,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: false,
+            enable_disk_browser: false,
             entries: vec![],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -374,6 +406,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: false,
+            enable_disk_browser: false,
             entries: vec![BootEntryConfig {
                 title: "Test".to_string(),
                 path: "/boot/isos/test.iso".to_string(),
@@ -398,6 +431,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: false,
+            enable_disk_browser: false,
             entries: vec![BootEntryConfig {
                 title: "evil\" } echo PWNED { ".to_string(),
                 path: "test.iso".to_string(),
@@ -448,6 +482,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: false,
+            enable_disk_browser: false,
             entries: vec![e],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -464,6 +499,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: false,
+            enable_disk_browser: false,
             entries: vec![entry("Plain", "p.iso")],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -480,6 +516,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: false,
+            enable_disk_browser: false,
             entries: vec![e],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -508,6 +545,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: false,
+            enable_disk_browser: false,
             entries: vec![e],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -524,6 +562,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: false,
+            enable_disk_browser: false,
             entries: vec![entry("Plain", "p.iso")],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -539,6 +578,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: false,
+            enable_disk_browser: false,
             entries: vec![entry("Shown", "shown.iso"), hidden],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -558,6 +598,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: false,
+            enable_disk_browser: false,
             entries: vec![hidden_a, hidden_b],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -640,6 +681,7 @@ mod tests {
             grub_superuser: "admin".to_string(),
             grub_password_pbkdf2: VALID_HASH.to_string(),
             tree_view: false,
+            enable_disk_browser: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         assert!(out.contains("set superusers=\"admin\""));
@@ -654,6 +696,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: VALID_HASH.to_string(),
             tree_view: false,
+            enable_disk_browser: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         assert!(!out.contains("set superusers"));
@@ -668,6 +711,7 @@ mod tests {
             grub_superuser: "admin".to_string(),
             grub_password_pbkdf2: "hunter2".to_string(), // plaintext — rejected
             tree_view: false,
+            enable_disk_browser: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         assert!(!out.contains("set superusers"));
@@ -685,6 +729,7 @@ mod tests {
             grub_superuser: "admin\"; echo bad".to_string(),
             grub_password_pbkdf2: VALID_HASH.to_string(),
             tree_view: false,
+            enable_disk_browser: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         // The injection metachars must not survive in any
@@ -744,6 +789,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: false,
+            enable_disk_browser: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         // The .efi path uses chainloader, not loopback.
@@ -764,6 +810,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: false,
+            enable_disk_browser: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         // ISO entries still use the loopback flow.
@@ -782,6 +829,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: false,
+            enable_disk_browser: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         assert!(out.contains("chainloader \"($root)/memtest86.efi\""));
@@ -802,6 +850,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: false,
+            enable_disk_browser: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         assert!(!out.contains("persistent persistent-path"));
@@ -817,6 +866,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: false,
+            enable_disk_browser: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         // Both the casper and the live kernel command lines pick up
@@ -845,6 +895,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: false,
+            enable_disk_browser: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         // Look at the linux line specifically. The sanitiser strips ;.
@@ -868,6 +919,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: false,
+            enable_disk_browser: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         assert!(out.contains("chainloader \"($root)/memtest86.efi\""));
@@ -898,6 +950,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: false,
+            enable_disk_browser: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         assert!(
@@ -920,6 +973,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: true,
+            enable_disk_browser: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         // Each class produces one submenu block.
@@ -950,6 +1004,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: true,
+            enable_disk_browser: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         // The top-level menuentry must appear before the submenu line.
@@ -977,6 +1032,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: true,
+            enable_disk_browser: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         assert!(!out.contains("Secret"), "hidden entry leaked: {out}");
@@ -993,6 +1049,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: true,
+            enable_disk_browser: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         let submenu_line = out
@@ -1010,6 +1067,93 @@ mod tests {
         );
         // The sanitised class name still flows through.
         assert!(out.contains("submenu \"linux echo bad\" {"));
+    }
+
+    // ---------------------------------------------------------------
+    // Ventoy gap G22: Browse local disks (F2 hotkey)
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn render_disk_browser_off_by_default() {
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![entry("X", "/x.iso")],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+            tree_view: false,
+            enable_disk_browser: false,
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        assert!(!out.contains("Browse local disks"));
+        assert!(!out.contains("--hotkey=f2"));
+    }
+
+    #[test]
+    fn render_disk_browser_when_enabled() {
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![entry("X", "/x.iso")],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+            tree_view: false,
+            enable_disk_browser: true,
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        assert!(
+            out.contains("menuentry \"Browse local disks (F2)\" --hotkey=f2 {"),
+            "missing disk-browser menuentry: {out}",
+        );
+        // Looks at both BIOS and EFI grub.cfg locations.
+        assert!(out.contains("$dev/boot/grub/grub.cfg"));
+        assert!(out.contains("$dev/EFI/BOOT/grub.cfg"));
+        // configfile is the chain mechanism.
+        assert!(out.contains("configfile $dev/boot/grub/grub.cfg"));
+        // The graceful fallback message is present.
+        assert!(out.contains("No bootable grub.cfg found"));
+        // Brace balance preserved.
+        assert_eq!(out.matches('{').count(), out.matches('}').count());
+    }
+
+    #[test]
+    fn render_disk_browser_appears_after_user_entries() {
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![entry("Ubuntu", "/u.iso")],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+            tree_view: false,
+            enable_disk_browser: true,
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        let ubuntu_pos = out.find("menuentry \"Ubuntu\"").expect("ubuntu missing");
+        let browser_pos = out
+            .find("menuentry \"Browse local disks")
+            .expect("browser missing");
+        assert!(
+            ubuntu_pos < browser_pos,
+            "browser must come after user entries (ubuntu at {ubuntu_pos}, browser at {browser_pos})",
+        );
+    }
+
+    #[test]
+    fn render_disk_browser_works_under_tree_view() {
+        // Tree-view branch also emits the browser entry at the end.
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![{
+                let mut e = entry("Ubuntu", "/u.iso");
+                e.class = "linux".to_string();
+                e
+            }],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+            tree_view: true,
+            enable_disk_browser: true,
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        assert!(out.contains("submenu \"linux\" {"));
+        assert!(out.contains("menuentry \"Browse local disks (F2)\""));
+        assert_eq!(out.matches('{').count(), out.matches('}').count());
     }
 
     // ---------------------------------------------------------------
@@ -1043,6 +1187,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: false,
+            enable_disk_browser: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         // The img path goes through loopback + chainload-on-loop.
@@ -1067,6 +1212,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: false,
+            enable_disk_browser: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         assert!(out.contains("set isofile="));
@@ -1083,6 +1229,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: false,
+            enable_disk_browser: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         assert!(out.contains("chainloader \"($root)/memtest86.efi\""));
@@ -1101,6 +1248,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: false,
+            enable_disk_browser: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         assert!(out.contains("chainloader \"($root)/m.efi\""));
@@ -1123,6 +1271,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: false,
+            enable_disk_browser: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         // UDF for Blu-ray rescue ISOs (G10).
@@ -1154,6 +1303,7 @@ mod tests {
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
             tree_view: true,
+            enable_disk_browser: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         assert!(

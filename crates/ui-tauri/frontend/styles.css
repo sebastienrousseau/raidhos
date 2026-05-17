@@ -264,8 +264,37 @@
         letter-spacing: 0.4px;
       }
 
-      .entry-advanced input {
+      .entry-advanced input[type="text"],
+      .entry-advanced input:not([type]),
+      .entry-advanced input.entry-initrd,
+      .entry-advanced input.entry-kargs,
+      .entry-advanced input.entry-class,
+      .entry-advanced input.entry-tip,
+      .entry-advanced input.entry-persistence {
         margin-top: var(--space-2);
+      }
+
+      .boot-global {
+        margin-bottom: var(--space-3);
+      }
+
+      .boot-global summary {
+        cursor: pointer;
+        color: var(--muted);
+        font-size: var(--font-xs);
+        letter-spacing: 0.4px;
+      }
+
+      .boot-global-row {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+        padding: var(--space-2) 0;
+      }
+
+      .boot-global-row input[type="text"],
+      .boot-global-row input:not([type]) {
+        margin-top: 0;
       }
 
       .entry-default {

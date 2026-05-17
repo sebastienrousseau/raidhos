@@ -27,6 +27,11 @@
       "type": "boolean",
       "default": false,
       "description": "Ventoy gap G20. When true, entries with a non-empty `class` are grouped into `submenu \"<class>\" { … }` blocks. Classless entries float to the top level so power-user entries stay one keypress from boot."
+    },
+    "enable_disk_browser": {
+      "type": "boolean",
+      "default": false,
+      "description": "Ventoy gap G22. When true, the renderer appends an F2-hotkeyed \"Browse local disks\" menuentry that walks `(hd*,*)` partitions and chains into any discovered `/boot/grub/grub.cfg` or `/EFI/BOOT/grub.cfg`. Lets users boot ISOs that live on an internal drive rather than on the USB."
     }
   },
   "required": ["default_entry", "entries"],
