@@ -66,21 +66,17 @@ jobs:
           if ! command -v cargo-tarpaulin >/dev/null 2>&1; then
             cargo install --locked cargo-tarpaulin
           fi
-      # Coverage floor. The actual measured number on Linux CI is
-      # ~68% — the gap to a higher gate is structural: tests for
-      # platform/{macos,windows}.rs are gated with
-      # `#[cfg(all(test, target_os = "…"))]` so they only run on
-      # the matching host. Tarpaulin runs on Linux and sees the
-      # macos.rs / windows.rs code but cannot execute their tests.
-      # Raising this gate requires either re-architecting those
-      # tests to be cross-platform (some can — the parser tests
-      # already are — others are platform-shape-dependent) or
-      # adding a macOS/Windows tarpaulin job.
-      # Tracking: 75% by v0.0.2 (refactor windows/macos tests),
-      #            95% by v0.1.0 (per-host coverage jobs).
+      # Coverage floor. Currently measured at ~91-92% on Linux CI
+      # after the validate_device_path_for_target refactor (75e43b5)
+      # made the macOS + Windows install_with tests cross-platform.
+      # The remaining ~8% is mostly the unsupported.rs fallback module
+      # and a handful of error branches that need real-host integration
+      # tests. Tracking: 95% by v0.1.0.
+      #
+      # Never lower this without a CHANGELOG entry justifying why.
       - name: Tarpaulin
         run: |
-          cargo tarpaulin -p raidhos-core --fail-under 65 --out Xml
+          cargo tarpaulin -p raidhos-core --fail-under 90 --out Xml
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4

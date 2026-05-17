@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `raidhos-core` line coverage jumped from ~68% to **91.62%**
+  (722/788 lines covered) after the
+  `validate_device_path_for_target` refactor. The macOS + Windows
+  `install_with` test modules no longer need a matching `target_os`
+  to run; the path-shape gate is decoupled from the host's
+  compile-time `target_os`. CI coverage gate raised from 65% to 90%.
+
+### Added
+
+- `validate_device_path_for_target(device, target)` —
+  target-string-driven path-shape validator. Accepts `"linux"`,
+  `"macos"`, `"windows"`, or `"simulator"`. Public-but-crate-internal;
+  the public `validate_device_path` / `validate_device_path_simulator`
+  still delegate through it.
+
 ## [0.0.1] — 2026-05-17 (release candidate)
 
 First public preview. The discovery surface, validation surface,

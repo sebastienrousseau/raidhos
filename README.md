@@ -22,7 +22,7 @@
 <p align="center">
   <a href="./rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.78%2B-blue.svg?style=for-the-badge&logo=rust" alt="Rust 1.78+" /></a>
   <a href="./Cargo.toml"><img src="https://img.shields.io/badge/unsafe-forbidden-success.svg?style=for-the-badge" alt="Unsafe forbidden" /></a>
-  <a href="./.github/workflows/ci.yml"><img src="https://img.shields.io/badge/coverage-%E2%89%A595%25-brightgreen.svg?style=for-the-badge" alt="Coverage gate" /></a>
+  <a href="./.github/workflows/ci.yml"><img src="https://img.shields.io/badge/coverage-91%25-brightgreen.svg?style=for-the-badge" alt="Coverage 91%" /></a>
   <a href="./docs/THREAT_MODEL.md"><img src="https://img.shields.io/badge/threat--model-published-success.svg?style=for-the-badge" alt="Threat model published" /></a>
   <a href="https://slsa.dev/spec/v1.0/levels"><img src="https://img.shields.io/badge/SLSA-L3-informational.svg?style=for-the-badge" alt="SLSA L3" /></a>
 </p>
