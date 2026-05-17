@@ -60,6 +60,13 @@ raidhos-priv-helper install
     [--allow-write]                # default: off
     [--no-wipe]                    # debug only; install will refuse
     [--persistence-mb <N>]         # default: 0; Linux only
+    [--data-fs <FS>]               # default: exfat; one of
+                                   #   exfat | ntfs | ext4 | btrfs | xfs
+                                   # closes Ventoy gaps G8 (NTFS) and G9
+                                   # (ext4/Btrfs/XFS). Linux pipeline.
+    [--bios-compat]                # opt-in Legacy-BIOS-bootable layout
+                                   # (scaffolded; destructive path returns
+                                   # NotImplemented until v0.0.2)
 ```
 
 The destructive path requires **both** `wipe == true` (the

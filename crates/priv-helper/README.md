@@ -123,6 +123,8 @@ Commands:
 | `--allow-write` | off | Required to actually touch the device |
 | `--no-wipe` | off | Debug-only; install will refuse |
 | `--persistence-mb <N>` | `0` | Persistence overlay size in MiB (Linux only) |
+| `--data-fs <FS>` | `exfat` | DATA partition filesystem: `exfat`/`ntfs`/`ext4`/`btrfs`/`xfs`. Closes Ventoy gaps G8/G9. |
+| `--bios-compat` | off | Legacy-BIOS-bootable layout (scaffolded; Linux pipeline returns `NotImplemented` for the destructive path until v0.0.2). |
 
 The destructive path requires **both** `--allow-write` and
 `wipe == true`. The CLI gives both safe defaults; the helper

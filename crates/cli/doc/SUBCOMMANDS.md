@@ -64,12 +64,15 @@ Delegates to: `raidhos_core::scan_isos`.
 ## `install`
 
 ```text
-raidhos-cli install --device <DEV>
+raidhos-cli install [--device <DEV> | --simulator <FILE>]
+                    [--simulator-size-mb <N>]
                     [--payload-version <VER>]
                     [--dry-run]
                     [--allow-write]
                     [--no-wipe]
                     [--persistence-mb <N>]
+                    [--data-fs <FS>]
+                    [--bios-compat]
 ```
 
 Run the install pipeline. Defaults are safe — without
@@ -77,12 +80,16 @@ Run the install pipeline. Defaults are safe — without
 
 | Flag | Default | Purpose |
 |---|---|---|
-| `--device <DEV>` | (required) | Target device path |
+| `--device <DEV>` | one-of required | Target device path |
+| `--simulator <FILE>` | one-of required | Sparse-file preview target (mutually exclusive with `--device`). Closes Ventoy gap G24's preview need; no real hardware touched. |
+| `--simulator-size-mb <N>` | 256 | Size of a newly-created `--simulator` file |
 | `--payload-version <VER>` | from `manifest.json` | Payload version pin |
 | `--dry-run` | on (until `--allow-write` is set) | No writes |
 | `--allow-write` | off | Required for destructive run |
 | `--no-wipe` | off | Refuses install; debug-only |
 | `--persistence-mb <N>` | 0 | Persistence image size (Linux only) |
+| `--data-fs <FS>` | `exfat` | DATA partition filesystem. One of `exfat`, `ntfs`, `ext4`, `btrfs`, `xfs`. Closes Ventoy gaps G8 (NTFS) and G9 (ext4/Btrfs/XFS). Linux pipeline only today; macOS / Windows install paths use the platform-native equivalents. |
+| `--bios-compat` | off | Opt-in Legacy-BIOS-bootable layout. Scaffolded in v0.0.1: the request is accepted and dry-run validates the shape; the destructive write path returns `CoreError::NotImplemented` until v0.0.2 ships the i386-pc GRUB binary. Closes Ventoy gap G1 (scaffold). |
 
 Delegates to: `raidhos_core::install` (dry-run) or
 `raidhos-priv-helper install` (destructive run, via the OS's
