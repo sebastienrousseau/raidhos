@@ -556,29 +556,48 @@ mod tests {
         assert!(rt.invocations.borrow().iter().any(|i| i.cmd == "mkfs.xfs"));
     }
 
-    #[test]
-    fn install_errors_when_chosen_formatter_is_missing() {
+    fn missing_formatter_error_for(fs: crate::DataFilesystem) -> CoreError {
         let (payload, mut rt) = payload_dir_with(true, true);
         rt.outcomes = std::cell::RefCell::new(
             std::iter::repeat_with(|| MockOutcome::Ok(vec![]))
                 .take(7)
                 .collect(),
         );
-        // Note: do NOT register mkfs.ntfs as present — that's the test.
+        // Deliberately do NOT register the chosen formatter as present.
         std::env::set_var("RAIDHOS_PAYLOAD_DIR", &payload);
         let disks = vec![disk("/dev/sdb", vec![], false)];
-        let res = install_with(
-            req_with_fs("/dev/sdb", crate::DataFilesystem::Ntfs),
-            &sink(),
-            &rt,
-            &disks,
-        );
+        let res = install_with(req_with_fs("/dev/sdb", fs), &sink(), &rt, &disks);
         std::env::remove_var("RAIDHOS_PAYLOAD_DIR");
         let _ = std::fs::remove_dir_all(&payload);
-        let err = res.unwrap_err();
-        let s = format!("{err}");
+        res.unwrap_err()
+    }
+
+    #[test]
+    fn install_errors_when_mkfs_ntfs_is_missing() {
+        let s = missing_formatter_error_for(crate::DataFilesystem::Ntfs).to_string();
         assert!(s.contains("mkfs.ntfs"), "got: {s}");
         assert!(s.contains("ntfs-3g"), "got: {s}");
+    }
+
+    #[test]
+    fn install_errors_when_mkfs_ext4_is_missing() {
+        let s = missing_formatter_error_for(crate::DataFilesystem::Ext4).to_string();
+        assert!(s.contains("mkfs.ext4"), "got: {s}");
+        assert!(s.contains("e2fsprogs"), "got: {s}");
+    }
+
+    #[test]
+    fn install_errors_when_mkfs_btrfs_is_missing() {
+        let s = missing_formatter_error_for(crate::DataFilesystem::Btrfs).to_string();
+        assert!(s.contains("mkfs.btrfs"), "got: {s}");
+        assert!(s.contains("btrfs-progs"), "got: {s}");
+    }
+
+    #[test]
+    fn install_errors_when_mkfs_xfs_is_missing() {
+        let s = missing_formatter_error_for(crate::DataFilesystem::Xfs).to_string();
+        assert!(s.contains("mkfs.xfs"), "got: {s}");
+        assert!(s.contains("xfsprogs"), "got: {s}");
     }
 
     #[test]
