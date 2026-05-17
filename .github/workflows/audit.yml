@@ -20,8 +20,16 @@ jobs:
       # the toolchain resolves from rust-toolchain.toml (no musl container
       # mismatch) and the action surface is pinned by the cargo-deny version.
       - uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo-deny binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-deny
+          key: cargo-deny-${{ runner.os }}-v1
       - name: Install cargo-deny
-        run: cargo install --locked cargo-deny
+        run: |
+          if ! command -v cargo-deny >/dev/null 2>&1; then
+            cargo install --locked cargo-deny
+          fi
       - name: cargo deny check
         run: cargo deny check
 
@@ -31,7 +39,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo install --locked cargo-audit
+      - name: Cache cargo-audit binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-audit
+          key: cargo-audit-${{ runner.os }}-v1
+      - run: |
+          if ! command -v cargo-audit >/dev/null 2>&1; then
+            cargo install --locked cargo-audit
+          fi
       # cargo-audit doesn't read deny.toml, so the unmaintained-transitives
       # we cleared via cargo-deny must be repeated here. `--deny unsound`
       # keeps the gate strict for real soundness issues; the `--ignore`

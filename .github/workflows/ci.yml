@@ -23,6 +23,13 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-${{ matrix.os }}
+          cache-targets: true
+          cache-all-crates: true
+
       - name: Build (CLI + core + helper)
         run: cargo build --workspace --exclude raidhos-ui
 
@@ -41,8 +48,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo + tarpaulin install
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: coverage
+          cache-targets: true
+
+      - name: Cache tarpaulin binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-tarpaulin
+          key: cargo-tarpaulin-${{ runner.os }}-v1
+
       - name: Install tarpaulin
-        run: cargo install --locked cargo-tarpaulin
+        run: |
+          if ! command -v cargo-tarpaulin >/dev/null 2>&1; then
+            cargo install --locked cargo-tarpaulin
+          fi
       # Coverage floor is set to a realistic value. Platform-cfg-gated
       # install paths (linux.rs:install, macos.rs:install, windows.rs:install)
       # call subprocess commands that need a real or loop-back device to
