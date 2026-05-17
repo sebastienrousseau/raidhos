@@ -120,7 +120,8 @@ pub fn load_catalog() -> Result<Vec<CatalogEntry>> {
 /// Load a catalog file from a specific path. Useful for tests and for
 /// hosts that ship the catalog under a non-default location.
 pub fn load_catalog_from(path: &Path) -> Result<Vec<CatalogEntry>> {
-    let body = fs::read(path).map_err(|e| CoreError::Io(format!("read {}: {e}", path.display())))?;
+    let body =
+        fs::read(path).map_err(|e| CoreError::Io(format!("read {}: {e}", path.display())))?;
     serde_json::from_slice(&body).map_err(|e| CoreError::Parse(format!("catalog.json: {e}")))
 }
 

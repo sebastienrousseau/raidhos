@@ -358,17 +358,72 @@ non-Linux builds don't pull `libc` / `seccompiler`.
 
 ## Examples
 
-Browse [`examples/`](examples/) for runnable command flows.
-Highlights:
+Browse [`examples/`](examples/) for shell-script command flows
+and [`crates/core/examples/`](crates/core/examples/) for runnable
+Rust examples.
+
+### Shell
 
 | File | What it shows |
 |---|---|
-| `examples/01-list-disks.sh` | Plain `raidhos-cli list-disks` + how to filter to removable. |
-| `examples/02-dry-run-install.sh` | A no-write rehearsal that exercises every validation guard. |
-| `examples/03-real-install-linux.sh` | Linux end-to-end with a Tails ISO. |
-| `examples/04-catalog-verify.sh` | Download an Ubuntu ISO and verify it against the bundled catalog. |
-| `examples/05-persistence.sh` | Add a 4 GiB persistence overlay during install. |
-| `examples/06-mok-enrol.sh` | Enrol a RaidhOS MOK so Secure Boot accepts the signed `BOOTX64.EFI`. |
+| [`examples/01-list-disks.sh`](examples/01-list-disks.sh) | Plain `list-disks` + filter to removable. |
+| [`examples/02-dry-run-install.sh`](examples/02-dry-run-install.sh) | No-write rehearsal exercising every validation guard. |
+| [`examples/03-real-install-linux.sh`](examples/03-real-install-linux.sh) | Linux end-to-end with a Tails ISO. |
+| [`examples/04-catalog-verify.sh`](examples/04-catalog-verify.sh) | Download an Ubuntu ISO and verify against the bundled catalog. |
+| [`examples/05-persistence.sh`](examples/05-persistence.sh) | Add a 4 GiB persistence overlay during install. |
+| [`examples/06-mok-enrol.sh`](examples/06-mok-enrol.sh) | Enrol a RaidhOS MOK for Secure Boot. |
+
+### Rust (library)
+
+| File | What it shows |
+|---|---|
+| [`list_disks.rs`](crates/core/examples/list_disks.rs) | Enumerate disks via the per-OS discovery backend. |
+| [`validate_device_path.rs`](crates/core/examples/validate_device_path.rs) | The full per-OS allowlist with every rejection reason. |
+| [`scan_isos.rs`](crates/core/examples/scan_isos.rs) | One-level filesystem ISO scan. |
+| [`verify_payload.rs`](crates/core/examples/verify_payload.rs) | Walk a payload tree and verify against `manifest.json`. |
+| [`catalog_verify.rs`](crates/core/examples/catalog_verify.rs) | Catalog lookup + `gpg(1)` verification. |
+| [`install_dry_run.rs`](crates/core/examples/install_dry_run.rs) | Dry-run install pipeline; emits progress events. |
+
+```bash
+# List the disks visible to your user.
+cargo run --example list_disks -p raidhos-core
+
+# See the allowlist accept / reject every input.
+cargo run --example validate_device_path -p raidhos-core
+
+# Dry-run install against a fake device (no writes).
+cargo run --example install_dry_run -p raidhos-core -- /dev/sdb
+```
+
+### One-screen recipe (Linux)
+
+```bash
+# Find your USB.
+raidhos-cli list-disks
+#   /dev/sdb USB DISK 3.0 32077825024 removable=true system=false mounts=
+
+# Dry-run.
+raidhos-cli install --device /dev/sdb --dry-run
+
+# Real install with persistence.
+sudo RAIDHOS_PAYLOAD_DIR=/srv/raidhos/payload \
+    raidhos-priv-helper install \
+        --device /dev/sdb \
+        --allow-write \
+        --persistence-mb 4096
+
+# Copy ISOs onto the new DATA partition.
+sudo mount /dev/sdb2 /mnt/data
+sudo cp ~/Downloads/*.iso /mnt/data/boot/isos/
+sudo umount /mnt/data
+
+# Verify an ISO against the bundled catalog (off-line, GPG-signed).
+raidhos-cli catalog verify \
+    --slug ubuntu-24.04-desktop-amd64 \
+    --iso  ~/Downloads/ubuntu-24.04.3-desktop-amd64.iso \
+    --sums ~/Downloads/SHA256SUMS \
+    --sig  ~/Downloads/SHA256SUMS.gpg
+```
 
 ---
 

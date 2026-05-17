@@ -172,7 +172,10 @@ mod tests {
         let out = scan_isos_fs(vec![root.display().to_string()]).unwrap();
         let titles: Vec<_> = out.iter().map(|e| e.title.clone()).collect();
         // case-insensitive sort: alpha (a), Mu (m), Zeta (z)
-        assert_eq!(titles, vec!["alpha".to_string(), "Mu".to_string(), "Zeta".to_string()]);
+        assert_eq!(
+            titles,
+            vec!["alpha".to_string(), "Mu".to_string(), "Zeta".to_string()]
+        );
         let _ = fs::remove_dir_all(&root);
     }
 

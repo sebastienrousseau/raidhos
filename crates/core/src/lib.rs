@@ -9,6 +9,49 @@
 //! The crate forbids `unsafe` workspace-wide (see `Cargo.toml`). All
 //! platform-specific code lives in [`crate::platform`]; the public
 //! surface here is the same on every supported OS.
+//!
+//! # Examples
+//!
+//! Discover physical disks:
+//!
+//! ```no_run
+//! let disks = raidhos_core::list_disks().expect("discovery failed");
+//! for d in disks {
+//!     println!("{} {} {} bytes", d.id, d.model, d.size_bytes);
+//! }
+//! ```
+//!
+//! Validate a device path before passing it anywhere risky:
+//!
+//! ```
+//! # #[cfg(target_os = "linux")]
+//! # {
+//! assert!(raidhos_core::validate_device_path("/dev/sdb").is_ok());
+//! assert!(raidhos_core::validate_device_path("/dev/sdb;rm -rf /").is_err());
+//! # }
+//! ```
+//!
+//! Dry-run the install pipeline (writes nothing):
+//!
+//! ```no_run
+//! struct StdoutSink;
+//! impl raidhos_core::ProgressSink for StdoutSink {
+//!     fn emit(&self, event: raidhos_core::ProgressEvent) {
+//!         println!("[{}] {}", event.phase, event.message);
+//!     }
+//! }
+//!
+//! let req = raidhos_core::InstallRequest {
+//!     device: "/dev/sdb".to_string(),
+//!     payload_version: "0.1.0".to_string(),
+//!     wipe: true,
+//!     dry_run: true,
+//!     allow_write: false,
+//! };
+//! let _ = raidhos_core::install(req, &StdoutSink);
+//! ```
+//!
+//! More runnable examples under [`examples/`](https://github.com/sebastienrousseau/raidhos/tree/main/crates/core/examples).
 
 #![warn(missing_docs)]
 
@@ -155,6 +198,14 @@ pub trait ProgressSink {
 
 /// Enumerate physical disks visible to the current user. Returns an
 /// error if the platform discovery subprocess fails.
+///
+/// # Examples
+///
+/// ```no_run
+/// for d in raidhos_core::list_disks().unwrap() {
+///     println!("{} ({} bytes, removable={})", d.id, d.size_bytes, d.removable);
+/// }
+/// ```
 pub fn list_disks() -> Result<Vec<DiskInfo>> {
     platform::list_disks()
 }
@@ -162,14 +213,36 @@ pub fn list_disks() -> Result<Vec<DiskInfo>> {
 /// Run the install pipeline. Validates the request, refuses unsafe
 /// targets, then either dry-runs or executes per `req`.
 ///
-/// **Linux only for v0.0.1**: macOS and Windows return
-/// [`CoreError::NotImplemented`].
+/// # Examples
+///
+/// ```no_run
+/// # struct Quiet;
+/// # impl raidhos_core::ProgressSink for Quiet { fn emit(&self, _: raidhos_core::ProgressEvent) {} }
+/// let req = raidhos_core::InstallRequest {
+///     device: "/dev/sdb".to_string(),
+///     payload_version: "0.1.0".to_string(),
+///     wipe: true,
+///     dry_run: true,     // never writes
+///     allow_write: false,
+/// };
+/// let _ = raidhos_core::install(req, &Quiet);
+/// ```
 pub fn install(req: InstallRequest, sink: &dyn ProgressSink) -> Result<()> {
     platform::install(req, sink)
 }
 
 /// Walk the supplied directories looking for `*.iso` files (one level
 /// deep). Used by the UI's "Scan ISOs" action.
+///
+/// # Examples
+///
+/// ```no_run
+/// let isos = raidhos_core::scan_isos(vec!["/home".into(), "/Downloads".into()])
+///     .unwrap();
+/// for e in isos {
+///     println!("{} ({} bytes)", e.title, e.size_bytes);
+/// }
+/// ```
 pub fn scan_isos(dirs: Vec<String>) -> Result<Vec<IsoEntry>> {
     platform::scan_isos(dirs)
 }
@@ -187,6 +260,21 @@ pub fn list_partitions(device: String) -> Result<Vec<PartitionInfo>> {
 /// invoke a shell, but rejecting the obvious cases early gives clearer
 /// errors and prevents accidental misuse from API callers who later
 /// pass these strings into shell snippets.
+///
+/// # Examples
+///
+/// ```
+/// # #[cfg(target_os = "linux")]
+/// # {
+/// assert!(raidhos_core::validate_device_path("/dev/sdb").is_ok());
+/// assert!(raidhos_core::validate_device_path("/dev/nvme0n1").is_ok());
+/// // Rejections:
+/// assert!(raidhos_core::validate_device_path("").is_err());
+/// assert!(raidhos_core::validate_device_path("sdb").is_err()); // missing /dev/ prefix
+/// assert!(raidhos_core::validate_device_path("/dev/sdb;rm -rf /").is_err());
+/// assert!(raidhos_core::validate_device_path("/dev/../etc/passwd").is_err());
+/// # }
+/// ```
 pub fn validate_device_path(device: &str) -> Result<()> {
     if device.is_empty() {
         return Err(CoreError::Validation("device path is empty".to_string()));
