@@ -33,7 +33,10 @@ jobs:
           key: cargo-fuzz-${{ runner.os }}-v1
 
       - name: Install cargo-fuzz
-        run: cargo install --locked cargo-fuzz
+        run: |
+          if ! command -v cargo-fuzz >/dev/null 2>&1; then
+            cargo install --locked cargo-fuzz
+          fi
 
       - name: Smoke fuzz (60s)
         working-directory: fuzz
