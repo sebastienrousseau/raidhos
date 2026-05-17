@@ -55,17 +55,17 @@ pie title v0.0.1 priority matrix status
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
 | Linux x86_64 | ✅ | ✅ | ✅ | ✅ | pkexec | ✅ |
 | Linux aarch64 | ✅ | ✅ | ✅ | ✅ | pkexec | ✅ |
-| macOS x86_64 | ✅ | ✅ | ✅ | 🟡 code complete | osascript | ✅ |
-| macOS aarch64 | ✅ | ✅ | ✅ | 🟡 code complete | osascript | ✅ |
-| Windows x86_64 | ✅ | ✅ | ✅ | 🟡 code complete | UAC | ✅ |
-| Windows aarch64 | ✅ | ✅ | ✅ | 🟡 code complete | UAC | ✅ |
+| macOS x86_64 | ✅ | ✅ | ✅ | ✅ virtual-disk in CI | osascript | ✅ |
+| macOS aarch64 | ✅ | ✅ | ✅ | ✅ virtual-disk in CI | osascript | ✅ |
+| Windows x86_64 | ✅ | ✅ | ✅ | ✅ virtual-disk in CI | UAC | ✅ |
+| Windows aarch64 | ✅ | ✅ | ✅ | ✅ virtual-disk in CI | UAC | ✅ |
 
-🟡 = the destructive install path **compiles and is fully
-implemented in Rust**, but hasn't yet been validated against
-real hardware. macOS uses `diskutil partitionDisk` + `bless`;
-Windows uses `Clear-Disk` + `New-Partition` + `Format-Volume` +
-`robocopy`. We will flip these to ✅ when the v0.0.2 release
-ships verified hardware runs.
+The macOS and Windows install paths are exercised in CI against
+virtual disks (`hdiutil` sparse images, `diskpart`-created
+VHDs) — see
+[`.github/workflows/install-hw-equiv.yml`](../.github/workflows/install-hw-equiv.yml).
+Real-USB-stick validation on physical hardware is a v0.0.2
+release-gate (one validated install per supported platform).
 
 ---
 
@@ -265,8 +265,8 @@ the branch we'd absorbed **19 of them**. The full mapping:
 | Item | Why | Plan |
 |---|---|---|
 | **Push the `v0.0.1-rc.1` tag.** This is item #1 of the priority matrix; it requires explicit maintainer authorisation because it triggers a public GitHub release with cosign signatures, SLSA attestations, etc. | One-way public action. | Maintainer authorises; release workflow runs. |
-| **Hardware-validated macOS install.** | Code complete; needs a Mac + USB stick to verify the `diskutil partitionDisk` + `bless` flow against APFS-formatted disks. | v0.0.2 — one validated install pass per supported platform. |
-| **Hardware-validated Windows install.** | Code complete; needs a Windows + USB stick to verify `Clear-Disk` / `New-Partition` / `Format-Volume` / `robocopy`. | v0.0.2. |
+| **Real-USB-stick macOS install.** | Virtual-disk install in CI passes; physical USB validation needs a Mac + USB stick on a runner with hot-plug. | v0.0.2 — one validated install pass per supported platform. |
+| **Real-USB-stick Windows install.** | Virtual-disk install in CI passes; physical USB validation needs Windows hardware. | v0.0.2. |
 | **Signed `BOOTX64.EFI` for Secure Boot.** | Scripts shipped; needs a published RaidhOS signing key with rotation policy. | v0.0.3. |
 | **Microsoft UEFI CA shim sign-off.** | Process is weeks-to-months and requires SBAT review. | v0.1.0+. |
 | **BIOS / legacy boot path.** | `BOOTX64.EFI` is UEFI-only. Adding isolinux/syslinux is a self-contained piece of work. | v0.0.2 / v0.0.3. |

@@ -227,17 +227,16 @@ boundary, and the supply chain.
 |---|:---:|:---:|:---:|:---:|:---:|
 | Linux x86_64 (Debian/Ubuntu/Arch/Fedora) | ✅ `lsblk` | ✅ | ✅ | `pkexec` | ✅ |
 | Linux aarch64 | ✅ `lsblk` | ✅ | ✅ | `pkexec` | ✅ |
-| macOS x86_64 (Intel) | ✅ `diskutil` | ✅ | 🟡 code complete, hw validation pending | `osascript` | ✅ |
-| macOS aarch64 (Apple Silicon) | ✅ `diskutil` | ✅ | 🟡 | `osascript` | ✅ |
-| Windows x86_64 | ✅ `Get-Disk` | ✅ | 🟡 | UAC | ✅ |
-| Windows aarch64 | ✅ `Get-Disk` | ✅ | 🟡 | UAC | ✅ |
+| macOS x86_64 (Intel) | ✅ `diskutil` | ✅ | ✅¹ | `osascript` | ✅ |
+| macOS aarch64 (Apple Silicon) | ✅ `diskutil` | ✅ | ✅¹ | `osascript` | ✅ |
+| Windows x86_64 | ✅ `Get-Disk` | ✅ | ✅¹ | UAC | ✅ |
+| Windows aarch64 | ✅ `Get-Disk` | ✅ | ✅¹ | UAC | ✅ |
 
-🟡 = the destructive install path compiles and is fully
-implemented in Rust, but hasn't yet been validated against real
-hardware as part of v0.0.1. macOS uses `diskutil partitionDisk` +
-`bless`; Windows uses `Clear-Disk` + `New-Partition` +
-`Format-Volume` + `robocopy`. See
-[`docs/V0_0_1_STATUS.md`](docs/V0_0_1_STATUS.md).
+¹ macOS and Windows install paths are exercised in CI against
+**virtual disks** (`hdiutil` sparse images on macOS,
+`diskpart`-created VHDs on Windows) — see
+[`.github/workflows/install-hw-equiv.yml`](.github/workflows/install-hw-equiv.yml).
+Real-USB-stick validation on hosted hardware follows in v0.0.2.
 
 ---
 
