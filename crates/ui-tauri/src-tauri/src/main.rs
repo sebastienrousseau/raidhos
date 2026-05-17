@@ -102,6 +102,59 @@ pub struct BootEntryConfig {
     /// in `raidhos_core::expected_persistence_label`.
     #[serde(default)]
     pub persistence_backend: String,
+    /// Optional auto-install descriptor (Ventoy gap G12).
+    /// When `kind` is anything other than `none` and `path` is
+    /// non-empty, the renderer appends the right per-distro
+    /// kargs to the linux line — kickstart for Fedora/RHEL,
+    /// preseed for Debian, autoinstall for Ubuntu subiquity,
+    /// autoyast for SUSE, or cloud-init nocloud for distros
+    /// that read from a `user-data` directory. See
+    /// `AutoinstallKind` for the per-kind karg shape.
+    #[serde(default)]
+    pub autoinstall: AutoinstallConfig,
+}
+
+/// Per-entry auto-install descriptor (Ventoy gap G12). Kept
+/// distro-aware so the user describes intent (`kind: kickstart`,
+/// `path: /ks/centos.ks`) and the renderer figures out the karg
+/// shape — `inst.ks=hd:LABEL=<data>:/ks/centos.ks` for Fedora,
+/// `auto=install preseed/file=…` for Debian, and so on.
+#[derive(Deserialize, Serialize, Default, Clone)]
+pub struct AutoinstallConfig {
+    /// Auto-install mechanism. `None` (the default) means no
+    /// kargs are added; this is back-compat-safe for older
+    /// configs that don't carry the field.
+    #[serde(default)]
+    pub kind: AutoinstallKind,
+    /// Path on the DATA partition (or URL for cloud-init
+    /// network sources). Sanitised before emission.
+    #[serde(default)]
+    pub path: String,
+}
+
+/// Auto-install mechanism family. Each variant maps to a
+/// per-distro karg pattern in `autoinstall_kargs()`.
+#[derive(Deserialize, Serialize, Default, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(rename_all = "kebab-case")]
+pub enum AutoinstallKind {
+    /// No auto-install. Default — emits no extra kargs.
+    #[default]
+    None,
+    /// Fedora / RHEL / Rocky / Alma / openSUSE Leap installers.
+    /// Karg: `inst.ks=hd:LABEL=<DATA>:<path>`.
+    Kickstart,
+    /// Debian / Ubuntu (live-installer) preseed.
+    /// Karg: `auto=install preseed/file=<path>`.
+    Preseed,
+    /// Ubuntu subiquity (24.04+ desktop / server).
+    /// Karg: `autoinstall ds=nocloud;s=<path>`.
+    Autoinstall,
+    /// openSUSE / SLE AutoYaST.
+    /// Karg: `autoyast=<path>`.
+    Autoyast,
+    /// cloud-init NoCloud datasource (generic).
+    /// Karg: `ds=nocloud;s=<path>`.
+    CloudInit,
 }
 
 /// Tauri event channel name. Frontend subscribes via
@@ -538,6 +591,7 @@ mod tests {
                 tip: String::new(),
                 hidden: false,
                 persistence_backend: String::new(),
+                autoinstall: Default::default(),
             }],
             default_entry: Some("ubuntu".into()),
             grub_superuser: String::new(),

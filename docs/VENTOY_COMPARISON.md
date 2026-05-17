@@ -111,11 +111,17 @@ link to the section that documents what's needed.
   group by class, and show help text on hover. Our `boot.json`
   carries `title` only.
 
-- **G12. Auto-install plugin** — Kickstart (`.ks`), preseed
-  (`preseed.cfg`), autoinstall (`user-data`), autounattend.xml
-  with Ventoy's variables expansion (`$$VT_LANG$$` etc.).
-  Big productivity win for fleet rollouts. Not in v0.0.1
-  scope; tracked for v0.1.0.
+- **G12. Auto-install plugin** — ✅ **Partial close in v0.0.1
+  for Linux distros.** `BootEntryConfig.autoinstall` carries a
+  typed `{ kind, path }` pair (variants: `kickstart`, `preseed`,
+  `autoinstall`, `autoyast`, `cloud-init`). The renderer
+  translates each into the right per-distro kargs (e.g.
+  `inst.ks=hd:LABEL=<DATA>:<path>` for Fedora/RHEL,
+  `auto=install preseed/file=<path>` for Debian,
+  `autoinstall ds=nocloud;s=<path>` for Ubuntu subiquity).
+  Sanitised against GRUB metachars. Ventoy's variable
+  expansion (`$$VT_LANG$$` etc.) and Windows `autounattend.xml`
+  remain v0.1.0 work.
 
 - **G13. Password protection** — Per-ISO and global GRUB
   password. We do not have menu-level password gating.
@@ -315,7 +321,7 @@ priorities aligned to user impact and security risk:
 | **G8 NTFS data partition** | **P1 — Windows-only hosts** | **✅ closed in v0.0.1** (`--data-fs ntfs`) |
 | **G9 ext4 / Btrfs / XFS data partition** | **P1 — Linux power users** | **✅ closed in v0.0.1** (`--data-fs ext4|btrfs|xfs`) |
 | **G11 menu_class + menu_tip** | **P1 — feature parity** | **✅ closed in v0.0.1** |
-| G12 Auto-install | P1 — fleet rollouts | v0.1.0 |
+| **G12 Auto-install** | **P1 — fleet rollouts** | **✅ partial in v0.0.1** (`BootEntryConfig.autoinstall` — Linux distros; Windows autounattend.xml → v0.1.0) |
 | **G13 Password protection** | **P2 — security** | **✅ closed in v0.0.1** (PBKDF2 only; plaintext rejected) |
 | G14–G16 Plugin system (DUD, injection, conf-replace) | P1 — feature parity | v0.1.0 |
 | **G17 image_blacklist** | **P2 — UX** | **✅ closed in v0.0.1** (`hidden: true` on entries) |
@@ -328,7 +334,7 @@ priorities aligned to user impact and security risk:
 | **G24 User-supplied checksum** | **P3 — flexibility** | **✅ closed in v0.0.1** (`verify_iso_sha256` / companion file) |
 | G25 Tested ISO catalog growth | continuous | — |
 
-**v0.0.1 closed:** G6, G7, G8, G9 (partial), G10, G11, G13, G17, G18, G19, G20, G22 (partial), G23, G24 — fourteen gaps.
+**v0.0.1 closed:** G6, G7, G8, G9 (partial), G10, G11, G12 (partial — Linux), G13, G17, G18, G19, G20, G22 (partial), G23, G24 — fifteen gaps.
 **v0.0.1 scaffolded:** G1, G3 — two gaps with the API surface, validation, and tooling in place; the destructive write path or the third-party shim signing remain for v0.0.2.
 
 ---

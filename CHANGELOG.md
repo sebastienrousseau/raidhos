@@ -9,12 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Ventoy gap closures
 
-Fourteen of the 25 gaps tracked in
+Fifteen of the 25 gaps tracked in
 [`docs/VENTOY_COMPARISON.md`](docs/VENTOY_COMPARISON.md) are
-closed in v0.0.1 (G22 is partial — chain into discovered
-grub.cfg works, full file browser deferred to v0.1.0); two
-are scaffolded with API surface + tooling, with the destructive
-paths deferred to v0.0.2.
+closed in v0.0.1 (G12 is partial — Linux autoinstall mechanisms
+work, Windows `autounattend.xml` deferred; G22 is partial — chain
+into discovered grub.cfg works, full file browser deferred to
+v0.1.0); two are scaffolded with API surface + tooling, with the
+destructive paths deferred to v0.0.2.
 
 | Gap | Status | Surface |
 |---|---|---|
@@ -24,6 +25,7 @@ paths deferred to v0.0.2.
 | G9 ext4 / Btrfs / XFS data partition | closed | `--data-fs ext4 \| btrfs \| xfs` (Linux pipeline) |
 | G10 UDF support | closed | `insmod udf` emitted by grub.cfg + `udf` embedded in EFI |
 | G11 menu_class + menu_tip per ISO | closed | `BootEntryConfig.class` + `tip` |
+| G12 Auto-install | partial | `BootEntryConfig.autoinstall { kind, path }`; renderer emits per-distro kargs (kickstart/preseed/autoinstall/autoyast/cloud-init) |
 | G13 GRUB password protection | closed | `BootConfig.grub_superuser` + `grub_password_pbkdf2` (PBKDF2 only) |
 | G17 image_blacklist | closed | `BootEntryConfig.hidden=true` |
 | G18 per-ISO persistence backend | closed | `BootEntryConfig.persistence_backend` |
@@ -45,8 +47,8 @@ paths deferred to v0.0.2.
   host's compile-time `target_os`. CI coverage gate raised from
   65% to 90%.
 - Test count: `raidhos-core` 201 unit + 26 doctest, `raidhos-ui`
-  67, `raidhos-cli` 14, `raidhos-priv-helper` 9 seccomp + 6 toctou
-  + 7 integration. Total: 330+ tests across the workspace.
+  76, `raidhos-cli` 14, `raidhos-priv-helper` 9 seccomp + 6 toctou
+  + 7 integration. Total: 339+ tests across the workspace.
 
 ### Added
 
@@ -90,6 +92,20 @@ paths deferred to v0.0.2.
   `hidden = true` still suppresses entries inside submenus, and
   class names go through the same metachar filter as everything
   else. Closes Ventoy gap G20.
+- Typed auto-install descriptor: `BootEntryConfig.autoinstall`
+  carries a `{ kind, path }` pair with `kind` ∈ `{none,
+  kickstart, preseed, autoinstall, autoyast, cloud-init}`.
+  The renderer translates each into per-distro install kargs:
+  `inst.ks=hd:LABEL=<DATA>:<path>` (Fedora/RHEL),
+  `auto=install preseed/file=<path>` (Debian),
+  `autoinstall ds=nocloud;s=<path>` (Ubuntu subiquity),
+  `autoyast=<path>` (SUSE),
+  `ds=nocloud;s=<path>` (cloud-init NoCloud). Both `path` and
+  the DATA label are sanitised against GRUB metachars. The
+  data partition label is threaded through the renderer so
+  kickstart's `LABEL=` matches the real partition. Partially
+  closes Ventoy gap G12 — Linux mechanisms only; Windows
+  `autounattend.xml` is deferred to v0.1.0.
 - `BootConfig.enable_disk_browser` — when set, the grub.cfg
   renderer appends an F2-hotkeyed `menuentry "Browse local
   disks (F2)"` that walks `(hd*,*)` and chains into any

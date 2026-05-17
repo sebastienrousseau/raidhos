@@ -79,6 +79,23 @@
           "type": "string",
           "default": "",
           "description": "Ventoy gap G18. Path of the per-ISO persistence backend file (e.g. `/persistence/ubuntu.dat`). When set, `persistent persistent-path=<value>` is appended to the linux line on the casper and live boot branches. Does not apply to .efi or .img / .raw paths."
+        },
+        "autoinstall": {
+          "type": "object",
+          "default": { "kind": "none", "path": "" },
+          "description": "Ventoy gap G12. Typed auto-install descriptor — distro-aware. When `kind` is non-`none` and `path` is non-empty, the renderer appends the appropriate per-distro kargs (`inst.ks=hd:LABEL=<data>:<path>` for kickstart, `auto=install preseed/file=<path>` for preseed, `autoinstall ds=nocloud;s=<path>` for subiquity, `autoyast=<path>` for AutoYaST, `ds=nocloud;s=<path>` for cloud-init NoCloud). Sanitised against GRUB metachars.",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": ["none", "kickstart", "preseed", "autoinstall", "autoyast", "cloud-init"],
+              "default": "none"
+            },
+            "path": {
+              "type": "string",
+              "default": ""
+            }
+          },
+          "additionalProperties": true
         }
       },
       "required": ["title", "path", "params", "initrd", "kargs"],

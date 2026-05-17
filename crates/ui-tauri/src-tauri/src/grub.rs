@@ -9,7 +9,7 @@
 //!
 //! See `docs/THREAT_MODEL.md` for context.
 
-use crate::{BootConfig, BootEntryConfig};
+use crate::{AutoinstallConfig, AutoinstallKind, BootConfig, BootEntryConfig};
 
 /// Render a complete `grub.cfg`.
 pub fn render_grub_cfg(config: &BootConfig, data_label: &str) -> String {
@@ -76,14 +76,14 @@ pub fn render_grub_cfg(config: &BootConfig, data_label: &str) -> String {
             }
         }
         for entry in flat {
-            out.push_str(&menuentry(entry));
+            out.push_str(&menuentry(entry, data_label));
         }
         for (class, entries) in by_class {
             out.push_str(&format!("submenu \"{class}\" {{\n"));
             for entry in entries {
                 // Indent two spaces inside the submenu block for
                 // readability; GRUB doesn't care about whitespace.
-                for line in menuentry(entry).lines() {
+                for line in menuentry(entry, data_label).lines() {
                     out.push_str("  ");
                     out.push_str(line);
                     out.push('\n');
@@ -99,7 +99,7 @@ pub fn render_grub_cfg(config: &BootConfig, data_label: &str) -> String {
             if entry.hidden {
                 continue;
             }
-            out.push_str(&menuentry(entry));
+            out.push_str(&menuentry(entry, data_label));
         }
     }
     if config.enable_disk_browser {
@@ -136,7 +136,7 @@ fn disk_browser_menuentry() -> String {
     out
 }
 
-fn menuentry(entry: &BootEntryConfig) -> String {
+fn menuentry(entry: &BootEntryConfig, data_label: &str) -> String {
     let title = sanitize(&entry.title);
     let path = sanitize(&entry.path);
     let params = sanitize(&entry.params);
@@ -153,6 +153,10 @@ fn menuentry(entry: &BootEntryConfig) -> String {
     } else {
         format!(" persistent persistent-path={persistence}")
     };
+    // Ventoy gap G12: typed auto-install descriptor. The
+    // renderer translates the `kind` + `path` pair into the
+    // right per-distro karg shape. Empty / None → no kargs.
+    let autoinstall_kargs = autoinstall_kargs(&entry.autoinstall, data_label);
 
     let mut out = String::new();
     if !tip.is_empty() {
@@ -194,7 +198,7 @@ fn menuentry(entry: &BootEntryConfig) -> String {
         out.push_str("    configfile (loop)/boot/grub/grub.cfg\n");
         out.push_str("  elif [ -f (loop)/casper/vmlinuz ]; then\n");
         out.push_str(&format!(
-            "    linux (loop)/casper/vmlinuz {params} {kargs} iso-scan/filename=$isofile{persistence_kargs}\n"
+            "    linux (loop)/casper/vmlinuz {params} {kargs} iso-scan/filename=$isofile{persistence_kargs}{autoinstall_kargs}\n"
         ));
         if !initrd.is_empty() {
             out.push_str(&format!("    initrd {initrd}\n"));
@@ -203,7 +207,7 @@ fn menuentry(entry: &BootEntryConfig) -> String {
         }
         out.push_str("  elif [ -f (loop)/live/vmlinuz ]; then\n");
         out.push_str(&format!(
-            "    linux (loop)/live/vmlinuz {params} {kargs} boot=live findiso=$isofile{persistence_kargs}\n"
+            "    linux (loop)/live/vmlinuz {params} {kargs} boot=live findiso=$isofile{persistence_kargs}{autoinstall_kargs}\n"
         ));
         if !initrd.is_empty() {
             out.push_str(&format!("    initrd {initrd}\n"));
@@ -233,6 +237,50 @@ fn is_efi_binary(path: &str) -> bool {
 fn is_raw_disk_image(path: &str) -> bool {
     let lower = path.to_ascii_lowercase();
     lower.ends_with(".img") || lower.ends_with(".raw")
+}
+
+/// Ventoy gap G12 — translate a typed `AutoinstallConfig` into
+/// the appropriate per-distro kargs.
+///
+/// Returns either an empty string (no auto-install configured)
+/// or a `" "`-prefixed karg fragment ready to concatenate onto
+/// the linux command line. The leading space is intentional —
+/// caller writes `… findiso=$isofile{persistence}{autoinstall}\n`.
+///
+/// The `path` is sanitised against GRUB metachars; the
+/// `data_label` is also sanitised so a hostile partition label
+/// (Ventoy gap G24-class TOCTOU) can't escape its quoted
+/// context either.
+pub fn autoinstall_kargs(cfg: &AutoinstallConfig, data_label: &str) -> String {
+    let path = sanitize(&cfg.path);
+    if path.is_empty() {
+        return String::new();
+    }
+    let label = sanitize(data_label);
+    match cfg.kind {
+        AutoinstallKind::None => String::new(),
+        AutoinstallKind::Kickstart => {
+            // Fedora / RHEL / Rocky / Alma family.
+            format!(" inst.ks=hd:LABEL={label}:{path}")
+        }
+        AutoinstallKind::Preseed => {
+            // Classic Debian / Ubuntu live installer.
+            format!(" auto=install preseed/file={path}")
+        }
+        AutoinstallKind::Autoinstall => {
+            // Ubuntu 24.04+ subiquity (cloud-init under the hood).
+            // The `s=` source is a directory on the DATA partition.
+            format!(" autoinstall ds=nocloud;s={path}")
+        }
+        AutoinstallKind::Autoyast => {
+            // openSUSE / SLE.
+            format!(" autoyast={path}")
+        }
+        AutoinstallKind::CloudInit => {
+            // Generic cloud-init NoCloud datasource.
+            format!(" ds=nocloud;s={path}")
+        }
+    }
 }
 
 /// Strip every character that has meaning to the GRUB scripting
@@ -417,6 +465,7 @@ mod tests {
                 tip: String::new(),
                 hidden: false,
                 persistence_backend: String::new(),
+                autoinstall: Default::default(),
             }],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -442,6 +491,7 @@ mod tests {
                 tip: String::new(),
                 hidden: false,
                 persistence_backend: String::new(),
+                autoinstall: Default::default(),
             }],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -470,6 +520,7 @@ mod tests {
             tip: String::new(),
             hidden: false,
             persistence_backend: String::new(),
+            autoinstall: Default::default(),
         }
     }
 
@@ -1067,6 +1118,143 @@ mod tests {
         );
         // The sanitised class name still flows through.
         assert!(out.contains("submenu \"linux echo bad\" {"));
+    }
+
+    // ---------------------------------------------------------------
+    // Ventoy gap G12: typed auto-install karg helper
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn autoinstall_kargs_default_emits_nothing() {
+        let cfg = AutoinstallConfig::default();
+        assert_eq!(autoinstall_kargs(&cfg, "DATA"), "");
+        // Setting only the kind without a path also emits nothing.
+        let cfg = AutoinstallConfig {
+            kind: AutoinstallKind::Kickstart,
+            path: String::new(),
+        };
+        assert_eq!(autoinstall_kargs(&cfg, "DATA"), "");
+    }
+
+    #[test]
+    fn autoinstall_kargs_kickstart_uses_data_label() {
+        let cfg = AutoinstallConfig {
+            kind: AutoinstallKind::Kickstart,
+            path: "/ks/centos.ks".to_string(),
+        };
+        assert_eq!(
+            autoinstall_kargs(&cfg, "RAIDHOS_DATA"),
+            " inst.ks=hd:LABEL=RAIDHOS_DATA:/ks/centos.ks",
+        );
+    }
+
+    #[test]
+    fn autoinstall_kargs_preseed_shape() {
+        let cfg = AutoinstallConfig {
+            kind: AutoinstallKind::Preseed,
+            path: "/cdrom/preseed.cfg".to_string(),
+        };
+        assert_eq!(
+            autoinstall_kargs(&cfg, "DATA"),
+            " auto=install preseed/file=/cdrom/preseed.cfg",
+        );
+    }
+
+    #[test]
+    fn autoinstall_kargs_subiquity_shape() {
+        let cfg = AutoinstallConfig {
+            kind: AutoinstallKind::Autoinstall,
+            path: "/autoinstall/".to_string(),
+        };
+        assert_eq!(
+            autoinstall_kargs(&cfg, "DATA"),
+            " autoinstall ds=nocloud;s=/autoinstall/",
+        );
+    }
+
+    #[test]
+    fn autoinstall_kargs_autoyast_shape() {
+        let cfg = AutoinstallConfig {
+            kind: AutoinstallKind::Autoyast,
+            path: "/yast/profile.xml".to_string(),
+        };
+        assert_eq!(
+            autoinstall_kargs(&cfg, "DATA"),
+            " autoyast=/yast/profile.xml",
+        );
+    }
+
+    #[test]
+    fn autoinstall_kargs_cloud_init_shape() {
+        let cfg = AutoinstallConfig {
+            kind: AutoinstallKind::CloudInit,
+            path: "/cidata/".to_string(),
+        };
+        assert_eq!(autoinstall_kargs(&cfg, "DATA"), " ds=nocloud;s=/cidata/");
+    }
+
+    #[test]
+    fn autoinstall_kargs_sanitises_path_and_label() {
+        // A hostile path / label that tries to inject GRUB
+        // metachars must have them stripped before reaching the
+        // linux line. The substring text is preserved (it's just
+        // data on the cmdline) — only the metachars matter.
+        let cfg = AutoinstallConfig {
+            kind: AutoinstallKind::Kickstart,
+            path: "/ks; rm -rf /".to_string(),
+        };
+        let out = autoinstall_kargs(&cfg, "DA;TA");
+        // None of the GRUB shell metachars survive.
+        for bad in [';', '$', '`', '"', '\\', '{', '}', '\n'] {
+            assert!(!out.contains(bad), "{bad:?} survived: {out}");
+        }
+        // The kickstart shape with the (sanitised) label flows
+        // through; the metachar removal trims `;` from both fields.
+        assert_eq!(out, " inst.ks=hd:LABEL=DATA:/ks rm -rf /");
+    }
+
+    #[test]
+    fn render_appends_autoinstall_to_casper_and_live() {
+        let mut e = entry("Ubuntu", "/u.iso");
+        e.autoinstall = AutoinstallConfig {
+            kind: AutoinstallKind::Autoinstall,
+            path: "/autoinstall/u24/".to_string(),
+        };
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![e],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+            tree_view: false,
+            enable_disk_browser: false,
+        };
+        let out = render_grub_cfg(&config, "RAIDHOS_DATA");
+        // The autoinstall karg appears on both the casper and the
+        // live kernel branches, after the persistence kargs slot.
+        assert!(
+            out.contains("autoinstall ds=nocloud;s=/autoinstall/u24/"),
+            "missing autoinstall kargs: {out}",
+        );
+        // And it doesn't appear on .efi / .img branches because
+        // those branches don't go through the linux line.
+        let mut img = entry("X", "/x.img");
+        img.autoinstall = AutoinstallConfig {
+            kind: AutoinstallKind::Kickstart,
+            path: "/k.ks".to_string(),
+        };
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![img],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+            tree_view: false,
+            enable_disk_browser: false,
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        assert!(
+            !out.contains("inst.ks="),
+            "kargs leaked into .img branch: {out}"
+        );
     }
 
     // ---------------------------------------------------------------

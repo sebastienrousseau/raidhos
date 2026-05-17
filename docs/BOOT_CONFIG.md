@@ -88,6 +88,31 @@ between installs.
 | `tip` | string | `""` | **G11.** Comment placed above the entry. |
 | `hidden` | bool | `false` | **G17.** Skip this entry entirely — applies in both ListView and TreeView. |
 | `persistence_backend` | string | `""` | **G18.** Path of a `.dat` persistence file. Appends `persistent persistent-path=<value>` to the linux line. Only applies to ISO entries; ignored for `.efi` / `.img`. |
+| `autoinstall` | object | `{kind: "none", path: ""}` | **G12.** Typed auto-install descriptor — see below. |
+
+### `autoinstall` sub-object
+
+```jsonc
+{
+  "kind": "kickstart",
+  "path": "/ks/centos.ks"
+}
+```
+
+| `kind` value | Karg emitted | Distro family |
+|---|---|---|
+| `none` (default) | — | none |
+| `kickstart` | `inst.ks=hd:LABEL=<DATA>:<path>` | Fedora / RHEL / Rocky / Alma / Leap |
+| `preseed` | `auto=install preseed/file=<path>` | Debian, Ubuntu live-installer |
+| `autoinstall` | `autoinstall ds=nocloud;s=<path>` | Ubuntu 24.04+ subiquity |
+| `autoyast` | `autoyast=<path>` | openSUSE / SLE |
+| `cloud-init` | `ds=nocloud;s=<path>` | generic NoCloud datasource |
+
+The DATA partition label is substituted at render time. Both
+`path` and the label go through the `sanitize` metachar filter,
+so a hostile config can't escape its quoted context on the
+linux line. Empty `path` or `kind: none` emits no kargs at all,
+which is the back-compat-safe default.
 
 ### Path dispatch
 
