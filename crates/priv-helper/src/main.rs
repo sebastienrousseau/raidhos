@@ -106,10 +106,15 @@ impl<T> HelperResponse<T> {
 }
 
 fn print_response<T: Serialize>(resp: &HelperResponse<T>) {
-    match serde_json::to_string_pretty(resp) {
-        Ok(s) => println!("{s}"),
-        Err(e) => println!("{{\"ok\":false,\"data\":null,\"error\":\"serialize failed: {e}\"}}"),
-    }
+    // `serde_json::to_string_pretty` cannot fail on any
+    // `HelperResponse<T>` produced by this binary — T is always
+    // one of our domain types (`Vec<DiskInfo>`, `Vec<PartitionInfo>`,
+    // `()`), all of which have derived `Serialize` impls that
+    // never error. Use `expect` so the panic surface is explicit;
+    // a defensive `Err` fallback would be dead code and a coverage
+    // hole that the previous version had.
+    let body = serde_json::to_string_pretty(resp).expect("HelperResponse serialise");
+    println!("{body}");
 }
 
 fn enforce_argv_budget() -> Result<(), String> {

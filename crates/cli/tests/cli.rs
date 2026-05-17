@@ -94,7 +94,10 @@ fn install_requires_device_or_simulator() {
 }
 
 #[test]
-fn install_rejects_both_device_and_simulator() {
+fn install_rejects_both_device_and_simulator_via_clap() {
+    // Clap's `conflicts_with` rejects the combo at parse time,
+    // exit 2 with a clap diagnostic on stderr — not the
+    // runtime guard (which is unreachable and was removed).
     let out = cli()
         .args([
             "install",
@@ -102,17 +105,14 @@ fn install_rejects_both_device_and_simulator() {
             "/dev/sdb",
             "--simulator",
             "/tmp/sim.img",
-            "--wipe",
         ])
         .output()
         .expect("spawn");
     assert_eq!(out.status.code(), Some(2));
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(
-        err.contains("mutually exclusive")
-            || err.contains("cannot be used")
-            || err.contains("conflict"),
-        "missing exclusion: {err}",
+        err.contains("cannot be used") || err.contains("conflict"),
+        "missing clap conflict diagnostic: {err}",
     );
 }
 
@@ -395,6 +395,95 @@ fn scan_isos_errors_on_unreadable_dir() {
         "missing scan error: {err}"
     );
     let _ = fs::remove_file(&tmp);
+}
+
+#[test]
+fn write_config_errors_on_unwritable_mount() {
+    // mount-path is a file (not a directory) → create_dir_all
+    // fails. Exercises cli/main.rs:161-162.
+    use std::fs;
+    let tmp_file = std::env::temp_dir().join(format!(
+        "raidhos-cli-mount-file-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::write(&tmp_file, b"this is a file, not a dir").unwrap();
+
+    let tmp_src = std::env::temp_dir().join(format!(
+        "raidhos-cli-cfg-src-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::write(&tmp_src, br#"{}"#).unwrap();
+
+    let out = cli()
+        .args([
+            "write-config",
+            "--mount-path",
+            &tmp_file.display().to_string(),
+            "--config-path",
+            &tmp_src.display().to_string(),
+        ])
+        .output()
+        .expect("spawn");
+    assert!(!out.status.success(), "expected failure");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("create_dir_all"), "missing mkdir error: {err}");
+    let _ = fs::remove_file(&tmp_file);
+    let _ = fs::remove_file(&tmp_src);
+}
+
+#[test]
+fn catalog_list_from_directory_without_catalog_errors_cleanly() {
+    // Run from /tmp where no `catalog/catalog.json` exists. Hits
+    // cli/main.rs:174-176 (load_catalog returns Err).
+    let out = cli()
+        .args(["catalog", "list"])
+        .current_dir(std::env::temp_dir())
+        .output()
+        .expect("spawn");
+    assert!(!out.status.success(), "expected non-zero exit");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        err.contains("catalog:") || err.contains("not found"),
+        "missing rejection: {err}",
+    );
+}
+
+#[test]
+fn catalog_verify_from_directory_without_catalog_errors_cleanly() {
+    // Same CWD trick for the Verify arm — covers cli/main.rs:
+    // 192-194 (load_catalog Err inside Verify).
+    let out = cli()
+        .args([
+            "catalog",
+            "verify",
+            "--slug",
+            "ubuntu-24.04-desktop-amd64",
+            "--iso",
+            "/tmp/x.iso",
+            "--sums",
+            "/tmp/x.sums",
+            "--sig",
+            "/tmp/x.sig",
+            "--key-dir",
+            "/tmp/x.keys",
+        ])
+        .current_dir(std::env::temp_dir())
+        .output()
+        .expect("spawn");
+    assert!(!out.status.success());
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        err.contains("catalog:") || err.contains("not found"),
+        "missing rejection: {err}",
+    );
 }
 
 #[test]

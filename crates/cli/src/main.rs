@@ -102,23 +102,23 @@ fn main() {
 
             // Resolve a real device path or set up a sparse-file simulator.
             let simulator_mode = simulator.is_some();
-            let device_path = match (device, simulator) {
-                (Some(d), None) => d,
-                (None, Some(s)) => match prepare_simulator(&s, simulator_size_mb) {
+            // clap's `conflicts_with` on the args struct already
+            // rejects the (Some, Some) case at parse time, so we
+            // only have to handle the three reachable states:
+            // device-only, simulator-only, or neither.
+            let device_path = if let Some(d) = device {
+                d
+            } else if let Some(s) = simulator {
+                match prepare_simulator(&s, simulator_size_mb) {
                     Ok(path) => path,
                     Err(e) => {
                         eprintln!("simulator setup failed: {e}");
                         std::process::exit(1);
                     }
-                },
-                (Some(_), Some(_)) => {
-                    eprintln!("--device and --simulator are mutually exclusive");
-                    std::process::exit(2);
                 }
-                (None, None) => {
-                    eprintln!("install: one of --device or --simulator is required");
-                    std::process::exit(2);
-                }
+            } else {
+                eprintln!("install: one of --device or --simulator is required");
+                std::process::exit(2);
             };
 
             let data_filesystem = match core::DataFilesystem::parse(&data_fs) {
