@@ -30,6 +30,15 @@ pub enum MockOutcome {
 /// Trait the install pipeline calls into for every side-effecting
 /// operation. Implemented by [`RealRuntime`] in production and by
 /// [`MockRuntime`] under `#[cfg(test)]`.
+///
+/// # Examples
+///
+/// ```
+/// use raidhos_core::{Runtime, RealRuntime};
+/// let rt = RealRuntime;
+/// // `has_cmd` returns false for clearly-nonexistent commands.
+/// assert!(!rt.has_cmd("absolutely-not-a-real-command-raidhos-xyz"));
+/// ```
 pub trait Runtime {
     /// Run a command; fail on non-zero exit. No stdout capture.
     fn run(&self, cmd: &str, args: &[&str]) -> crate::Result<()>;
@@ -55,6 +64,14 @@ pub trait Runtime {
 
 /// The shipped runtime. Talks to `std::process::Command`, `std::env`,
 /// and `std::fs` directly.
+///
+/// # Examples
+///
+/// ```
+/// use raidhos_core::{Runtime, RealRuntime};
+/// let rt = RealRuntime;
+/// assert_eq!(rt.env_var("DEFINITELY_NOT_SET_VAR_XYZ"), None);
+/// ```
 #[derive(Default)]
 pub struct RealRuntime;
 

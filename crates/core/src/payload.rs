@@ -76,6 +76,16 @@ pub enum ManifestError {
 /// `Ok(())` on a clean match. Returns [`ManifestError::Unpinned`] if
 /// the manifest's `checksum` is empty — callers should surface this as
 /// a non-fatal warning during development.
+///
+/// # Examples
+///
+/// ```no_run
+/// use std::path::Path;
+/// match raidhos_core::verify_payload(Path::new("/srv/raidhos/payload")) {
+///     Ok(()) => println!("payload OK"),
+///     Err(e) => eprintln!("payload check: {e}"),
+/// }
+/// ```
 pub fn verify_payload(payload_dir: &Path) -> std::result::Result<(), ManifestError> {
     let manifest_path = manifest_path_for(payload_dir);
     let body = fs::read(&manifest_path)

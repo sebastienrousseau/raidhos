@@ -103,6 +103,15 @@ impl From<CatalogError> for CoreError {
 /// Load the bundled catalog from `catalog/catalog.json` (relative to
 /// the current working directory or the repo root, whichever resolves
 /// first).
+///
+/// # Examples
+///
+/// ```no_run
+/// let catalog = raidhos_core::load_catalog().expect("catalog.json not found");
+/// for entry in &catalog {
+///     println!("{} ({})", entry.name, entry.slug);
+/// }
+/// ```
 pub fn load_catalog() -> Result<Vec<CatalogEntry>> {
     let candidates = [
         PathBuf::from("catalog/catalog.json"),
@@ -119,6 +128,15 @@ pub fn load_catalog() -> Result<Vec<CatalogEntry>> {
 
 /// Load a catalog file from a specific path. Useful for tests and for
 /// hosts that ship the catalog under a non-default location.
+///
+/// # Examples
+///
+/// ```no_run
+/// use std::path::Path;
+/// let catalog = raidhos_core::load_catalog_from(Path::new("./my-catalog.json"))
+///     .expect("catalog parse failed");
+/// assert!(!catalog.is_empty());
+/// ```
 pub fn load_catalog_from(path: &Path) -> Result<Vec<CatalogEntry>> {
     let body =
         fs::read(path).map_err(|e| CoreError::Io(format!("read {}: {e}", path.display())))?;
@@ -126,6 +144,15 @@ pub fn load_catalog_from(path: &Path) -> Result<Vec<CatalogEntry>> {
 }
 
 /// Resolve a catalog entry by its `slug`.
+///
+/// # Examples
+///
+/// ```no_run
+/// let catalog = raidhos_core::load_catalog().unwrap();
+/// if let Some(entry) = raidhos_core::find_entry(&catalog, "ubuntu-24.04-desktop-amd64") {
+///     println!("Will verify against {}", entry.iso_filename);
+/// }
+/// ```
 pub fn find_entry<'a>(catalog: &'a [CatalogEntry], slug: &str) -> Option<&'a CatalogEntry> {
     catalog.iter().find(|e| e.slug == slug)
 }
@@ -214,6 +241,16 @@ fn gpg_available(rt: &dyn Runtime) -> bool {
 /// expected hex hash if present. Public re-export of the internal
 /// helper for callers that want to verify against a downloaded
 /// `SHA256SUMS` without going through [`verify_iso`].
+///
+/// # Examples
+///
+/// ```
+/// let body = "deadbeef  ubuntu.iso\nfeedface  arch.iso\n";
+/// assert_eq!(
+///     raidhos_core::sha256sums_lookup(body, "arch.iso").as_deref(),
+///     Some("feedface"),
+/// );
+/// ```
 pub fn sha256sums_lookup_pub(body: &str, filename: &str) -> Option<String> {
     sha256sums_lookup(body, filename)
 }
