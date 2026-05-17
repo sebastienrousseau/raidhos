@@ -214,9 +214,10 @@ fn tempdir() -> std::result::Result<PathBuf, CatalogError> {
     Ok(dir)
 }
 
-/// Public re-export of [`sha256sums_lookup`] for callers that want to
-/// look up a filename in a `SHA256SUMS` body directly (e.g. integration
-/// tests, CI tooling).
+/// Look up a filename in a `SHA256SUMS`-style body and return the
+/// expected hex hash if present. Public re-export of the internal
+/// helper for callers that want to verify against a downloaded
+/// `SHA256SUMS` without going through [`verify_iso`].
 pub fn sha256sums_lookup_pub(body: &str, filename: &str) -> Option<String> {
     sha256sums_lookup(body, filename)
 }

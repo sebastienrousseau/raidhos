@@ -4,10 +4,10 @@
 //! payload directory, install flags) and the destructive operations that
 //! act on raw block devices. Every public function on the install path
 //! walks input through [`validate_device_path`] and the per-OS platform
-//! backend in [`crate::platform`] before any byte is written.
+//! backend in `crate::platform` before any byte is written.
 //!
 //! The crate forbids `unsafe` workspace-wide (see `Cargo.toml`). All
-//! platform-specific code lives in [`crate::platform`]; the public
+//! platform-specific code lives in `crate::platform`; the public
 //! surface here is the same on every supported OS.
 //!
 //! # Examples
