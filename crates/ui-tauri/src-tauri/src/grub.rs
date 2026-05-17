@@ -69,6 +69,15 @@ fn menuentry(entry: &BootEntryConfig) -> String {
     let kargs = sanitize(&entry.kargs);
     let class = sanitize(&entry.class);
     let tip = sanitize(&entry.tip);
+    // Ventoy gap G18: per-ISO persistence backend. The kernel
+    // command-line gets `persistent persistent-path=<value>`
+    // appended when this field is set on the entry.
+    let persistence = sanitize(&entry.persistence_backend);
+    let persistence_kargs = if persistence.is_empty() {
+        String::new()
+    } else {
+        format!(" persistent persistent-path={persistence}")
+    };
 
     let mut out = String::new();
     if !tip.is_empty() {
@@ -98,7 +107,7 @@ fn menuentry(entry: &BootEntryConfig) -> String {
         out.push_str("    configfile (loop)/boot/grub/grub.cfg\n");
         out.push_str("  elif [ -f (loop)/casper/vmlinuz ]; then\n");
         out.push_str(&format!(
-            "    linux (loop)/casper/vmlinuz {params} {kargs} iso-scan/filename=$isofile\n"
+            "    linux (loop)/casper/vmlinuz {params} {kargs} iso-scan/filename=$isofile{persistence_kargs}\n"
         ));
         if !initrd.is_empty() {
             out.push_str(&format!("    initrd {initrd}\n"));
@@ -107,7 +116,7 @@ fn menuentry(entry: &BootEntryConfig) -> String {
         }
         out.push_str("  elif [ -f (loop)/live/vmlinuz ]; then\n");
         out.push_str(&format!(
-            "    linux (loop)/live/vmlinuz {params} {kargs} boot=live findiso=$isofile\n"
+            "    linux (loop)/live/vmlinuz {params} {kargs} boot=live findiso=$isofile{persistence_kargs}\n"
         ));
         if !initrd.is_empty() {
             out.push_str(&format!("    initrd {initrd}\n"));
@@ -307,6 +316,7 @@ mod tests {
                 class: String::new(),
                 tip: String::new(),
                 hidden: false,
+                persistence_backend: String::new(),
             }],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -329,6 +339,7 @@ mod tests {
                 class: String::new(),
                 tip: String::new(),
                 hidden: false,
+                persistence_backend: String::new(),
             }],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -356,6 +367,7 @@ mod tests {
             class: String::new(),
             tip: String::new(),
             hidden: false,
+            persistence_backend: String::new(),
         }
     }
 
@@ -694,5 +706,85 @@ mod tests {
         assert!(out.contains("set isofile=\"($root)/boot/isos/ubuntu.iso\""));
         // Each entry has its own balanced { } block.
         assert_eq!(out.matches('{').count(), out.matches('}').count());
+    }
+
+    // ---------------------------------------------------------------
+    // Ventoy gap G18: per-ISO persistence backend file
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn render_omits_persistence_kargs_when_unset() {
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![entry("Ubuntu", "/boot/isos/ubuntu.iso")],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        assert!(!out.contains("persistent persistent-path"));
+    }
+
+    #[test]
+    fn render_appends_persistence_kargs_to_casper_and_live() {
+        let mut e = entry("Ubuntu", "/boot/isos/ubuntu.iso");
+        e.persistence_backend = "/persistence/ubuntu.dat".to_string();
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![e],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        // Both the casper and the live kernel command lines pick up
+        // the persistence kargs at the end.
+        assert!(
+            out.contains(
+                "linux (loop)/casper/vmlinuz   iso-scan/filename=$isofile persistent persistent-path=/persistence/ubuntu.dat"
+            ),
+            "missing casper persistence in: {out}",
+        );
+        assert!(
+            out.contains(
+                "linux (loop)/live/vmlinuz   boot=live findiso=$isofile persistent persistent-path=/persistence/ubuntu.dat"
+            ),
+            "missing live persistence in: {out}",
+        );
+    }
+
+    #[test]
+    fn render_sanitises_persistence_backend_field() {
+        let mut e = entry("Ubuntu", "/u.iso");
+        e.persistence_backend = "/safe; rm -rf /".to_string();
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![e],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        // Look at the linux line specifically. The sanitiser strips ;.
+        let linux_line = out
+            .lines()
+            .find(|l| l.contains("linux (loop)/casper/vmlinuz"))
+            .expect("casper line");
+        assert!(!linux_line.contains(';'), "semicolon escaped: {linux_line}");
+        assert!(linux_line.contains("persistent persistent-path=/safe rm -rf /"));
+    }
+
+    #[test]
+    fn render_skips_persistence_for_efi_chainload() {
+        // EFI binaries don't take a kernel command line, so the
+        // persistence kargs must not appear in the chainloader path.
+        let mut e = entry("Memtest", "/memtest86.efi");
+        e.persistence_backend = "/persistence.dat".to_string();
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![e],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        assert!(out.contains("chainloader \"($root)/memtest86.efi\""));
+        assert!(!out.contains("persistent persistent-path"));
     }
 }

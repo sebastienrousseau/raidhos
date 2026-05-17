@@ -80,6 +80,14 @@ pub struct BootEntryConfig {
     /// the USB but hide it from the menu. Closes Ventoy gap G17.
     #[serde(default)]
     pub hidden: bool,
+    /// Optional path to a persistence-backend file on the DATA
+    /// partition (Ventoy's `persistence` plugin per-ISO map).
+    /// When set, the renderer appends `persistent
+    /// persistent-path=<value>` to the live-kernel command line.
+    /// Closes Ventoy gap G18. Pair with the per-distro label table
+    /// in `raidhos_core::expected_persistence_label`.
+    #[serde(default)]
+    pub persistence_backend: String,
 }
 
 /// Tauri event channel name. Frontend subscribes via
@@ -514,6 +522,7 @@ mod tests {
                 class: String::new(),
                 tip: String::new(),
                 hidden: false,
+                persistence_backend: String::new(),
             }],
             default_entry: Some("ubuntu".into()),
             grub_superuser: String::new(),
