@@ -17,6 +17,7 @@ cargo run --example <name> -p raidhos-core -- [args]
 | [`verify_payload.rs`](verify_payload.rs) | Walk a payload tree and verify it against `manifest.json`. |
 | [`catalog_verify.rs`](catalog_verify.rs) | Catalog lookup + `gpg(1)` verification of a downloaded ISO. |
 | [`install_dry_run.rs`](install_dry_run.rs) | Run the install pipeline with `dry_run = true` — no writes. |
+| [`install_simulator.rs`](install_simulator.rs) | Run the full pipeline against a sparse file you own — partition + format + verify without touching real hardware. |
 
 All examples exit 0 on success and a non-zero code on failure;
 they're safe to wire into shell scripts.

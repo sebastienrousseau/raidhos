@@ -56,6 +56,7 @@
 **Operational**
 
 - [Development](#development) — build, test, fuzz, format, lint
+- [Comparison with Ventoy](#comparison-with-ventoy) — feature gap matrix
 - [Documentation](#documentation) — every doc in `docs/`
 - [Roadmap](#roadmap) — what's in `v0.0.1`, what's in `v0.0.2`, what's later
 - [Contributing](#contributing)
@@ -515,6 +516,52 @@ The full developer guide is
 [`CONTRIBUTING.md`](CONTRIBUTING.md). The release recipe is
 [`docs/RELEASE.md`](docs/RELEASE.md). Packaging downstream:
 [`docs/PACKAGING.md`](docs/PACKAGING.md).
+
+---
+
+## Comparison with Ventoy
+
+Ventoy 1.1.12 is the incumbent in the multi-ISO USB imager
+space. RaidhOS is a different project with different goals,
+not a Ventoy clone: we lean on Rust's memory safety, a
+Sigstore-rooted supply chain, and a per-action elevation
+model, while Ventoy leans on years of feature surface and a
+plugin ecosystem.
+
+The full feature-by-feature gap analysis lives at
+[`docs/VENTOY_COMPARISON.md`](docs/VENTOY_COMPARISON.md) —
+**read it before adopting** if you need any of the following
+today, which Ventoy still handles and RaidhOS does not yet:
+
+- Legacy BIOS boot (RaidhOS is UEFI-only in v0.0.1)
+- ARM64 / IA32 UEFI
+- A working Secure Boot signed shim
+- WIM / VHD(x) / IMG / raw EFI image boot
+- NTFS / ext4 / Btrfs / XFS on the data partition
+- A plugin system: themes, per-ISO menu aliases, password
+  protection, file injection, conf replacement, driver
+  update disks
+- Kickstart / preseed / autounattend.xml auto-install
+- Per-ISO persistence backend files (Ventoy maps each
+  distro to its native persistence label)
+- Multi-language boot menu
+- "F2 — browse files on a local disk"
+- A library of 1300+ tested ISOs
+
+On the other side, things RaidhOS does that Ventoy does not:
+
+- `#![forbid(unsafe_code)]` Rust workspace
+- cosign keyless + SLSA L3 + CycloneDX SBOM on every release
+- GPG-verified ISO catalog (Ventoy boots whatever you copied)
+- Tauri 2 desktop app with WCAG 2.2 AA accessibility
+- Per-action `pkexec` / `osascript` / UAC; never setuid
+- seccomp-bpf denylist + TOCTOU-safe device fd pin (Linux)
+- `--simulator` non-destructive preview against a sparse file
+- One-shot per-distro packaging: Homebrew, winget, .deb,
+  AppImage, AUR, Fedora COPR, Flatpak
+
+See [`docs/VENTOY_COMPARISON.md`](docs/VENTOY_COMPARISON.md)
+for the priority-tagged roadmap of closing the gaps.
 
 ---
 

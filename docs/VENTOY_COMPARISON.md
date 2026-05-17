@@ -1,0 +1,325 @@
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+
+# RaidhOS vs Ventoy — feature gap analysis
+
+Ventoy 1.1.12 (April 2026) is the de-facto incumbent in the
+multi-ISO USB imager space. This document compares RaidhOS v0.0.1
+against it: what Ventoy does that RaidhOS doesn't yet, what
+RaidhOS does that Ventoy doesn't, and where the two projects sit
+philosophically.
+
+The goal is not to clone Ventoy. The goal is **honest accounting**
+so users and contributors know exactly which features they can
+expect and which they need to wait for or contribute.
+
+---
+
+## TL;DR
+
+| Dimension | Ventoy 1.1.12 | RaidhOS 0.0.1 |
+|---|---|---|
+| Language / safety | C, hand-rolled GRUB patches | Rust `#![forbid(unsafe_code)]` workspace |
+| ISO formats | ISO, WIM, IMG, VHD(x), EFI | ISO only |
+| Boot modes | Legacy BIOS, IA32/x86_64/ARM64/MIPS64 UEFI, Secure Boot | UEFI x86_64 (Secure Boot scaffolded, not signed) |
+| Filesystems on data partition | FAT32, exFAT, NTFS, UDF, XFS, Btrfs, ext2/3/4 | FAT32 (ESP) + exFAT (DATA) |
+| Plugin system | 15+ plugin types | None |
+| Themes | GRUB2 themes, ListView / TreeView toggle | Single grub.cfg generator |
+| Persistence | Per-ISO backend file map (Ubuntu, MX, Arch, Mint, Kali, …) | Single overlay file (Linux) |
+| Auto-install | Kickstart / preseed / autounattend.xml + variable expansion | Not implemented |
+| Browse local disk | F2 hotkey, boot files from internal drives | Not implemented |
+| Checksum verification | MD5/SHA-1/SHA-256/SHA-512 against companion `VENTOY_CHECKSUM` | SHA-256 + GPG against bundled catalog |
+| ISO catalog | 1300+ tested distros, no verification | ~10 curated, **GPG-signed** entries |
+| GUI | `Ventoy2Disk` (installer only, not a session app) | Tauri 2 desktop, WCAG 2.2 AA |
+| Elevation | Single-shot installer | Per-action polkit / osascript / UAC |
+| Supply chain | Signed binary releases | cosign keyless + SLSA L3 + CycloneDX SBOM |
+| Non-destructive preview | None | `--simulator` against a sparse file |
+
+---
+
+## Gaps: what Ventoy has and RaidhOS does **not**
+
+Tracked as concrete v0.0.2 / v0.1.0 targets. Numbers in brackets
+link to the section that documents what's needed.
+
+### Boot coverage
+
+- **G1. Legacy BIOS** — Ventoy ships an MBR + isolinux fallback so
+  any 2007+ PC boots. RaidhOS is UEFI-only (GPT). Approximately
+  10% of installed-base motherboards still need this.
+  *Required for v0.0.2 if we want to claim broad hardware support.*
+
+- **G2. ARM64 UEFI / IA32 UEFI** — Ventoy boots on Raspberry Pi
+  CM4, Apple Silicon UEFI via Asahi, and some legacy IA32 boards.
+  Our GRUB build is x86_64-only at present.
+
+- **G3. Secure Boot with a signed shim** — Ventoy installs its
+  own self-signed key (controversial, requires enrolment).
+  RaidhOS has the scaffolding (`docs/SECURE_BOOT.md`) but no
+  working signed shim path yet. Decision needed: Microsoft's
+  shim-review process (~6 months) vs. document the MOK
+  enrolment flow only.
+
+### ISO / image format support
+
+- **G4. WIM boot** — Required for WinPE rescue / Windows install
+  ISOs that hit the 4 GiB WIM split. Ventoy's `WIMBOOT` mode
+  handles this. RaidhOS currently extracts an ISO and chains
+  to the bootloader inside; WIM-only payloads break.
+
+- **G5. VHD(x) boot** — Ventoy chain-boots a Windows installation
+  image directly. Not in our scope for v0.0.1; consider for
+  v0.0.2 alongside WIM.
+
+- **G6. IMG / raw disk image boot** — Floppy and small embedded
+  systems (DOS rescue images, BIOS firmware updaters). Ventoy
+  exposes `memdisk` mode. RaidhOS does not.
+
+- **G7. EFI binary boot** — Drop a `.EFI` into the USB and have
+  it appear in the menu. Useful for memtest86+ and firmware
+  updaters. Not implemented.
+
+### Filesystems
+
+- **G8. NTFS on the data partition** — Required for files > 4 GiB
+  on Windows-only target hosts. Ventoy supports it; we ship
+  exFAT instead, which Windows ≥ 10 also reads but some
+  enterprise estates restrict.
+
+- **G9. ext4 / Btrfs / XFS data partition** — Some users want
+  the persistence partition to be a native Linux filesystem so
+  it's mountable read-write from a host distro. Ventoy
+  supports all of these; we support FAT32 + exFAT only.
+
+- **G10. UDF support** — Niche, mostly Blu-ray rescue images.
+  Documented as a low-priority gap.
+
+### Plugin / configuration system
+
+- **G11. Per-ISO menu customisation** — Ventoy's `menu_class`,
+  `menu_alias`, `menu_tip` plugins let users rename entries,
+  group by class, and show help text on hover. Our `boot.json`
+  carries `title` only.
+
+- **G12. Auto-install plugin** — Kickstart (`.ks`), preseed
+  (`preseed.cfg`), autoinstall (`user-data`), autounattend.xml
+  with Ventoy's variables expansion (`$$VT_LANG$$` etc.).
+  Big productivity win for fleet rollouts. Not in v0.0.1
+  scope; tracked for v0.1.0.
+
+- **G13. Password protection** — Per-ISO and global GRUB
+  password. We do not have menu-level password gating.
+
+- **G14. Driver Update Disk (DUD) plugin** — Inject `dd.iso`
+  contents into a running installer. Niche but valued by
+  RHEL admins. Not implemented.
+
+- **G15. File injection (`injection` plugin)** — Drop custom
+  files into the booted live system before init. Ventoy
+  supports it; useful for autoexec.
+
+- **G16. Conf replace plugin** — Replace boot configs at boot
+  time without re-mastering the ISO. Important when a distro
+  ships broken grub.cfg or to add custom kernel parameters
+  per-host.
+
+- **G17. Image list / blacklist** — Bulk hide ISOs from the
+  menu without deleting them. Useful when a USB has 200+ ISOs.
+
+### Persistence
+
+- **G18. Per-ISO backend file map** — Ventoy's `persistence`
+  plugin maps each ISO to its own `.dat` file with the right
+  label per distro (`casper-rw`, `MX-Persist`, `vtoycow`,
+  …). RaidhOS has one persistence overlay applied to the
+  Linux install; the v0.0.1 GUI does not let the user attach
+  a persistence file per distro.
+
+- **G19. Persistence label compatibility** — Most distros use
+  a different volume label for their persistence partition.
+  We need a mapping table baked into the catalog.
+
+### Menu UX
+
+- **G20. ListView ↔ TreeView toggle** — Ventoy shows ISOs
+  either as a flat list (sorted) or a directory tree (matches
+  the on-USB folder structure). Our v0.0.1 wizard does not
+  surface a tree view.
+
+- **G21. Multi-language boot menu** — Ventoy ships `en_US`,
+  `zh_CN`, `de_DE`, plus 20+ others. RaidhOS GRUB menu is
+  English-only. The Tauri GUI is English-only too (gettext
+  not wired).
+
+- **G22. Browse files in local disk (F2)** — Ventoy lets the
+  user pick an ISO from an internal drive at boot time, not
+  just the USB. Useful for laptops without an optical drive
+  and large libraries.
+
+- **G23. GUI plugin configurator (`VentoyPlugson`)** — Ventoy
+  ships a separate GUI to edit `ventoy.json`. Our Tauri UI
+  edits `boot.json` directly; we could subsume both.
+
+### Verification
+
+- **G24. Per-ISO `VENTOY_CHECKSUM` file** — Ventoy reads a
+  drop-in checksum file co-located with the ISO. RaidhOS only
+  verifies ISOs that are *in the bundled catalog*. Allowing a
+  user-supplied `<iso>.sha256` would close this gap without
+  giving up our GPG-verified default path.
+
+### Coverage
+
+- **G25. "Tested 1300+ ISO files"** — Ventoy maintains a public
+  per-ISO test matrix. We have 10 curated entries. Closing this
+  gap is not about code; it's about test infrastructure and
+  community contributions over time.
+
+---
+
+## What RaidhOS does that Ventoy does **not**
+
+These are the project's structural advantages — not flag
+features that someone can copy in a release. They flow from the
+language choice and the supply-chain pipeline.
+
+### Memory safety
+
+- **R1. `#![forbid(unsafe_code)]`** workspace-wide. Verified by
+  CI clippy `-D warnings`. Ventoy is implemented in C with
+  hand-rolled GRUB patches; multiple Ventoy CVEs have been
+  classified as memory-safety bugs in the past.
+
+### Supply chain
+
+- **R2. cosign keyless signatures** on every release artefact,
+  rooted in Sigstore — anyone can verify the binary was built
+  by the public CI workflow.
+
+- **R3. SLSA L3 build provenance** — the GitHub Actions
+  workflow produces a verifiable attestation linking the
+  release tarball to the source commit.
+
+- **R4. CycloneDX SBOM** attached to every release, listing
+  every transitive crate with its version.
+
+- **R5. Reproducible GRUB build** — the EFI binary is built in
+  a digest-pinned Docker image; same input → same output bytes.
+
+- **R6. `cargo deny check` + `cargo audit`** in CI on every PR,
+  with documented advisory ignores.
+
+### Process safety
+
+- **R7. Never setuid** — the privileged helper is invoked via
+  `pkexec` / `osascript` / UAC per action, not via a
+  permanent privilege bit.
+
+- **R8. seccomp-bpf denylist** on Linux — `ptrace`, `bpf`,
+  `kexec_*`, `init_module`, `perf_event_open`, `userfaultfd`,
+  `process_vm_*` are blocked **before** any destructive
+  operation runs.
+
+- **R9. TOCTOU-safe device fd pin** — the helper opens the
+  device once, snapshots `rdev` via `fstat`, and holds the
+  fd for the install lifetime so a hot-plug swap can't
+  redirect the write target.
+
+- **R10. argv length cap (64 KiB)** before clap parses —
+  defence against memory blow-up on hostile spawn.
+
+- **R11. Double opt-in** — both `--wipe` and `--allow-write`
+  required. CLI defaults to `--dry-run`. A copy-paste from
+  the docs never flashes anything.
+
+### GPG-verified catalog
+
+- **R12. GPG-signed ISO catalog with bundled keyring** —
+  `verify_iso` imports the catalog-pinned fingerprint, verifies
+  `SHA256SUMS` against the detached signature, then SHA-256s
+  the ISO bytes. Ventoy does not verify ISO provenance at all;
+  it boots whatever you copied.
+
+### Session GUI
+
+- **R13. Tauri 2 desktop app** with a strict CSP (no
+  `'unsafe-inline'`), WCAG 2.2 AA accessibility pass,
+  drag-and-drop ISO management, typed `raidhos://progress`
+  event stream, three-step wizard for beginners + dashboard
+  for power users. Ventoy ships `Ventoy2Disk` as a one-shot
+  installer, not a session application.
+
+### Non-destructive preview
+
+- **R14. `--simulator` mode** — run the full install pipeline
+  against a sparse file the user owns. Ventoy has no
+  equivalent.
+
+### Modern packaging coverage
+
+- **R15. Per-distro packaging** — Homebrew tap, winget, .deb,
+  AppImage, AUR (source + binary), Fedora COPR (.spec),
+  Flatpak. Same on-disk file layout under `/usr` so
+  cross-distro tests can assume one path set. Ventoy ships
+  one-script tarballs and AUR only.
+
+### Testing
+
+- **R16. 163+ in-source tests** (141 unit + 22 doctest)
+  on raidhos-core at 92.39% line coverage. Plus per-platform
+  integration via the virtual-disk install workflow.
+  Ventoy's public test surface is the 1300+ tested ISOs;
+  there's no in-source test count comparable to this.
+
+---
+
+## Roadmap mapping
+
+The gaps above are folded into the project roadmap with
+priorities aligned to user impact and security risk:
+
+| Gap | Priority | Target |
+|---|---|---|
+| G1 Legacy BIOS | P0 — broad-hardware claim | v0.0.2 |
+| G3 Secure Boot signed shim | P0 — security claim | v0.0.2 |
+| G2 ARM64 UEFI | P1 — Raspberry Pi support | v0.1.0 |
+| G4 WIM boot | P1 — Windows installer ISOs | v0.0.2 |
+| G8 NTFS data partition | P1 — Windows-only hosts | v0.0.2 |
+| G11–G16 Plugin system | P1 — feature parity | v0.1.0 |
+| G12 Auto-install | P1 — fleet rollouts | v0.1.0 |
+| G18 Per-ISO persistence | P2 — power users | v0.1.0 |
+| G20 ListView/TreeView | P2 — UX | v0.1.0 |
+| G21 Multi-language menu | P2 — i18n | v0.1.0 |
+| G22 Browse local disk | P3 — convenience | v0.2.0 |
+| G24 User-supplied checksum | P3 — flexibility | v0.0.2 |
+| G25 Tested ISO catalog growth | continuous | — |
+
+---
+
+## When *not* to use RaidhOS yet
+
+If you need any of the following today, Ventoy is still the
+right tool:
+
+- A USB stick that boots on a Legacy-BIOS-only motherboard.
+- A WinPE rescue stick using WIM payloads.
+- A multi-arch stick that boots on ARM64 Raspberry Pi *and*
+  x86_64.
+- Kickstart / preseed / autounattend.xml automation.
+- A theme system you can drop GRUB2 themes into.
+- A boot menu in your native language.
+
+If you need any of these in the next release, the corresponding
+gap numbers above are issue-tracker labels you can drive.
+
+---
+
+## See also
+
+- [`docs/ROADMAP.md`](ROADMAP.md) — milestone planning.
+- [`docs/SECURE_BOOT.md`](SECURE_BOOT.md) — current state of
+  Secure Boot (gap G3).
+- [`docs/THREAT_MODEL.md`](THREAT_MODEL.md) — security
+  guarantees the C-implemented competition does not offer.
+- [`CHANGELOG.md`](../CHANGELOG.md) — what is shipped per release.
+- [Ventoy](https://www.ventoy.net/) — the project this document
+  compares against.
