@@ -319,4 +319,107 @@ mod tests {
         // PartialEq + Eq + Clone hold.
         assert_eq!(inv.clone(), inv);
     }
+
+    #[test]
+    fn real_runtime_run_errors_on_missing_command() {
+        let rt = RealRuntime;
+        let err = rt
+            .run("absolutely-not-a-real-command-raidhos-xyz", &[])
+            .unwrap_err();
+        // Different OSes phrase "no such file" differently; we just
+        // confirm it's an Io-flavoured error.
+        assert!(matches!(err, crate::CoreError::Io(_)));
+    }
+
+    #[test]
+    fn real_runtime_run_output_errors_on_missing_command() {
+        let rt = RealRuntime;
+        let err = rt
+            .run_output("absolutely-not-a-real-command-raidhos-xyz", &[])
+            .unwrap_err();
+        // run_output prefixes errors with the command name —
+        // see RealRuntime::run_output.
+        let s = format!("{err}");
+        assert!(
+            s.contains("absolutely-not-a-real-command-raidhos-xyz"),
+            "got: {s}"
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn real_runtime_run_output_returns_stdout() {
+        let rt = RealRuntime;
+        let out = rt.run_output("echo", &["hello-raidhos"]).unwrap();
+        let s = String::from_utf8_lossy(&out);
+        assert!(s.contains("hello-raidhos"));
+    }
+
+    #[test]
+    fn real_runtime_create_dir_all_succeeds() {
+        let rt = RealRuntime;
+        let path = std::env::temp_dir().join(format!(
+            "raidhos-rt-mkdir-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        assert!(rt.create_dir_all(&path).is_ok());
+        assert!(path.exists());
+        let _ = std::fs::remove_dir_all(&path);
+    }
+
+    #[test]
+    fn real_runtime_create_dir_all_errors_on_unwritable_parent() {
+        let rt = RealRuntime;
+        // /nonexistent-root/foo can't be created because /nonexistent-root
+        // doesn't exist and we can't mkdir under /.
+        // On most systems this fails with EACCES or ENOENT.
+        let res = rt.create_dir_all(Path::new("/proc/cannot-create-here/x"));
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn real_runtime_mount_base_default() {
+        let rt = RealRuntime;
+        assert_eq!(rt.mount_base(), PathBuf::from("/mnt"));
+    }
+
+    #[test]
+    fn mock_runtime_create_dir_all_real_io_branch() {
+        let mut rt = MockRuntime::new();
+        rt.fake_mkdir = false;
+        let path = std::env::temp_dir().join(format!(
+            "raidhos-mock-real-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        assert!(rt.create_dir_all(&path).is_ok());
+        assert!(path.exists());
+        let _ = std::fs::remove_dir_all(&path);
+    }
+
+    #[test]
+    fn mock_runtime_create_dir_all_real_io_branch_errors() {
+        let mut rt = MockRuntime::new();
+        rt.fake_mkdir = false;
+        let res = rt.create_dir_all(Path::new("/proc/cannot-create-here/x"));
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn mock_outcome_clone_debug() {
+        let a = MockOutcome::Ok(vec![1, 2, 3]);
+        let b = a.clone();
+        let s = format!("{a:?}");
+        assert!(s.contains("Ok"));
+        let _ = b;
+        let c = MockOutcome::Err("x".into());
+        assert!(format!("{c:?}").contains("Err"));
+    }
 }
