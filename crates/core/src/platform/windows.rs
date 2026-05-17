@@ -14,8 +14,7 @@
 use crate::parsers::parse_get_disk_json;
 use crate::runtime::{RealRuntime, Runtime};
 use crate::{
-    validate_device_path, CoreError, DiskInfo, InstallRequest, PartitionInfo, ProgressEvent,
-    ProgressSink, Result,
+    CoreError, DiskInfo, InstallRequest, PartitionInfo, ProgressEvent, ProgressSink, Result,
 };
 
 pub fn list_disks() -> Result<Vec<DiskInfo>> {
@@ -108,11 +107,14 @@ fn validate_install(
     sink: &dyn ProgressSink,
     disks: &[DiskInfo],
 ) -> Result<()> {
-    if req.simulator {
-        crate::validate_device_path_simulator(&req.device)?;
+    // Use the target-specific validator so this code path is unit-
+    // testable from any host (Linux CI in particular).
+    let target = if req.simulator {
+        "simulator"
     } else {
-        validate_device_path(&req.device)?;
-    }
+        "windows"
+    };
+    crate::validate_device_path_for_target(&req.device, target)?;
 
     sink.emit(ProgressEvent {
         phase: "validate".to_string(),
@@ -245,7 +247,11 @@ pub(crate) fn extract_disk_number(device: &str) -> Option<u64> {
 
 // Windows-shape device paths are only accepted by
 // `validate_device_path` on Windows hosts.
-#[cfg(all(test, target_os = "windows"))]
+// Tests run cross-platform: the install path's path-shape check now
+// goes through `validate_device_path_for_target("windows", …)` which
+// has no host dependency, so tarpaulin on Linux CI sees these tests
+// execute against the Windows install pipeline through MockRuntime.
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::runtime::{MockOutcome, MockRuntime};

@@ -390,7 +390,56 @@ pub fn validate_device_path_simulator(device: &str) -> Result<()> {
     validate_device_path_inner(device, true)
 }
 
-fn validate_device_path_inner(device: &str, simulator: bool) -> Result<()> {
+/// Target-OS-aware validator. Same checks as
+/// [`validate_device_path`] but with the shape gate decoupled from
+/// the host's compile-time `target_os`. Used by the per-platform
+/// `install_with` implementations so they remain unit-testable
+/// from any host (Linux CI tarpaulin in particular).
+///
+/// `target` accepts `"linux"`, `"macos"`, `"windows"`, or
+/// `"simulator"` (= skip the shape gate).
+pub(crate) fn validate_device_path_for_target(device: &str, target: &str) -> Result<()> {
+    // Shared checks: empty / overlong / shell-metachar / path traversal.
+    validate_device_path_common(device)?;
+    match target {
+        "simulator" => Ok(()),
+        "linux" => {
+            if device.starts_with("/dev/") {
+                Ok(())
+            } else {
+                Err(CoreError::Validation(
+                    "device must be an absolute /dev path".to_string(),
+                ))
+            }
+        }
+        "macos" => {
+            if device.starts_with("/dev/disk") {
+                Ok(())
+            } else {
+                Err(CoreError::Validation(
+                    "device must be a /dev/diskN path".to_string(),
+                ))
+            }
+        }
+        "windows" => {
+            let lower = device.to_ascii_lowercase();
+            if lower.starts_with("\\\\.\\physicaldrive")
+                || lower.starts_with("\\\\?\\physicaldrive")
+            {
+                Ok(())
+            } else {
+                Err(CoreError::Validation(
+                    "device must be a \\\\.\\PhysicalDriveN path".to_string(),
+                ))
+            }
+        }
+        other => Err(CoreError::Validation(format!(
+            "unknown validation target: {other}"
+        ))),
+    }
+}
+
+fn validate_device_path_common(device: &str) -> Result<()> {
     if device.is_empty() {
         return Err(CoreError::Validation("device path is empty".to_string()));
     }
@@ -399,12 +448,10 @@ fn validate_device_path_inner(device: &str, simulator: bool) -> Result<()> {
             "device path is unreasonably long".to_string(),
         ));
     }
-
     // `\\` is *not* in this list because Windows device paths
     // legitimately contain backslashes (`\\.\PhysicalDriveN`). The
-    // per-OS shape check below still rejects malformed paths on every
-    // platform — see e.g. the `starts_with("\\\\.\\PhysicalDrive")`
-    // check in the Windows branch.
+    // per-OS shape check still rejects malformed paths on every
+    // platform.
     const FORBIDDEN: &[char] = &[
         ';', '|', '&', '$', '`', '\n', '\r', '\t', '<', '>', '"', '\'', '*', '?', '(', ')',
     ];
@@ -413,47 +460,28 @@ fn validate_device_path_inner(device: &str, simulator: bool) -> Result<()> {
             "device path contains forbidden character".to_string(),
         ));
     }
-
     if device.contains("..") {
         return Err(CoreError::Validation(
             "device path may not contain '..'".to_string(),
         ));
     }
-
-    if simulator {
-        // Simulator mode: skip the per-OS shape gate. The caller is
-        // explicitly opting in to targeting a sparse file outside /dev.
-        return Ok(());
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        if !device.starts_with("/dev/") {
-            return Err(CoreError::Validation(
-                "device must be an absolute /dev path".to_string(),
-            ));
-        }
-    }
-    #[cfg(target_os = "macos")]
-    {
-        if !device.starts_with("/dev/disk") {
-            return Err(CoreError::Validation(
-                "device must be a /dev/diskN path".to_string(),
-            ));
-        }
-    }
-    #[cfg(target_os = "windows")]
-    {
-        let lower = device.to_ascii_lowercase();
-        let looks_physical =
-            lower.starts_with("\\\\.\\physicaldrive") || lower.starts_with("\\\\?\\physicaldrive");
-        if !looks_physical {
-            return Err(CoreError::Validation(
-                "device must be a \\\\.\\PhysicalDriveN path".to_string(),
-            ));
-        }
-    }
     Ok(())
+}
+
+fn validate_device_path_inner(device: &str, simulator: bool) -> Result<()> {
+    let target = if simulator {
+        "simulator"
+    } else if cfg!(target_os = "linux") {
+        "linux"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else if cfg!(target_os = "windows") {
+        "windows"
+    } else {
+        // Unsupported host: only the common checks apply.
+        return validate_device_path_common(device);
+    };
+    validate_device_path_for_target(device, target)
 }
 
 #[cfg(test)]

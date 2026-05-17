@@ -14,8 +14,7 @@
 use crate::parsers::parse_disks_plist;
 use crate::runtime::{RealRuntime, Runtime};
 use crate::{
-    validate_device_path, CoreError, DiskInfo, InstallRequest, PartitionInfo, ProgressEvent,
-    ProgressSink, Result,
+    CoreError, DiskInfo, InstallRequest, PartitionInfo, ProgressEvent, ProgressSink, Result,
 };
 use std::path::PathBuf;
 
@@ -120,11 +119,10 @@ fn validate_install(
     sink: &dyn ProgressSink,
     disks: &[DiskInfo],
 ) -> Result<()> {
-    if req.simulator {
-        crate::validate_device_path_simulator(&req.device)?;
-    } else {
-        validate_device_path(&req.device)?;
-    }
+    // Use the target-specific validator so this code path is unit-
+    // testable from any host (Linux CI in particular).
+    let target = if req.simulator { "simulator" } else { "macos" };
+    crate::validate_device_path_for_target(&req.device, target)?;
 
     sink.emit(ProgressEvent {
         phase: "validate".to_string(),
@@ -215,7 +213,11 @@ fn cp_recursive(rt: &dyn Runtime, src: &std::path::Path, dst: &std::path::Path) 
 
 // macOS-shape device paths are only accepted by `validate_device_path`
 // on macOS hosts; gate to keep these tests Mac-only.
-#[cfg(all(test, target_os = "macos"))]
+// Tests run cross-platform: the install path's path-shape check now
+// goes through `validate_device_path_for_target("macos", …)` which
+// has no host dependency, so tarpaulin on Linux CI sees these tests
+// execute against the macOS install pipeline through MockRuntime.
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::runtime::{MockOutcome, MockRuntime};

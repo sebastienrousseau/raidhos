@@ -13,8 +13,7 @@
 use crate::parsers::{parse_lsblk_disks, parse_lsblk_partitions};
 use crate::runtime::{RealRuntime, Runtime};
 use crate::{
-    validate_device_path, CoreError, DiskInfo, InstallRequest, PartitionInfo, ProgressEvent,
-    ProgressSink, Result,
+    CoreError, DiskInfo, InstallRequest, PartitionInfo, ProgressEvent, ProgressSink, Result,
 };
 
 /// Discovery wrapper using the real runtime.
@@ -147,11 +146,11 @@ fn validate_install(
     sink: &dyn ProgressSink,
     disks: &[DiskInfo],
 ) -> Result<()> {
-    if req.simulator {
-        crate::validate_device_path_simulator(&req.device)?;
-    } else {
-        validate_device_path(&req.device)?;
-    }
+    // Use the target-specific validator so this code path is unit-
+    // testable from any host. Linux callers in production still hit
+    // the same shape check as before.
+    let target = if req.simulator { "simulator" } else { "linux" };
+    crate::validate_device_path_for_target(&req.device, target)?;
 
     sink.emit(ProgressEvent {
         phase: "validate".to_string(),
