@@ -14,6 +14,14 @@
 //! separate work.
 
 #![cfg(target_os = "linux")]
+// The helpers below (`assert_matches`, `assert_disk_identity`,
+// struct fields `rdev` / `size_hint`) are exposed for callers that
+// want a stronger TOCTOU check between the validate step and a
+// specific later operation. The current `install` path only needs
+// the fd-held-for-lifetime guarantee; the comparison helpers are
+// scaffolded for v0.0.2 when the install pipeline gets re-entrant
+// inspection points.
+#![allow(dead_code)]
 
 use raidhos_core::DiskInfo;
 use std::fs::{File, OpenOptions};
