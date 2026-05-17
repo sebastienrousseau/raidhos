@@ -73,9 +73,12 @@ fn install_install_dry_run_against_invalid_device_fails_cleanly() {
 }
 
 #[test]
+#[cfg(unix)]
 fn argv_length_cap_rejects_huge_argv() {
     // Build a single argument longer than 64 KiB so the cap fires
-    // before clap sees the request.
+    // before clap sees the request. Unix-only because Windows
+    // CreateProcess refuses commandlines past ~32 KiB before our
+    // own cap can run.
     let big = "x".repeat(100_000);
     let out = helper().arg(&big).output().expect("spawn");
     assert_eq!(out.status.code(), Some(2));

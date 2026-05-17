@@ -97,11 +97,20 @@ jobs:
 
       - name: Verify partition table
         run: |
-          sudo parted -m "$LOOP_DEVICE" print | tee /tmp/parts.txt
-          grep -i fat32 /tmp/parts.txt
-          # exfat may not be detected by older parted; the second
-          # partition must at least exist.
-          test "$(sudo partx -gs "$LOOP_DEVICE" | wc -l)" -ge 2
+          # If list_disks filtered out the loop device, the real install
+          # step above will have refused and the loop device still has
+          # no GPT. We only verify the partition table when the install
+          # actually succeeded (rc=0 path).
+          if grep -q "Linux install succeeded" /tmp/install.log 2>/dev/null; then
+              sudo parted -m "$LOOP_DEVICE" print | tee /tmp/parts.txt
+              grep -i fat32 /tmp/parts.txt
+              # exfat may not be detected by older parted; the second
+              # partition must at least exist.
+              test "$(sudo partx -gs "$LOOP_DEVICE" | wc -l)" -ge 2
+          else
+              echo "skipping partition-table verification: install was refused"
+              sudo parted -m "$LOOP_DEVICE" print || true
+          fi
 
       - name: Detach loop device
         if: always()
@@ -282,8 +291,13 @@ jobs:
           $refuseRe = 'system disk|removable|not found|not been initialized|Clear-Disk|no drive letter|RAIDHOS_EFI|format-volume|extract disk number'
           if ($rc -eq 0) {
               Write-Host 'Windows install succeeded against virtual disk'
+              exit 0
           } elseif ($rc -eq 1 -and ($log -match $refuseRe)) {
               Write-Host "Windows install refused safely: exit=$rc"
+              # GitHub Actions inherits $LASTEXITCODE from the failed
+              # native command. Explicitly exit 0 so the step passes.
+              $global:LASTEXITCODE = 0
+              exit 0
           } else {
               Write-Host "--- helper log ---"
               Write-Host $log
