@@ -95,3 +95,101 @@ pub fn assert_disk_identity(
     // still gives us TOCTOU-after-this-point safety.
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn disk(id: &str) -> DiskInfo {
+        DiskInfo {
+            id: id.to_string(),
+            model: "Test".into(),
+            size_bytes: 0,
+            removable: true,
+            mountpoints: Vec::new(),
+            is_system: false,
+        }
+    }
+
+    // We can't easily build a real DeviceHandle in a unit test (it owns
+    // a File on a /dev/* node), so we synthesise one with a regular
+    // file in /tmp. The rdev/size fields are exercised directly below;
+    // assert_matches and assert_disk_identity only care about the
+    // pinned values.
+    fn synthetic_handle(rdev: u64, size: u64) -> DeviceHandle {
+        let p = std::env::temp_dir().join(format!(
+            "raidhos-toctou-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::write(&p, b"x").unwrap();
+        let file = std::fs::OpenOptions::new().read(true).open(&p).unwrap();
+        let _ = std::fs::remove_file(&p);
+        DeviceHandle {
+            _file: file,
+            rdev,
+            size_hint: size,
+        }
+    }
+
+    #[test]
+    fn assert_disk_identity_accepts_matching_path() {
+        let h = synthetic_handle(0x803, 1024);
+        let d = disk("/dev/sdb");
+        assert!(assert_disk_identity(&h, &d, "/dev/sdb").is_ok());
+    }
+
+    #[test]
+    fn assert_disk_identity_rejects_mismatched_path() {
+        let h = synthetic_handle(0x803, 1024);
+        let d = disk("/dev/sdb");
+        let err = assert_disk_identity(&h, &d, "/dev/sdc").unwrap_err();
+        assert!(err.contains("/dev/sdb"));
+        assert!(err.contains("/dev/sdc"));
+    }
+
+    #[test]
+    fn pin_device_refuses_missing_path() {
+        let res = pin_device("/no/such/raidhos-test-path-xyz");
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn pin_device_refuses_regular_file() {
+        // A regular file has rdev == 0, so pin_device refuses.
+        let p = std::env::temp_dir().join(format!(
+            "raidhos-toctou-reg-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::write(&p, b"not a device").unwrap();
+        let res = pin_device(p.to_str().unwrap());
+        let _ = std::fs::remove_file(&p);
+        assert!(res.is_err());
+        let msg = res.unwrap_err();
+        assert!(
+            msg.contains("not a block device") || msg.contains("open"),
+            "unexpected error: {msg}",
+        );
+    }
+
+    #[test]
+    fn device_handle_exposes_pinned_fields() {
+        let h = synthetic_handle(0xdead, 4096);
+        assert_eq!(h.rdev, 0xdead);
+        assert_eq!(h.size_hint, 4096);
+    }
+
+    #[test]
+    fn assert_matches_rejects_missing_path() {
+        let h = synthetic_handle(0x803, 1024);
+        let err = assert_matches(&h, "/no/such/path-raidhos-xyz").unwrap_err();
+        assert!(err.contains("re-stat"));
+    }
+}
