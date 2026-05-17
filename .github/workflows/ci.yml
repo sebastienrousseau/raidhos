@@ -96,7 +96,7 @@ jobs:
           # scaffolding.
           cargo tarpaulin \
             -p raidhos-cli \
-            --follow-exec \
+            --engine llvm \
             --exclude-files 'crates/core/**' \
             --exclude-files 'crates/priv-helper/**' \
             --exclude-files 'crates/ui-tauri/**' \
@@ -107,7 +107,7 @@ jobs:
         run: |
           cargo tarpaulin \
             -p raidhos-priv-helper \
-            --follow-exec \
+            --engine llvm \
             --exclude-files 'crates/core/**' \
             --exclude-files 'crates/cli/**' \
             --exclude-files 'crates/ui-tauri/**' \
