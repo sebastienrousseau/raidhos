@@ -88,3 +88,201 @@ pub enum CatalogAction {
         key_dir: String,
     },
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::CommandFactory;
+
+    #[test]
+    fn cli_command_factory_renders_help() {
+        let cmd = Cli::command();
+        let mut buf = Vec::new();
+        cmd.clone().write_long_help(&mut buf).unwrap();
+        let help = String::from_utf8(buf).unwrap();
+        assert!(help.contains("raidhos-cli"));
+        assert!(help.contains("Discover, validate, and install RaidhOS"));
+    }
+
+    #[test]
+    fn parses_list_disks() {
+        let cli = Cli::try_parse_from(["raidhos-cli", "list-disks"]).unwrap();
+        assert!(matches!(cli.command, Commands::ListDisks));
+    }
+
+    #[test]
+    fn parses_scan_isos_with_default_dirs() {
+        let cli = Cli::try_parse_from(["raidhos-cli", "scan-isos"]).unwrap();
+        if let Commands::ScanIsos { dirs } = cli.command {
+            assert!(dirs.contains(&"/home".to_string()));
+        } else {
+            panic!("expected ScanIsos");
+        }
+    }
+
+    #[test]
+    fn parses_scan_isos_with_custom_dirs() {
+        let cli = Cli::try_parse_from(["raidhos-cli", "scan-isos", "--dirs", "/a,/b,/c"]).unwrap();
+        if let Commands::ScanIsos { dirs } = cli.command {
+            assert_eq!(
+                dirs,
+                vec!["/a".to_string(), "/b".to_string(), "/c".to_string()]
+            );
+        } else {
+            panic!("expected ScanIsos");
+        }
+    }
+
+    #[test]
+    fn parses_install_defaults_to_dry_run_and_wipe() {
+        let cli = Cli::try_parse_from(["raidhos-cli", "install", "--device", "/dev/sdb"]).unwrap();
+        if let Commands::Install {
+            device,
+            payload_version,
+            wipe,
+            dry_run,
+            allow_write,
+        } = cli.command
+        {
+            assert_eq!(device, "/dev/sdb");
+            assert_eq!(payload_version, "0.1.0");
+            assert!(wipe);
+            assert!(dry_run);
+            assert!(!allow_write);
+        } else {
+            panic!("expected Install");
+        }
+    }
+
+    #[test]
+    fn install_requires_device() {
+        let res = Cli::try_parse_from(["raidhos-cli", "install"]);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn parses_write_config() {
+        let cli = Cli::try_parse_from([
+            "raidhos-cli",
+            "write-config",
+            "--mount-path",
+            "/mnt/data",
+            "--config-path",
+            "/tmp/boot.json",
+        ])
+        .unwrap();
+        if let Commands::WriteConfig {
+            mount_path,
+            config_path,
+        } = cli.command
+        {
+            assert_eq!(mount_path, "/mnt/data");
+            assert_eq!(config_path, "/tmp/boot.json");
+        } else {
+            panic!("expected WriteConfig");
+        }
+    }
+
+    #[test]
+    fn parses_catalog_list() {
+        let cli = Cli::try_parse_from(["raidhos-cli", "catalog", "list"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Catalog {
+                action: CatalogAction::List
+            }
+        ));
+    }
+
+    #[test]
+    fn parses_catalog_verify_with_explicit_args() {
+        let cli = Cli::try_parse_from([
+            "raidhos-cli",
+            "catalog",
+            "verify",
+            "--slug",
+            "ubuntu",
+            "--iso",
+            "/i.iso",
+            "--sums",
+            "/s.sums",
+            "--sig",
+            "/s.gpg",
+        ])
+        .unwrap();
+        if let Commands::Catalog {
+            action:
+                CatalogAction::Verify {
+                    slug,
+                    iso,
+                    sums,
+                    sig,
+                    key_dir,
+                },
+        } = cli.command
+        {
+            assert_eq!(slug, "ubuntu");
+            assert_eq!(iso, "/i.iso");
+            assert_eq!(sums, "/s.sums");
+            assert_eq!(sig, "/s.gpg");
+            assert_eq!(key_dir, "catalog/keys");
+        } else {
+            panic!("expected Catalog::Verify");
+        }
+    }
+
+    #[test]
+    fn parses_catalog_verify_with_override_key_dir() {
+        let cli = Cli::try_parse_from([
+            "raidhos-cli",
+            "catalog",
+            "verify",
+            "--slug",
+            "ubuntu",
+            "--iso",
+            "/i.iso",
+            "--sums",
+            "/s.sums",
+            "--sig",
+            "/s.gpg",
+            "--key-dir",
+            "/etc/keys",
+        ])
+        .unwrap();
+        if let Commands::Catalog {
+            action: CatalogAction::Verify { key_dir, .. },
+        } = cli.command
+        {
+            assert_eq!(key_dir, "/etc/keys");
+        } else {
+            panic!("expected Catalog::Verify");
+        }
+    }
+
+    #[test]
+    fn rejects_unknown_subcommand() {
+        let res = Cli::try_parse_from(["raidhos-cli", "definitely-not-a-subcommand"]);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn install_payload_version_can_be_overridden() {
+        let cli = Cli::try_parse_from([
+            "raidhos-cli",
+            "install",
+            "--device",
+            "/dev/sdb",
+            "--payload-version",
+            "0.5.0",
+        ])
+        .unwrap();
+        if let Commands::Install {
+            payload_version, ..
+        } = cli.command
+        {
+            assert_eq!(payload_version, "0.5.0");
+        } else {
+            panic!("expected Install");
+        }
+    }
+}
