@@ -7,15 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Ventoy gap closures
+
+Nine of the 25 gaps tracked in
+[`docs/VENTOY_COMPARISON.md`](docs/VENTOY_COMPARISON.md) are
+closed in v0.0.1; two are scaffolded with API surface +
+tooling, with the destructive paths deferred to v0.0.2.
+
+| Gap | Status | Surface |
+|---|---|---|
+| G7 .EFI binary chainload | closed | grub.cfg renderer detects `.efi` and emits `chainloader` |
+| G8 NTFS data partition | closed | `--data-fs ntfs` (Linux pipeline) |
+| G9 ext4 / Btrfs / XFS data partition | closed | `--data-fs ext4 \| btrfs \| xfs` (Linux pipeline) |
+| G11 menu_class + menu_tip per ISO | closed | `BootEntryConfig.class` + `tip` |
+| G13 GRUB password protection | closed | `BootConfig.grub_superuser` + `grub_password_pbkdf2` (PBKDF2 only) |
+| G17 image_blacklist | closed | `BootEntryConfig.hidden=true` |
+| G18 per-ISO persistence backend | closed | `BootEntryConfig.persistence_backend` |
+| G19 per-distro persistence labels | closed | `raidhos_core::expected_persistence_label` (30-distro table) |
+| G24 user-supplied checksum | closed | `verify_iso_sha256` / `verify_iso_companion_sha256` |
+| G1 Legacy BIOS layout | scaffolded | `--bios-compat` flag; destructive path returns `NotImplemented` |
+| G3 Secure Boot signed shim | scaffolded | `tools/secure-boot/{generate-mok,sign-bootx64}.sh` + enrolment helper |
+
 ### Changed
 
-- `raidhos-core` line coverage jumped from ~68% to **92.45%**
-  (735/795 lines covered) after the
+- `raidhos-core` line coverage jumped from ~68% to **91.21%**
+  (778/853 lines covered) after the
   `validate_device_path_for_target` refactor. The macOS, Windows,
   *and* Linux `install_with` test modules no longer need a matching
   `target_os` to run; the path-shape gate is decoupled from the
   host's compile-time `target_os`. CI coverage gate raised from
   65% to 90%.
+- Test count: `raidhos-core` 201 unit + 26 doctest, `raidhos-ui`
+  48, `raidhos-cli` 14, `raidhos-priv-helper` 9 seccomp + 6 toctou
+  + 7 integration. Total: 311+ tests across the workspace.
 
 ### Added
 
@@ -35,6 +59,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accepts the request shape and emits the dry-run completion
   event; the actual `grub-install --target=i386-pc` embedding
   is deferred to v0.0.2 (scaffolds Ventoy gap G1).
+- `DataFilesystem` enum + `data_filesystem` field on
+  `InstallRequest`, plus `--data-fs <FS>` flag on the CLI and
+  the privileged helper. Variants: `exfat` (default), `ntfs`,
+  `ext4`, `btrfs`, `xfs`. Linux pipeline branches on the variant
+  with per-filesystem `mkfs.*` formatters, each refusing cleanly
+  with a per-package install hint (`ntfs-3g`, `e2fsprogs`,
+  `btrfs-progs`, `xfsprogs`) when the binary is missing. Closes
+  Ventoy gap G8 and the lower half of G9.
+- Per-ISO menu metadata on `BootEntryConfig`:
+  - `class: String` → `--class TAG` on the rendered menuentry,
+    sanitised against GRUB injection. Closes Ventoy gap G11.
+  - `tip: String` → GRUB comment above the menuentry. G11.
+  - `hidden: bool` → renderer skips the entry entirely. Closes
+    Ventoy gap G17.
+  - `persistence_backend: String` → appends `persistent
+    persistent-path=<value>` to the live-kernel command line on
+    casper + live boot flows. Closes Ventoy gap G18.
+- GRUB password protection: `grub_superuser` + `grub_password_pbkdf2`
+  on `BootConfig`. PBKDF2-only — plaintext passwords are refused
+  by `is_grub_pbkdf2_hash()`. The username is sanitised to
+  `[A-Za-z0-9_-]+`; the hash flows through unmodified (sanitising
+  would corrupt the PBKDF2 output). Closes Ventoy gap G13.
+- `.EFI` direct chainload: the grub.cfg renderer detects
+  `.efi` (case-insensitive) at the end of an entry's `path`
+  and emits a single `chainloader "($root)<path>"` line instead
+  of the loopback-ISO shim. Useful for memtest86+, firmware
+  updaters, and other raw UEFI payloads. Closes Ventoy gap G7.
+- `raidhos_core::expected_persistence_label(slug)` — maps a
+  catalog slug to the volume label that distro's initramfs
+  hunts for at boot (`casper-rw`, `MX-Persist`, `vtoycow`,
+  `kali-persistence`, `writable`, `live-rw`, etc.). 30 distro
+  entries across Ubuntu/Debian/MX/Arch/Kali/Fedora/CloneZilla/
+  Kaspersky/Tails. Closes Ventoy gap G19.
 - `--simulator <FILE>` + `--simulator-size-mb N` on
   `raidhos-cli install` — non-destructive preview against a
   sparse file. Targets the same install pipeline as a real USB.
