@@ -21,10 +21,10 @@ expect and which they need to wait for or contribute.
 | Language / safety | C, hand-rolled GRUB patches | Rust `#![forbid(unsafe_code)]` workspace |
 | ISO formats | ISO, WIM, IMG, VHD(x), EFI | ISO only |
 | Boot modes | Legacy BIOS, IA32/x86_64/ARM64/MIPS64 UEFI, Secure Boot | UEFI x86_64 (Secure Boot scaffolded, not signed) |
-| Filesystems on data partition | FAT32, exFAT, NTFS, UDF, XFS, Btrfs, ext2/3/4 | FAT32 (ESP) + exFAT (DATA) |
-| Plugin system | 15+ plugin types | None |
-| Themes | GRUB2 themes, ListView / TreeView toggle | Single grub.cfg generator |
-| Persistence | Per-ISO backend file map (Ubuntu, MX, Arch, Mint, Kali, …) | Single overlay file (Linux) |
+| Filesystems on data partition | FAT32, exFAT, NTFS, UDF, XFS, Btrfs, ext2/3/4 | FAT32 (ESP) + exFAT / NTFS / ext4 / Btrfs / XFS (DATA, opt-in via `--data-fs`) |
+| Plugin system | 15+ plugin types | Subset: `menu_class`, `menu_tip`, password (PBKDF2), image_blacklist, persistence map — closed in v0.0.1 |
+| Themes | GRUB2 themes, ListView / TreeView toggle | Single grub.cfg generator (theme support via the standard GRUB theme file) |
+| Persistence | Per-ISO backend file map (Ubuntu, MX, Arch, Mint, Kali, …) | Per-ISO `persistence_backend` + 30-entry per-distro label table (`expected_persistence_label`); single overlay also still supported |
 | Auto-install | Kickstart / preseed / autounattend.xml + variable expansion | Not implemented |
 | Browse local disk | F2 hotkey, boot files from internal drives | Not implemented |
 | Checksum verification | MD5/SHA-1/SHA-256/SHA-512 against companion `VENTOY_CHECKSUM` | SHA-256 + GPG against bundled catalog |

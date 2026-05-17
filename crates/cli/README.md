@@ -157,6 +157,31 @@ shell wrapper around a single subcommand:
 
 # 06 — round-trip a boot.json into a mounted DATA partition.
 ./examples/06-write-config.sh
+
+# 07 — probe validate_device_path() against several strings.
+./examples/07-validate-device.sh
+
+# 08 — non-destructive install preview against a sparse file.
+./examples/08-install-simulator.sh
+```
+
+Newer install flags shipped with v0.0.1:
+
+```bash
+# Pick a non-default filesystem for the DATA partition.
+# Closes Ventoy gap G8 (NTFS) and G9 (ext4/Btrfs/XFS).
+raidhos-cli install --device /dev/sdX --data-fs ntfs   --dry-run
+raidhos-cli install --device /dev/sdX --data-fs ext4   --dry-run
+raidhos-cli install --device /dev/sdX --data-fs btrfs  --dry-run
+raidhos-cli install --device /dev/sdX --data-fs xfs    --dry-run
+
+# Opt-in Legacy-BIOS-bootable layout (scaffolded in v0.0.1; full
+# i386-pc GRUB embedding lands in v0.0.2).
+raidhos-cli install --device /dev/sdX --bios-compat --dry-run
+
+# Non-destructive preview against a sparse file.
+raidhos-cli install --simulator /tmp/raidhos.img --simulator-size-mb 1024 \
+    --wipe --allow-write
 ```
 
 Example index: [`examples/README.md`](examples/README.md).
