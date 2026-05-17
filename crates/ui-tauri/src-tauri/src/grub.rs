@@ -18,6 +18,23 @@ pub fn render_grub_cfg(config: &BootConfig, data_label: &str) -> String {
     if let Some(default) = &config.default_entry {
         out.push_str(&format!("set default=\"{}\"\n", sanitize(default)));
     }
+    // Ventoy gap G13: superuser + PBKDF2 password gate. Both must
+    // be set together; a hash-without-superuser would be silently
+    // ignored by GRUB, and a superuser-without-hash would lock the
+    // user out. The hash format check rejects plaintext passwords
+    // (the most common foot-gun).
+    if !config.grub_superuser.is_empty() && is_grub_pbkdf2_hash(&config.grub_password_pbkdf2) {
+        let user = sanitize_username(&config.grub_superuser);
+        out.push_str(&format!("set superusers=\"{user}\"\n"));
+        // The hash is the literal output of grub-mkpasswd-pbkdf2
+        // — it contains '.' '/' '$' but no characters that escape
+        // GRUB's string parsing, so it goes through unmodified.
+        // Sanitising it would corrupt the hash.
+        out.push_str(&format!(
+            "password_pbkdf2 {user} {}\n",
+            config.grub_password_pbkdf2.trim()
+        ));
+    }
     out.push_str("insmod part_gpt\n");
     out.push_str("insmod fat\n");
     out.push_str("insmod exfat\n");
@@ -143,6 +160,55 @@ pub fn path_prefix(path: &str) -> String {
     }
 }
 
+/// Strictly validate that a string looks like the output of
+/// `grub-mkpasswd-pbkdf2`. Format:
+///
+///   `grub.pbkdf2.sha512.<rounds>.<salt-hex>.<hash-hex>`
+///
+/// Rejects empty strings, plaintext passwords, and anything that
+/// doesn't carry the four-segment shape. Defence against a user
+/// mistakenly pasting their actual password into the field.
+fn is_grub_pbkdf2_hash(s: &str) -> bool {
+    let s = s.trim();
+    if !s.starts_with("grub.pbkdf2.sha512.") {
+        return false;
+    }
+    // Split on '.' — expect exactly 6 segments
+    //   ["grub", "pbkdf2", "sha512", "<rounds>", "<salt>", "<hash>"]
+    let segs: Vec<&str> = s.split('.').collect();
+    if segs.len() != 6 {
+        return false;
+    }
+    // Rounds is a decimal integer ≥ 1. Avoid `is_none_or` (stable
+    // since 1.82) to keep the workspace's 1.78 MSRV.
+    match segs[3].parse::<u32>() {
+        Ok(n) if n > 0 => {}
+        _ => return false,
+    }
+    // Salt + hash are hex; PBKDF2-SHA512 produces 128-hex-char (64-
+    // byte) output. We don't pin the salt length — grub accepts
+    // any positive even-length hex. But both must be hex.
+    segs[4].chars().all(|c| c.is_ascii_hexdigit())
+        && !segs[4].is_empty()
+        && segs[5].chars().all(|c| c.is_ascii_hexdigit())
+        && !segs[5].is_empty()
+}
+
+/// Sanitise a GRUB username: alphanumerics, underscore, hyphen
+/// only. Empty input → "admin" so the rendered output remains
+/// valid grub.cfg syntax even if the caller passes whitespace.
+fn sanitize_username(s: &str) -> String {
+    let cleaned: String = s
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
+        .collect();
+    if cleaned.is_empty() {
+        "admin".to_string()
+    } else {
+        cleaned
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -205,6 +271,8 @@ mod tests {
     fn render_contains_search_label() {
         let config = BootConfig {
             default_entry: None,
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
             entries: vec![],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -215,6 +283,8 @@ mod tests {
     fn render_menuentry_contains_loopback() {
         let config = BootConfig {
             default_entry: None,
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
             entries: vec![BootEntryConfig {
                 title: "Test".to_string(),
                 path: "/boot/isos/test.iso".to_string(),
@@ -235,6 +305,8 @@ mod tests {
     fn render_neutralises_hostile_title() {
         let config = BootConfig {
             default_entry: None,
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
             entries: vec![BootEntryConfig {
                 title: "evil\" } echo PWNED { ".to_string(),
                 path: "test.iso".to_string(),
@@ -280,6 +352,8 @@ mod tests {
         e.class = "linux".to_string();
         let config = BootConfig {
             default_entry: None,
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
             entries: vec![e],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -293,6 +367,8 @@ mod tests {
     fn render_omits_class_when_empty() {
         let config = BootConfig {
             default_entry: None,
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
             entries: vec![entry("Plain", "p.iso")],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -306,6 +382,8 @@ mod tests {
         e.class = "linux; rm -rf /".to_string();
         let config = BootConfig {
             default_entry: None,
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
             entries: vec![e],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -331,6 +409,8 @@ mod tests {
         e.tip = "Rolling-release Linux".to_string();
         let config = BootConfig {
             default_entry: None,
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
             entries: vec![e],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -344,6 +424,8 @@ mod tests {
     fn render_omits_tip_when_empty() {
         let config = BootConfig {
             default_entry: None,
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
             entries: vec![entry("Plain", "p.iso")],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -356,6 +438,8 @@ mod tests {
         hidden.hidden = true;
         let config = BootConfig {
             default_entry: None,
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
             entries: vec![entry("Shown", "shown.iso"), hidden],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -372,11 +456,156 @@ mod tests {
         hidden_b.hidden = true;
         let config = BootConfig {
             default_entry: None,
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
             entries: vec![hidden_a, hidden_b],
         };
         let out = render_grub_cfg(&config, "DATA");
         // Boilerplate is still there but no menuentry blocks.
         assert!(out.contains("search --no-floppy --label DATA"));
         assert!(!out.contains("menuentry"));
+    }
+
+    // ---------------------------------------------------------------
+    // Ventoy gap G13: GRUB password protection
+    // ---------------------------------------------------------------
+
+    const VALID_HASH: &str =
+        "grub.pbkdf2.sha512.10000.aabbccdd.eeff00112233445566778899aabbccddeeff";
+
+    #[test]
+    fn is_grub_pbkdf2_hash_accepts_canonical_output() {
+        assert!(is_grub_pbkdf2_hash(VALID_HASH));
+    }
+
+    #[test]
+    fn is_grub_pbkdf2_hash_trims_whitespace() {
+        assert!(is_grub_pbkdf2_hash(&format!("  {VALID_HASH}  \n")));
+    }
+
+    #[test]
+    fn is_grub_pbkdf2_hash_rejects_plaintext_password() {
+        assert!(!is_grub_pbkdf2_hash("hunter2"));
+        assert!(!is_grub_pbkdf2_hash("password123"));
+        assert!(!is_grub_pbkdf2_hash(""));
+    }
+
+    #[test]
+    fn is_grub_pbkdf2_hash_rejects_wrong_prefix() {
+        assert!(!is_grub_pbkdf2_hash("grub.pbkdf2.sha256.10000.aabb.ccdd"));
+        assert!(!is_grub_pbkdf2_hash("md5.deadbeef"));
+    }
+
+    #[test]
+    fn is_grub_pbkdf2_hash_rejects_wrong_segment_count() {
+        // 5 segments instead of 6
+        assert!(!is_grub_pbkdf2_hash("grub.pbkdf2.sha512.10000.aabbcc"));
+        // 7 segments instead of 6
+        assert!(!is_grub_pbkdf2_hash("grub.pbkdf2.sha512.10000.aa.bb.cc"));
+    }
+
+    #[test]
+    fn is_grub_pbkdf2_hash_rejects_zero_rounds() {
+        assert!(!is_grub_pbkdf2_hash(
+            "grub.pbkdf2.sha512.0.aabbccdd.eeff00112233"
+        ));
+    }
+
+    #[test]
+    fn is_grub_pbkdf2_hash_rejects_non_hex_payload() {
+        assert!(!is_grub_pbkdf2_hash(
+            "grub.pbkdf2.sha512.10000.NOTHEX.eeff00112233"
+        ));
+        assert!(!is_grub_pbkdf2_hash(
+            "grub.pbkdf2.sha512.10000.aabbccdd.NOTHEX"
+        ));
+    }
+
+    #[test]
+    fn sanitize_username_filters_non_ident_chars() {
+        assert_eq!(sanitize_username("admin"), "admin");
+        assert_eq!(sanitize_username("op-1"), "op-1");
+        assert_eq!(sanitize_username("op_2"), "op_2");
+        assert_eq!(sanitize_username("admin'; DROP"), "adminDROP");
+        assert_eq!(sanitize_username(""), "admin");
+        // Whitespace-only also collapses to the default "admin".
+        assert_eq!(sanitize_username("   "), "admin");
+    }
+
+    #[test]
+    fn render_emits_password_lines_when_both_set() {
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![entry("Plain", "p.iso")],
+            grub_superuser: "admin".to_string(),
+            grub_password_pbkdf2: VALID_HASH.to_string(),
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        assert!(out.contains("set superusers=\"admin\""));
+        assert!(out.contains(&format!("password_pbkdf2 admin {VALID_HASH}")));
+    }
+
+    #[test]
+    fn render_omits_password_lines_when_superuser_missing() {
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![entry("Plain", "p.iso")],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: VALID_HASH.to_string(),
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        assert!(!out.contains("set superusers"));
+        assert!(!out.contains("password_pbkdf2"));
+    }
+
+    #[test]
+    fn render_omits_password_lines_when_hash_invalid() {
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![entry("Plain", "p.iso")],
+            grub_superuser: "admin".to_string(),
+            grub_password_pbkdf2: "hunter2".to_string(), // plaintext — rejected
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        assert!(!out.contains("set superusers"));
+        assert!(!out.contains("password_pbkdf2"));
+        // The plaintext password must NOT leak into the rendered output.
+        assert!(!out.contains("hunter2"));
+    }
+
+    #[test]
+    fn render_sanitises_superuser_name() {
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![entry("Plain", "p.iso")],
+            // Hostile superuser name containing GRUB metachars.
+            grub_superuser: "admin\"; echo bad".to_string(),
+            grub_password_pbkdf2: VALID_HASH.to_string(),
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        // The injection metachars must not survive in any
+        // password-related directive line.
+        let superusers_line = out
+            .lines()
+            .find(|l| l.starts_with("set superusers="))
+            .expect("superusers line");
+        let password_line = out
+            .lines()
+            .find(|l| l.starts_with("password_pbkdf2 "))
+            .expect("password_pbkdf2 line");
+        for line in [superusers_line, password_line] {
+            assert!(!line.contains(';'), "semicolon survived: {line}");
+            // The closing quote of `superusers=\"X\"` is legitimate;
+            // an attacker-injected `\"` would be a second one. The
+            // sanitised username has no `\"` of its own.
+            let inner_quotes = line.matches('"').count();
+            assert!(
+                inner_quotes <= 2,
+                "extra quotes in {line} (count={inner_quotes})",
+            );
+        }
+        // The sanitised username flows through, sans metachars.
+        assert!(out.contains("set superusers=\"adminechobad\""));
+        assert!(out.contains("password_pbkdf2 adminechobad"));
     }
 }

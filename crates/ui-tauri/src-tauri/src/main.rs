@@ -43,6 +43,18 @@ struct PartitionInfo {
 pub struct BootConfig {
     pub entries: Vec<BootEntryConfig>,
     pub default_entry: Option<String>,
+    /// Optional GRUB superuser name (Ventoy gap G13). When set,
+    /// the renderer emits `set superusers="NAME"` at the top of
+    /// grub.cfg. Empty means no password gating.
+    #[serde(default)]
+    pub grub_superuser: String,
+    /// Optional PBKDF2 hash for the superuser. **Must** be the
+    /// output of `grub-mkpasswd-pbkdf2`, starting with
+    /// `grub.pbkdf2.sha512.…`. The renderer emits
+    /// `password_pbkdf2 NAME HASH`. Plaintext passwords are
+    /// rejected by `is_grub_pbkdf2_hash()`.
+    #[serde(default)]
+    pub grub_password_pbkdf2: String,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -504,6 +516,8 @@ mod tests {
                 hidden: false,
             }],
             default_entry: Some("ubuntu".into()),
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
         };
         let res = write_grub_cfg_to_esp(scratch.display().to_string(), cfg, "DATA".into());
         assert!(res.is_ok(), "got {res:?}");
