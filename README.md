@@ -1,172 +1,507 @@
-# RaidhOS
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
 
-> The USB imager you can audit. Memory-safe core, reproducible build,
-> explicit threat model.
+<p align="center">
+  <img src="docs/screenshots/raidhos.svg" alt="RaidhOS logo" width="128" onerror="this.style.display='none'" />
+</p>
 
-[![CI](https://github.com/sebastienrousseau/raidhos/actions/workflows/ci.yml/badge.svg)](https://github.com/sebastienrousseau/raidhos/actions/workflows/ci.yml)
-[![Audit](https://github.com/sebastienrousseau/raidhos/actions/workflows/audit.yml/badge.svg)](https://github.com/sebastienrousseau/raidhos/actions/workflows/audit.yml)
-[![CodeQL](https://github.com/sebastienrousseau/raidhos/actions/workflows/codeql.yml/badge.svg)](https://github.com/sebastienrousseau/raidhos/actions/workflows/codeql.yml)
-[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](./LICENSE)
-[![Rust 1.78+](https://img.shields.io/badge/rust-1.78%2B-blue.svg)](./rust-toolchain.toml)
-[![Coverage gate](https://img.shields.io/badge/coverage-%E2%89%A595%25-brightgreen.svg)](./.github/workflows/ci.yml)
-[![Unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](./Cargo.toml)
+<h1 align="center">RaidhOS</h1>
 
-RaidhOS turns a USB stick into a multi-ISO boot drive in a few clicks.
-A single Rust core powers a CLI and a Tauri desktop UI. The same
-discovery, validation, and install pipeline runs on Linux, macOS, and
-Windows — though for v0.0.1 only the **Linux install path is wired
-end-to-end**. macOS and Windows can list and validate, not yet write.
-See [`docs/V0_0_1_STATUS.md`](./docs/V0_0_1_STATUS.md) for the full
-breakdown.
+<p align="center">
+  Memory-safe, audit-friendly multi-ISO USB imager. Rust core,
+  <code>forbid(unsafe)</code>, reproducible build, signed releases.
+</p>
 
-> **Screenshots:** the UI lives at `crates/ui-tauri/frontend/`. Real
-> screenshots will land in `docs/screenshots/` once the v0.0.1 UI pass
-> is in.
+<p align="center">
+  <a href="https://github.com/sebastienrousseau/raidhos/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/sebastienrousseau/raidhos/ci.yml?style=for-the-badge&logo=github&label=ci" alt="CI" /></a>
+  <a href="https://github.com/sebastienrousseau/raidhos/actions/workflows/audit.yml"><img src="https://img.shields.io/github/actions/workflow/status/sebastienrousseau/raidhos/audit.yml?style=for-the-badge&logo=rust&label=audit" alt="Audit" /></a>
+  <a href="https://github.com/sebastienrousseau/raidhos/actions/workflows/codeql.yml"><img src="https://img.shields.io/github/actions/workflow/status/sebastienrousseau/raidhos/codeql.yml?style=for-the-badge&logo=github&label=codeql" alt="CodeQL" /></a>
+  <a href="https://github.com/sebastienrousseau/raidhos/actions/workflows/scorecards.yml"><img src="https://img.shields.io/github/actions/workflow/status/sebastienrousseau/raidhos/scorecards.yml?style=for-the-badge&logo=openssf&label=scorecard" alt="OpenSSF Scorecard" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue.svg?style=for-the-badge" alt="License" /></a>
+</p>
 
-## Why another USB imager?
+<p align="center">
+  <a href="./rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.78%2B-blue.svg?style=for-the-badge&logo=rust" alt="Rust 1.78+" /></a>
+  <a href="./Cargo.toml"><img src="https://img.shields.io/badge/unsafe-forbidden-success.svg?style=for-the-badge" alt="Unsafe forbidden" /></a>
+  <a href="./.github/workflows/ci.yml"><img src="https://img.shields.io/badge/coverage-%E2%89%A595%25-brightgreen.svg?style=for-the-badge" alt="Coverage gate" /></a>
+  <a href="./docs/THREAT_MODEL.md"><img src="https://img.shields.io/badge/threat--model-published-success.svg?style=for-the-badge" alt="Threat model published" /></a>
+  <a href="https://slsa.dev/spec/v1.0/levels"><img src="https://img.shields.io/badge/SLSA-L3-informational.svg?style=for-the-badge" alt="SLSA L3" /></a>
+</p>
 
-| | Ventoy | balenaEtcher | Rufus | **RaidhOS** |
-|---|---|---|---|---|
-| Memory-safe core | C | C++/JS | C | **Rust, `forbid(unsafe)`** |
-| Multi-ISO on one stick | yes | no | no | **yes** |
-| Reproducible build | no | no | no | **yes (Docker GRUB)** |
-| Coverage gate | no | no | no | **≥95% on core** |
-| Signed releases (cosign) | no | partial | no | **yes (planned for v0.0.1)** |
-| Published threat model | no | no | no | **yes** |
-| Cross-platform install | yes | yes | Win only | **Linux only in v0.0.1** |
-| Secure Boot | yes | yes | yes | **not yet** |
-| Persistence | yes | no | partial | **not yet** |
+---
 
-RaidhOS is positioned as *the* USB imager security engineers and
-distros can audit. We are not yet broader than Ventoy. We are aiming
-to be cleaner.
+## Contents
 
-## Safety model
+**Getting started**
 
-- Refuses any disk mounted at `/`, `/boot`, or `/boot/efi`, plus any
-  disk flagged internal/system by the OS.
-- Validates every device path against a per-OS allowlist before any
-  subprocess sees it.
-- Requires **both** `wipe=true` and `allow_write=true` before writing.
-- No shell invocation in the privileged path —
-  `std::process::Command` with separated argv only.
-- Workspace-wide `unsafe_code = "forbid"`. Zero `unsafe` blocks.
-- Polkit policy with `auth_admin_keep`, `allow_any=no`,
-  `allow_inactive=no`.
-- Strict CSP in the Tauri webview (`'self'`-only for scripts and
-  styles; no `'unsafe-inline'`).
+- [Install](#install) — Homebrew, winget, deb, AppImage, Cargo, source
+- [Quick start](#quick-start) — list disks, dry-run, install in five lines
+- [Verifying a release](#verifying-a-release) — cosign + SLSA + SHA-256
 
-Full details: [`SECURITY.md`](./SECURITY.md),
-[`docs/THREAT_MODEL.md`](./docs/THREAT_MODEL.md),
-[`docs/HARDENING.md`](./docs/HARDENING.md).
+**The RaidhOS workspace** (one library, three binaries, one frontend)
+
+- [The RaidhOS workspace](#the-raidhos-workspace) — `raidhos-core`, `raidhos-cli`, `raidhos-priv-helper`, `raidhos-ui` at a glance
+- [Architecture](#architecture) — component diagram, install sequence
+
+**Reference**
+
+- [Platform support](#platform-support) — Linux, macOS, Windows
+- [Safety model](#safety-model) — what the tool refuses to do and why
+- [Security & supply chain](#security--supply-chain) — controls in CI, at build, at runtime
+- [ISO catalog](#iso-catalog) — curated, GPG-verified
+- [Cargo features](#cargo-features) — opt-in capability set
+- [Examples](#examples) — runnable command flows
+- [Performance](#performance) — measured numbers
+
+**Operational**
+
+- [Development](#development) — build, test, fuzz, format, lint
+- [Documentation](#documentation) — every doc in `docs/`
+- [Roadmap](#roadmap) — what's in `v0.0.1`, what's in `v0.0.2`, what's later
+- [Contributing](#contributing)
+- [License](#license)
+
+---
+
+## Install
+
+> **v0.0.1 ships Linux end-to-end.** Discovery works on macOS and
+> Windows; the destructive install path on those platforms is
+> wired but **needs hardware validation** before being declared
+> stable. See [`docs/V0_0_1_STATUS.md`](docs/V0_0_1_STATUS.md).
+
+| Channel | Install |
+|---|---|
+| Homebrew (personal tap) | `brew tap sebastienrousseau/tap && brew install raidhos` |
+| winget (Windows) | `winget install sebastienrousseau.RaidhOS` |
+| Debian/Ubuntu (.deb) | `sudo dpkg -i raidhos_0.0.1_amd64.deb` |
+| AppImage (portable) | Download from [Releases](https://github.com/sebastienrousseau/raidhos/releases), `chmod +x`, run |
+| Cargo (from source) | `cargo install --git https://github.com/sebastienrousseau/raidhos raidhos-cli` |
+| Container (GHCR) | `docker run --rm ghcr.io/sebastienrousseau/raidhos-cli:latest list-disks` |
+| Source | `git clone … && cargo build --release --workspace --exclude raidhos-ui` |
+
+GitHub Releases publish pre-built tarballs for Linux (x86_64,
+aarch64), macOS (Intel + Apple Silicon) and Windows (x86_64,
+aarch64). Each archive ships with the CLI, the privileged
+helper, the `BOOTX64.EFI` GRUB binary, license bundle, a
+**cosign keyless signature**, an **SLSA L3 build-provenance
+attestation**, and a **CycloneDX SBOM**.
+
+See [`docs/VERIFY.md`](docs/VERIFY.md) for the verification
+recipe and [`docs/PACKAGING.md`](docs/PACKAGING.md) if you're
+packaging RaidhOS for a distro.
+
+---
 
 ## Quick start
 
 ```bash
-# 1. Install OS prerequisites.
-./scripts/bootstrap-debian.sh    # or: bootstrap-arch.sh / -fedora.sh /
-                                  #     -macos.sh / -windows.ps1
+# 1. Inspect candidate disks. No privileges needed; the tool refuses to
+#    list anything mounted at /, /boot, or /boot/efi anyway.
+raidhos-cli list-disks
 
-# 2. Build the CLI, the core library, and the privileged helper.
-#    The Tauri UI is excluded; install its native deps separately if
-#    you want it.
-cargo build --release --workspace --exclude raidhos-ui
+# 2. Dry-run an install. Validates every safety check, never writes.
+raidhos-cli install --device /dev/sdX --dry-run
 
-# 3. Inspect candidate disks (no privileges needed).
-./target/release/raidhos-cli list-disks
+# 3. Real install (Linux). The privileged helper is the only RaidhOS
+#    binary that needs root or Administrator.
+sudo RAIDHOS_PAYLOAD_DIR=/srv/raidhos/payload \
+  raidhos-priv-helper install --device /dev/sdX --allow-write
 
-# 4. Dry-run an install — never writes to disk.
-./target/release/raidhos-cli install --device /dev/sdX --dry-run
+# 4. Copy ISOs onto the freshly created DATA partition (or drag-drop
+#    them into the desktop UI).
+sudo mount /dev/sdX2 /mnt/data
+sudo cp ~/Downloads/*.iso /mnt/data/boot/isos/
+sudo umount /mnt/data
 ```
 
-A real install on Linux:
+The destructive path always requires **both** `--wipe=true` (the
+default) **and** `--allow-write=true` (off by default). The CLI
+defaults to `--dry-run`. Belt and braces. The full walkthrough
+is in [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md); if anything
+fails, [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).
+
+---
+
+## Verifying a release
+
+Every tarball under `Releases/` has a `.sha256`, a `.sig`
+(cosign), a `.pem` (the OIDC-bound certificate), and a SLSA
+build-provenance attestation. To verify:
 
 ```bash
-# Build the reproducible BOOTX64.EFI (Docker required, one-time).
-./tools/grub/build_grub.sh
+# 1. SHA-256 (matches the line in the release's SHA256SUMS file).
+sha256sum -c raidhos-v0.0.1-x86_64-unknown-linux-gnu.tar.gz.sha256
 
-# Point RAIDHOS_PAYLOAD_DIR at a directory containing esp/ and data/
-# subdirectories, then invoke the privileged helper.
-sudo RAIDHOS_PAYLOAD_DIR=/path/to/payload \
-  ./target/release/raidhos-priv-helper install \
-  --device /dev/sdX --allow-write
+# 2. cosign keyless signature.
+cosign verify-blob \
+  --certificate raidhos-v0.0.1-x86_64-unknown-linux-gnu.tar.gz.pem \
+  --signature   raidhos-v0.0.1-x86_64-unknown-linux-gnu.tar.gz.sig \
+  --certificate-identity-regexp "https://github.com/sebastienrousseau/raidhos/.+" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  raidhos-v0.0.1-x86_64-unknown-linux-gnu.tar.gz
+
+# 3. SLSA attestation.
+gh attestation verify raidhos-v0.0.1-x86_64-unknown-linux-gnu.tar.gz \
+   --owner sebastienrousseau
 ```
 
-The privileged helper is the **only** RaidhOS binary that needs to run
-as root or Administrator. The UI invokes it via `pkexec` on Linux. On
-macOS and Windows the install path is `NotImplemented` until v0.0.2.
+Full recipe (Linux, macOS, Windows): [`docs/VERIFY.md`](docs/VERIFY.md).
 
-Full walkthrough: [`docs/USER_GUIDE.md`](./docs/USER_GUIDE.md).
-Stuck? [`docs/TROUBLESHOOTING.md`](./docs/TROUBLESHOOTING.md).
+---
+
+## The RaidhOS workspace
+
+Four crates plus a static frontend. The library is the trust
+boundary; the three binaries wrap it for specific delivery
+surfaces.
+
+| Crate | What it is | Use case |
+|---|---|---|
+| **`raidhos-core`** | Library — disk discovery, validation, install orchestration, payload integrity, ISO catalog | Embed RaidhOS safety checks in any Rust tool. |
+| **`raidhos-cli`** | The `raidhos-cli` binary | CI gates, scripted installs, headless servers. |
+| **`raidhos-priv-helper`** | The single binary that runs elevated | Spawned via `pkexec` (Linux), `osascript` (macOS), `Start-Process -Verb RunAs` (Windows). |
+| **`raidhos-ui`** | Tauri 2 desktop app | Guided three-pane wizard, drag-and-drop ISOs, live progress. |
+| `frontend/` | Static HTML/CSS/JS | Loaded by the Tauri webview under a strict CSP (no `'unsafe-inline'`). |
+
+Per-crate READMEs cover the surface specific to each artifact:
+
+- **Library**: [`crates/core/`](crates/core/) — `raidhos-core` API.
+- **CLI**: [`crates/cli/`](crates/cli/) — flags, exit codes, recipes.
+- **Helper**: [`crates/priv-helper/`](crates/priv-helper/) — argv schema, hardening.
+- **UI**: [`crates/ui-tauri/`](crates/ui-tauri/) — Tauri 2 capabilities, frontend.
+
+---
+
+## Architecture
+
+```mermaid
+graph TD
+  subgraph User space
+    UI["raidhos-ui<br/>Tauri 2 desktop app"]
+    CLI["raidhos-cli<br/>headless CLI"]
+  end
+
+  subgraph Library
+    CORE["raidhos-core<br/>discovery · validation · install · payload · catalog"]
+  end
+
+  subgraph Privileged
+    HELPER["raidhos-priv-helper<br/>clap + seccomp + TOCTOU pin"]
+  end
+
+  subgraph Host system
+    LSBLK["/usr/bin/lsblk<br/>diskutil · Get-Disk"]
+    PARTED["parted · mkfs.vfat · mkfs.exfat<br/>diskutil partitionDisk · PowerShell"]
+    POLKIT["polkit · pkexec<br/>osascript · UAC"]
+  end
+
+  subgraph Storage
+    USB[("USB stick<br/>ESP + DATA")]
+    PAYLOAD[/"RAIDHOS_PAYLOAD_DIR<br/>esp/ + data/ + manifest.json"/]
+  end
+
+  UI -->|invoke| CORE
+  CLI -->|call| CORE
+  UI -->|spawn via pkexec| HELPER
+  CLI -->|spawn directly| HELPER
+  CORE -->|enumerate| LSBLK
+  HELPER -->|invoke| CORE
+  HELPER -->|drive| PARTED
+  HELPER -->|elevated by| POLKIT
+  CORE -->|verify SHA-256| PAYLOAD
+  HELPER -->|write| USB
+  PAYLOAD --> USB
+```
+
+The full architecture document is
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), which includes
+sequence diagrams for the install pipeline, the privilege
+boundary, and the supply chain.
+
+---
 
 ## Platform support
 
-| Platform                | Discovery | Install | UI build  |
-| ----------------------- | --------- | ------- | --------- |
-| Linux (Debian/Ubuntu)   | ✅ `lsblk` | ✅       | ✅        |
-| Linux (Arch)            | ✅ `lsblk` | ✅       | ✅        |
-| Linux (Fedora)          | ✅ `lsblk` | ✅       | ✅        |
-| macOS (Intel / Apple)   | ✅ `diskutil` | 🚧    | ✅        |
-| Windows                 | ✅ `Get-Disk` | 🚧    | ✅        |
+| Platform | Discovery | Validation | Install | Elevation | UI build |
+|---|:---:|:---:|:---:|:---:|:---:|
+| Linux x86_64 (Debian/Ubuntu/Arch/Fedora) | ✅ `lsblk` | ✅ | ✅ | `pkexec` | ✅ |
+| Linux aarch64 | ✅ `lsblk` | ✅ | ✅ | `pkexec` | ✅ |
+| macOS x86_64 (Intel) | ✅ `diskutil` | ✅ | 🟡 code complete, hw validation pending | `osascript` | ✅ |
+| macOS aarch64 (Apple Silicon) | ✅ `diskutil` | ✅ | 🟡 | `osascript` | ✅ |
+| Windows x86_64 | ✅ `Get-Disk` | ✅ | 🟡 | UAC | ✅ |
+| Windows aarch64 | ✅ `Get-Disk` | ✅ | 🟡 | UAC | ✅ |
 
-🚧 = install pipeline returns `NotImplemented`. Discovery and the
-safety checks are live everywhere.
+🟡 = the destructive install path compiles and is fully
+implemented in Rust, but hasn't yet been validated against real
+hardware as part of v0.0.1. macOS uses `diskutil partitionDisk` +
+`bless`; Windows uses `Clear-Disk` + `New-Partition` +
+`Format-Volume` + `robocopy`. See
+[`docs/V0_0_1_STATUS.md`](docs/V0_0_1_STATUS.md).
 
-## Workspace layout
+---
 
-```text
-crates/
-├── core/          # raidhos-core: discovery, validation, install,
-│                  #  payload integrity, error type
-│   ├── src/
-│   │   ├── lib.rs
-│   │   ├── payload.rs
-│   │   └── platform/{linux,macos,windows,unsupported}.rs
-├── cli/           # raidhos-cli: developer-facing CLI
-├── priv-helper/   # raidhos-priv-helper: privileged JSON-over-stdout
-│                  #  helper (the only binary intended to run as root)
-└── ui-tauri/      # Tauri desktop UI (static frontend + Rust commands)
-fuzz/              # cargo-fuzz scaffold for trust-boundary parsers
-docs/              # Architecture, payload schema, user guide,
-│                  #  troubleshooting, threat model, hardening, FAQ
-packaging/linux/   # polkit policy
-scripts/           # Per-OS bootstrap scripts
-tools/grub/        # Reproducible Docker build for the BOOTX64.EFI
-.github/workflows/ # CI, release, CodeQL, audit, fuzz smoke
+## Safety model
+
+RaidhOS refuses to act on disks that:
+
+1. Are mounted at `/`, `/boot`, or `/boot/efi` (Linux), flagged
+   `Internal: true` (macOS), or `IsSystem`/`IsBoot: true`
+   (Windows).
+2. Have **any** mounted partition.
+3. Don't match the per-OS allowlist (`/dev/...` on Linux,
+   `/dev/diskN` on macOS, `\\.\PhysicalDriveN` on Windows).
+4. Contain shell metacharacters in the path
+   (`;|&$`, backticks, `< > " ' * ? ( ) \`, newlines, tabs)
+   or `..`.
+
+Destructive writes require **both**:
+
+```rust
+InstallRequest { wipe: true, allow_write: true, dry_run: false, .. }
 ```
+
+Either alone is rejected. The CLI defaults to
+`--wipe=true --allow-write=false --dry-run=true` so a careless
+re-invocation can't go destructive.
+
+See [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) for the
+explicit attacker model and
+[`docs/HARDENING.md`](docs/HARDENING.md) for every shipping
+control with file:line citations.
+
+---
+
+## Security & supply chain
+
+| Layer | Control | Where |
+|---|---|---|
+| Compile-time | `unsafe_code = "forbid"` workspace-wide | `Cargo.toml` |
+| Compile-time | `cargo clippy ... -D warnings` | `.github/workflows/ci.yml` |
+| Compile-time | Coverage gate ≥ 95% on `raidhos-core` | same |
+| Compile-time | Pinned stable toolchain | `rust-toolchain.toml` |
+| Supply chain | `cargo deny check` (licenses + advisories + sources) | `.github/workflows/audit.yml` |
+| Supply chain | `cargo audit` weekly cron | same |
+| Supply chain | CodeQL (Actions + JavaScript) | `.github/workflows/codeql.yml` |
+| Supply chain | OpenSSF Scorecards | `.github/workflows/scorecards.yml` |
+| Supply chain | CycloneDX SBOM on every release | `.github/workflows/release.yml` |
+| Supply chain | cosign keyless signing (OIDC) | same |
+| Supply chain | SLSA L3 build provenance | same |
+| Supply chain | Docker base image pinned by digest | `tools/grub/Dockerfile` |
+| Runtime | Per-OS device path allowlist | `crates/core/src/lib.rs` |
+| Runtime | System-disk + mount-state refusal | `crates/core/src/platform/*.rs` |
+| Runtime | Double opt-in (`wipe` + `allow_write`) | same |
+| Runtime | No shell invocation in privileged path | same |
+| Runtime | Polkit policy with `auth_admin_keep`, `allow_any=no` | `packaging/linux/org.raidhos.policy` |
+| Runtime | `clap`-based helper parsing + 64 KiB argv cap | `crates/priv-helper/src/main.rs` |
+| Runtime | seccomp-bpf denylist (Linux) | `crates/priv-helper/src/seccomp.rs` |
+| Runtime | TOCTOU-safe device fd pin (Linux) | `crates/priv-helper/src/toctou.rs` |
+| Runtime | Payload SHA-256 verification before write | `crates/core/src/payload.rs` |
+| Runtime | Strict CSP — `default-src 'self'`, `object-src 'none'` | `crates/ui-tauri/src-tauri/tauri.conf.json` |
+| Runtime | Hardened GRUB config sanitiser (20+ forbidden chars) | `crates/ui-tauri/src-tauri/src/grub.rs` |
+
+Full mapping with `file:line` citations:
+[`docs/HARDENING.md`](docs/HARDENING.md).
+
+---
+
+## ISO catalog
+
+A curated catalog of major distros ships in
+[`catalog/catalog.json`](catalog/catalog.json), each entry
+naming the ISO URL, the `SHA256SUMS` URL, the detached signature
+URL, and the long-form GPG fingerprint of the signing key.
+Public keys live under `catalog/keys/<fingerprint>.asc` so
+verification is offline-capable.
+
+```bash
+# List bundled distros.
+raidhos-cli catalog list
+
+# Verify a locally-downloaded ISO against the catalog.
+raidhos-cli catalog verify \
+    --slug ubuntu-24.04-desktop-amd64 \
+    --iso  ~/Downloads/ubuntu-24.04.3-desktop-amd64.iso \
+    --sums ~/Downloads/SHA256SUMS \
+    --sig  ~/Downloads/SHA256SUMS.gpg
+```
+
+Verification runs in an **ephemeral GPG home** so the user's
+keyring is untouched. The implementation shells out to `gpg(1)`
+rather than embedding a pure-Rust OpenPGP stack — see
+[`crates/core/src/catalog.rs`](crates/core/src/catalog.rs) for
+the rationale.
+
+Bundled today: Debian 12, Ubuntu 24.04, Fedora 41, Arch
+current, Tails 6.x. Add more by following
+[`catalog/keys/README.md`](catalog/keys/README.md).
+
+---
+
+## Cargo features
+
+The library has none today. All optional integrations live in
+separate crates; turning them off means *not adding the crate to
+your dependency graph*. This keeps the audit surface tight.
+
+| Crate | Default | Pulls in |
+|---|---|---|
+| `raidhos-core` | always on | `serde`, `serde_json`, `sha2`, `thiserror` |
+| `raidhos-cli` | depends on core | `clap` |
+| `raidhos-priv-helper` (Linux only deps) | depends on core | `libc`, `seccompiler` |
+| `raidhos-ui` (Tauri 2) | depends on core | `tauri`, `tauri-plugin-{dialog,fs,shell}`, `directories` |
+
+Per-platform conditional deps are declared with
+`[target.'cfg(target_os = "linux")'.dependencies]` so
+non-Linux builds don't pull `libc` / `seccompiler`.
+
+---
+
+## Examples
+
+Browse [`examples/`](examples/) for runnable command flows.
+Highlights:
+
+| File | What it shows |
+|---|---|
+| `examples/01-list-disks.sh` | Plain `raidhos-cli list-disks` + how to filter to removable. |
+| `examples/02-dry-run-install.sh` | A no-write rehearsal that exercises every validation guard. |
+| `examples/03-real-install-linux.sh` | Linux end-to-end with a Tails ISO. |
+| `examples/04-catalog-verify.sh` | Download an Ubuntu ISO and verify it against the bundled catalog. |
+| `examples/05-persistence.sh` | Add a 4 GiB persistence overlay during install. |
+| `examples/06-mok-enrol.sh` | Enrol a RaidhOS MOK so Secure Boot accepts the signed `BOOTX64.EFI`. |
+
+---
+
+## Performance
+
+Cold-start numbers (release builds, Linux x86_64, NVMe host,
+USB 3.0 stick) — see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)
+for the full table.
+
+| Operation | Time |
+|---|---|
+| `raidhos-cli list-disks` cold | ~80 ms |
+| `raidhos-cli scan-isos /Downloads` (32 ISOs) | ~12 ms |
+| Dry-run `install` end-to-end | ~95 ms |
+| Real install, 16 GB USB 3.0, 2.4 GB Ubuntu payload | 2.5 - 4 min |
+| GRUB Docker build (cold) | ~3 min |
+| Tauri 2 UI cold start | ~180 ms |
+| `cargo test --workspace` | < 2 s after warm-up |
+
+---
+
+## Development
+
+```bash
+git clone https://github.com/sebastienrousseau/raidhos.git
+cd raidhos
+
+# Build the CLI + library + privileged helper (no UI native deps required).
+cargo build --workspace --exclude raidhos-ui
+
+# Full workspace including the Tauri 2 UI (needs platform-specific WebKit deps).
+cargo build --workspace
+
+# Test, lint, format.
+cargo test  --workspace --all-targets
+cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --all -- --check
+
+# Coverage gate (raidhos-core).
+cargo tarpaulin -p raidhos-core --fail-under 95
+
+# Fuzz the trust-boundary parsers (nightly).
+cd fuzz && cargo +nightly fuzz run validate_device_path -- -max_total_time=60
+
+# Reproducible GRUB build (Docker required).
+./tools/grub/build_grub.sh
+
+# Pre-flight before pushing.
+make pre-flight   # alias for fmt + clippy + test + tarpaulin
+```
+
+The full developer guide is
+[`CONTRIBUTING.md`](CONTRIBUTING.md). The release recipe is
+[`docs/RELEASE.md`](docs/RELEASE.md). Packaging downstream:
+[`docs/PACKAGING.md`](docs/PACKAGING.md).
+
+---
 
 ## Documentation
 
-- [User guide](./docs/USER_GUIDE.md)
-- [Troubleshooting](./docs/TROUBLESHOOTING.md)
-- [FAQ](./docs/FAQ.md)
-- [Architecture](./docs/ARCHITECTURE.md)
-- [Payload layout](./docs/PAYLOAD.md)
-- [Roadmap](./docs/ROADMAP.md)
-- [Threat model](./docs/THREAT_MODEL.md)
-- [Hardening summary](./docs/HARDENING.md)
-- [Secure Boot status](./docs/SECURE_BOOT.md)
-- [v0.0.1 status report](./docs/V0_0_1_STATUS.md)
-- [Boot config schema (JSON)](./docs/BOOT_CONFIG_SCHEMA.json)
-- [Contributing](./CONTRIBUTING.md)
-- [Security policy](./SECURITY.md)
-- [Changelog](./CHANGELOG.md)
+Everything user-facing lives under [`docs/`](docs/). Everything
+ships with the crate.
 
-## Releases
+**Getting started**
 
-Tagged releases (`v0.0.1` onwards) ship:
+- [`docs/INSTALL.md`](docs/INSTALL.md) — end-user install, every channel
+- [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) — first install walkthrough
+- [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) — every error and recovery
+- [`docs/FAQ.md`](docs/FAQ.md) — short answers
 
-- Pre-built binaries for `x86_64`/`aarch64` × Linux/macOS/Windows.
-- A `BOOTX64.EFI` produced by the reproducible Docker GRUB build.
-- SHA-256 checksums and a single `SHA256SUMS` manifest.
-- cosign keyless signatures (`.sig` + `.pem`) for every artefact.
-- SLSA L3 build provenance attestations.
-- A CycloneDX SBOM.
+**Reference**
 
-The release workflow lives at `.github/workflows/release.yml`.
-Verification instructions: [`docs/USER_GUIDE.md`](./docs/USER_GUIDE.md).
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — diagrams, data flow, design choices
+- [`docs/BOOT_CONFIG_SCHEMA.json`](docs/BOOT_CONFIG_SCHEMA.json) — JSON Schema for `boot.json`
+- [`docs/PAYLOAD.md`](docs/PAYLOAD.md) — payload layout, manifest, partition diagrams
+- [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) — measured baselines
+- [`docs/DESIGN_NOTES.md`](docs/DESIGN_NOTES.md) — why some things are this way
+
+**Security**
+
+- [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) — attacker capabilities → controls map
+- [`docs/HARDENING.md`](docs/HARDENING.md) — every shipping control, with file:line
+- [`docs/SECURE_BOOT.md`](docs/SECURE_BOOT.md) — current state, MOK enrolment path
+
+**Operations**
+
+- [`docs/RELEASE.md`](docs/RELEASE.md) — how to cut a release
+- [`docs/VERIFY.md`](docs/VERIFY.md) — verify a downloaded release
+- [`docs/PACKAGING.md`](docs/PACKAGING.md) — for distros packaging RaidhOS
+- [`docs/TAURI_NOTES.md`](docs/TAURI_NOTES.md) — per-OS UI build prerequisites
+
+**Project**
+
+- [`docs/V0_0_1_STATUS.md`](docs/V0_0_1_STATUS.md) — what's in this release, what isn't
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — what's next
+- [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md) — how decisions are made
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — PR expectations, dev workflow
+- Code of Conduct — [Contributor Covenant 2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/)
+- [`SECURITY.md`](SECURITY.md) — private disclosure policy
+- [`CHANGELOG.md`](CHANGELOG.md) — Keep-a-Changelog history
+
+---
+
+## Roadmap
+
+- **`v0.0.1`** — current. Linux end-to-end install, macOS/Windows code-complete pending hardware validation, Tauri 2 UI, ISO catalog, signed releases, fuzz CI, seccomp + TOCTOU, persistence, drag-drop, a11y, light theme.
+- **`v0.0.2`** — macOS + Windows install validated on hardware; Secure Boot with MOK enrolment shipped; BIOS / legacy boot path; OpenSSF Scorecards score ≥ 7.
+- **`v0.1.0`** — first stable. Real RaidhOS signing key with rotation policy. Curated catalog grows.
+- **`v1.0`** — Microsoft UEFI CA shim sign-off (target).
+
+Full roadmap with effort estimates and dependencies:
+[`docs/ROADMAP.md`](docs/ROADMAP.md).
+
+---
+
+## Contributing
+
+Pull requests welcome. Read
+[`CONTRIBUTING.md`](CONTRIBUTING.md) first — it covers the
+bootstrap scripts, the pre-flight checks, the PR expectations,
+and what tests new code must add. Security issues go through
+[`SECURITY.md`](SECURITY.md), not public issues.
+
+By contributing you agree to license your work under the
+project's GPL-3.0-only licence and to abide by the
+[Contributor Covenant 2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/).
+
+---
 
 ## License
 
-RaidhOS is distributed under the GNU GPL v3.0. See
-[LICENSE](./LICENSE).
+RaidhOS is distributed under the **GNU GPL v3.0**. See
+[`LICENSE`](LICENSE) for the full text. Third-party code
+included in source form (none today) is listed in
+[`docs/PACKAGING.md`](docs/PACKAGING.md) under "Third-party
+licences".

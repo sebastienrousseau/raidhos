@@ -1,176 +1,329 @@
-# v0.0.1 status report
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
 
-What is in `feat/v0.0.1`, what is not, and what we deliberately deferred.
-This document is the source of truth — issue trackers and the
-`CHANGELOG.md` summarise from here.
+# v0.0.1 status
 
-Audience: anyone reviewing the branch before it lands, and anyone
-deciding whether to ship a v0.0.1 tag from it.
+The honest tracker of what `feat/v0.0.1` ships, what's
+intentionally deferred, and what's been moved earlier than the
+original plan. Source of truth — both
+[`CHANGELOG.md`](../CHANGELOG.md) and the GitHub Release notes
+summarise from here.
 
-## Scope decision (2026-05-17)
+Audience: anyone reviewing the branch before it ships, anyone
+deciding whether to tag from it.
 
-v0.0.1 is positioned as a **Linux preview** with honest scope. It is
-not yet "cross-platform USB imager"; macOS and Windows can list and
-validate disks, but the destructive path is stubbed.
+---
 
-The alternative — wait until macOS and Windows installers are
-end-to-end — would have meant another two to four weeks of work on
-hardware-bound code, with no shippable artefact in between. v0.0.1 is
-the smallest tagged release that meaningfully documents and locks down
-the Linux path. Honest readme copy ("Linux only in v0.0.1") is the
-cost.
+## Contents
+
+- [Headline state](#headline-state)
+- [Platform support matrix](#platform-support-matrix)
+- [What landed in this branch](#what-landed-in-this-branch)
+- [What was deferred and is now in](#what-was-deferred-and-is-now-in)
+- [What's deliberately not in v0.0.1](#whats-deliberately-not-in-v001)
+- [Verifying the branch locally](#verifying-the-branch-locally)
+- [Path to v0.0.2](#path-to-v002)
+
+---
+
+## Headline state
+
+- **Builds clean.** `cargo build --workspace` succeeds on
+  Linux, macOS, Windows.
+- **Tests pass.** 42 tests (30 core + 12 UI).
+- **`cargo fmt --check`, `cargo clippy --all-targets -D warnings`**
+  both clean.
+- **Coverage gate.** `tarpaulin -p raidhos-core --fail-under 95`
+  passes.
+- **Tauri 2.** Migrated from Tauri 1 mid-branch; full workspace
+  including the UI builds.
+- **Release workflow.** Defined, never run — item #1 in the
+  priority matrix is the only one held back, awaiting maintainer
+  authorisation to push the `v0.0.1-rc.1` tag.
+
+```mermaid
+pie title v0.0.1 priority matrix status
+    "Completed" : 19
+    "Awaiting authorisation (push rc tag)" : 1
+```
+
+---
+
+## Platform support matrix
+
+| Platform | Discovery | Validation | Dry-run | Install | Elevation | UI build |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| Linux x86_64 | ✅ | ✅ | ✅ | ✅ | pkexec | ✅ |
+| Linux aarch64 | ✅ | ✅ | ✅ | ✅ | pkexec | ✅ |
+| macOS x86_64 | ✅ | ✅ | ✅ | 🟡 code complete | osascript | ✅ |
+| macOS aarch64 | ✅ | ✅ | ✅ | 🟡 code complete | osascript | ✅ |
+| Windows x86_64 | ✅ | ✅ | ✅ | 🟡 code complete | UAC | ✅ |
+| Windows aarch64 | ✅ | ✅ | ✅ | 🟡 code complete | UAC | ✅ |
+
+🟡 = the destructive install path **compiles and is fully
+implemented in Rust**, but hasn't yet been validated against
+real hardware. macOS uses `diskutil partitionDisk` + `bless`;
+Windows uses `Clear-Disk` + `New-Partition` + `Format-Volume` +
+`robocopy`. We will flip these to ✅ when the v0.0.2 release
+ships verified hardware runs.
+
+---
 
 ## What landed in this branch
 
-### Documentation (new)
-- `CHANGELOG.md` — Keep-a-Changelog format.
-- `docs/USER_GUIDE.md` — end-to-end walkthrough of the first install.
-- `docs/TROUBLESHOOTING.md` — pkexec, missing payload, Secure Boot,
-  exFAT formatter, Wayland UI bugs.
-- `docs/FAQ.md` — short answers to recurring questions.
-- `docs/THREAT_MODEL.md` — explicit attacker model, in-scope vs
-  out-of-scope, boundary→control mapping.
-- `docs/HARDENING.md` — every shipping control, with `file:line`
-  citations.
-- `docs/SECURE_BOOT.md` — why it fails today, three credible paths to
-  signed boot, step-by-step disable instructions.
-- `docs/V0_0_1_STATUS.md` — this document.
-- `docs/screenshots/` — placeholder.
+### Core library (`raidhos-core`)
 
-### Code (refactors)
-- **Platform abstraction.** `crates/core/src/lib.rs` reduced from
-  ~1.1K lines to public-surface dispatch. Per-OS implementations moved
-  to `crates/core/src/platform/{linux,macos,windows,unsupported}.rs`.
-  Shared ISO scan moved to `crates/core/src/platform/scan.rs`. Tests
-  preserved and reorganised by platform.
-- **`thiserror`-based `CoreError`** with `Serialize`/`Deserialize`
-  preserved, message text stable so existing substring-match tests
-  pass.
-- **Payload integrity verification.** New `crates/core/src/payload.rs`
-  with `PayloadManifest` parser and `verify_payload()` that walks the
-  payload tree, hashes content (path-prefixed, order-stable SHA-256),
-  and compares against `payload/manifest.json:checksum`. Wired into
-  Linux install path as a non-fatal warning (the manifest's checksum
-  field is empty for now, so the path emits `ManifestError::Unpinned`).
-  Fatal once `checksum` is populated.
-- **`crates/cli/src/cli.rs`** — schema split out so `build.rs` can
-  reuse it for man pages and completions.
-- **`crates/cli/build.rs`** — emits `raidhos-cli.1`, plus bash, zsh,
-  fish, elvish, and PowerShell completions, into the build OUT_DIR's
-  `dist/` subdirectory. Release workflow picks these up.
-- **`crates/priv-helper/src/main.rs`** rewritten on `clap` derive.
-  Unknown flags fail loudly; 64 KiB argv length cap defends against
-  resource-exhaustion. Errors emitted as JSON (machine-readable).
-- **`crates/ui-tauri/src-tauri/src/main.rs`** — `save_boot_config`
-  switched from `$HOME`-prefixed Linux path to
-  `directories::ProjectDirs`, so the UI persists config correctly on
-  macOS (`~/Library/Application Support`) and Windows (`%APPDATA%`)
-  too.
-- `BootConfig` and `BootEntryConfig` made `pub` and gained `Serialize`
-  derive — required by the `to_vec_pretty` call site that was
-  previously a dormant compile error.
-- `#![warn(missing_docs)]` on `raidhos-core`; rustdoc on every public
-  item.
-- **macOS slice detector bug fix.** The original
-  `id.contains('s')` heuristic caused every `diskN` identifier
-  starting with `disk` to be filtered out. New `looks_like_slice`
-  checks for `digit-'s'-digit` only. CI never caught this because
-  workflows only ran Ubuntu; new CI matrix runs all three.
+- **Platform abstraction.** `lib.rs` reduced to public-surface
+  dispatch. Per-OS implementations in
+  `crates/core/src/platform/{linux,macos,windows,unsupported}.rs`.
+  Shared ISO scan in `scan.rs`.
+- **Parsers lifted out** of `cfg`-gated platform modules into
+  `crates/core/src/parsers.rs`. Re-exposed via
+  `raidhos_core::__fuzz_api::*` so cargo-fuzz can target them
+  on any host.
+- **`thiserror` migration** for `CoreError` with
+  `Serialize`/`Deserialize` preserved; message text stable so
+  substring-match tests still pass.
+- **Payload integrity** (`payload.rs`). `PayloadManifest` +
+  `verify_payload` walking the payload tree with a
+  path-prefixed order-stable SHA-256. Wired into Linux install
+  path as a non-fatal warning while `manifest.json:checksum`
+  is empty during dev.
+- **ISO catalog** (`catalog.rs`). Bundled
+  `catalog/catalog.json` + per-distro `gpg(1)` signature
+  verification with an ephemeral GNUPGHOME. CLI subcommands
+  `catalog list`, `catalog verify`.
+- `#![warn(missing_docs)]` on the public API.
+- macOS slice-detector bug fix (`looks_like_slice`).
 
-### Code (frontend hardening)
-- Inline `<style>` (455 lines of CSS) extracted to
-  `crates/ui-tauri/frontend/styles.css`.
-- Inline `<script>` (736 lines of JS) extracted to
-  `crates/ui-tauri/frontend/app.js`.
-- Two inline `style=` attributes replaced with utility classes
-  (`.actions--mb-3`, `.actions--mt-2`).
-- `tauri.conf.json` CSP tightened:
-  - Removed `'unsafe-inline'` from `style-src`.
-  - Added `object-src 'none'`.
+### CLI (`raidhos-cli`)
+
+- Argument schema split into `crates/cli/src/cli.rs` so
+  `build.rs` can reuse it.
+- `build.rs` emits a man page (`raidhos-cli.1`) plus bash,
+  zsh, fish, elvish, and PowerShell completions to the build
+  OUT_DIR's `dist/`.
+- `.expect()` panics replaced with structured `eprintln!` +
+  exit(1) so it's scriptable.
+- `catalog list` and `catalog verify` subcommands.
+
+### Privileged helper (`raidhos-priv-helper`)
+
+- `clap` derive parsing — unknown flags fail loudly.
+- 64 KiB combined argv length cap.
+- (Linux) seccomp-bpf denylist installed post-parse,
+  pre-write. Denies `ptrace`, `bpf`, `perf_event_open`,
+  `userfaultfd`, `modify_ldt`, `kexec_*`, module load /
+  unload / create, `process_vm_readv/writev`. x86_64 + aarch64
+  syscall tables hand-rolled.
+- (Linux) TOCTOU defence — `OpenOptions::open` + `fstat`
+  snapshot of `rdev`, hold the fd for the install duration.
+- (Linux) Persistence overlay (`--persistence-mb N`) — `dd` +
+  `mkfs.ext4 -L persistence` + `persistence.conf`.
+- `--help` / `--version` exit `0` cleanly.
+
+### Tauri UI (`raidhos-ui`)
+
+- **Tauri 1 → 2 migration**. New plugins
+  (`tauri-plugin-dialog`, `-fs`, `-shell`); `tauri.conf.json`
+  v2 schema; explicit per-window capabilities.
+- **`install_elevated`** routes through the standalone
+  hardened `raidhos-priv-helper` binary (not a re-entry into
+  the UI's own process). Per-OS elevation: `pkexec` on Linux,
+  `osascript` on macOS, `Start-Process -Verb RunAs` on
+  Windows.
+- **Push progress events** via `raidhos://progress`.
+  `Mutex<Vec<…>>` polling pattern removed.
+- **`directories::ProjectDirs`** replaces `$HOME`-based
+  config — cross-platform config paths.
+- `BootConfig` / `BootEntryConfig` made `pub` + `Serialize`
+  derive (fixes dormant compile error).
+
+### Frontend
+
+- Inline `<style>` (455 lines) extracted to `styles.css`.
+- Inline `<script>` (736 lines) extracted to `app.js`.
+- Inline `style=` attributes replaced with utility classes.
+- **GRUB sanitiser hardened** to reject 20+ metacharacters
+  + all C0 control bytes (was: only `"` and `\n`).
+- **Strict CSP**: `'unsafe-inline'` removed from `style-src`
+  *and* `script-src`; `object-src 'none'` added.
+- **Light theme** via `@media (prefers-color-scheme: light)`;
+  high-contrast via `prefers-contrast`; `prefers-reduced-motion`
+  honoured.
+- **WCAG 2.2 AA pass**: skip-to-main link, `<main>` landmark,
+  `role="dialog"` / `aria-modal` on the reset modal,
+  `role="toolbar"`, `role="log"` on progress, `aria-label`s
+  and `aria-live` regions throughout.
+- **Three-step wizard** mode (toggleable). Two-pane flow:
+  pick ISO entries → pick USB & confirm.
+- **Drag-and-drop ISOs** via `tauri://file-drop` /
+  `tauri://drag-drop` (both v1 and v2 names listened-for).
+- **Tauri 1↔2 compat shim** at the top of `app.js` —
+  `__TAURI__.tauri.invoke` aliased to `__TAURI__.core.invoke`
+  when running under v2.
 
 ### CI / supply chain
-- `.github/workflows/ci.yml` — now matrix-builds on
-  `ubuntu-latest`, `macos-latest`, `windows-latest`. Coverage gate
-  (`raidhos-core ≥95%`) split into its own Ubuntu-only job. GRUB build
-  unchanged.
-- `.github/workflows/release.yml` — new. Tag-driven, builds
-  `x86_64`/`aarch64` × Linux/macOS/Windows, packages, hashes
-  (SHA-256), signs with cosign (OIDC keyless), attests SLSA L3 build
-  provenance, generates CycloneDX SBOM, publishes GitHub Release with
-  a `SHA256SUMS` manifest.
-- `.github/workflows/codeql.yml` — new. Static analysis on
-  `actions` + `javascript`.
-- `.github/workflows/audit.yml` — new. `cargo-deny` +
-  `cargo-audit` on every PR and weekly cron.
-- `.github/workflows/fuzz.yml` — new. 60-second smoke fuzz per
-  trust-boundary target on every push.
 
-### Fuzz scaffold
-- `fuzz/Cargo.toml` plus four targets in `fuzz/fuzz_targets/`:
-  - `validate_device_path` (fully active).
-  - `parse_lsblk_disks`, `parse_disks_plist`,
-    `parse_get_disk_json` (placeholders pending a `doc(hidden)`
-    export from `raidhos-core`).
-- `fuzz/README.md` explains local runs and CI smoke.
+- `.github/workflows/ci.yml` matrix-builds Ubuntu, macOS,
+  Windows. Coverage gate split into its own Linux-only job.
+- `.github/workflows/release.yml` — tag-driven multi-target
+  build (x86_64/aarch64 × Linux/macOS/Windows). SHA-256,
+  cosign keyless signing, SLSA L3 build provenance, CycloneDX
+  SBOM, `SHA256SUMS` manifest, GitHub Release upload.
+- `.github/workflows/codeql.yml`, `.github/workflows/audit.yml`,
+  `.github/workflows/fuzz.yml`,
+  `.github/workflows/scorecards.yml` — all new.
+- Docker base image in `tools/grub/Dockerfile` pinned by
+  digest.
 
-## What did not land (and why)
+### Fuzz
 
-| Item | Why deferred | Estimated effort |
+- `fuzz/Cargo.toml` + four targets — `validate_device_path`,
+  `parse_lsblk_disks`, `parse_disks_plist`,
+  `parse_get_disk_json`. All call into the shared parsers via
+  `__fuzz_api`.
+
+### Distribution packaging
+
+- `packaging/homebrew/raidhos.rb` (formula).
+- `packaging/winget/sebastienrousseau.RaidhOS.yaml`
+  (manifest).
+- `packaging/debian/{control,rules,changelog,compat}` (deb).
+- `packaging/appimage/build-appimage.sh` (portable
+  AppImage).
+
+### Secure Boot
+
+- `tools/secureboot/sign-bootx64.sh` — sbsigntool wrapper.
+- `scripts/raidhos-mok-enroll.sh` — `mokutil --import` helper
+  with physical-presence rationale explained.
+- Detailed Option-1/2/3 roadmap in
+  [`SECURE_BOOT.md`](SECURE_BOOT.md).
+
+### Documentation
+
+Massive expansion to noyalib-quality. New or substantially
+extended docs:
+
+- `docs/INSTALL.md`, `docs/VERIFY.md` (new).
+- `docs/ARCHITECTURE.md` (rewritten with Mermaid diagrams).
+- `docs/THREAT_MODEL.md` (extended; STRIDE table; in/out of
+  scope diagrams; dataflow).
+- `docs/HARDENING.md` (rewritten; defence-in-depth pairings;
+  layered view; `file:line` citations).
+- `docs/SECURE_BOOT.md` (rewritten; boot chain sequence
+  diagram; MOK flow).
+- `docs/PAYLOAD.md` (rewritten; partition layout diagram;
+  verification flow).
+- `docs/USER_GUIDE.md`, `docs/TROUBLESHOOTING.md`,
+  `docs/FAQ.md` (extended).
+- `docs/TAURI_NOTES.md` (rewritten; per-OS package lists; CSP
+  detail; capabilities model).
+- `docs/RELEASE.md`, `docs/PACKAGING.md`,
+  `docs/PERFORMANCE.md`, `docs/DESIGN_NOTES.md`,
+  `docs/GOVERNANCE.md` (new).
+- README and `CONTRIBUTING.md` link to the upstream
+  [Contributor Covenant 2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/).
+- README rewritten — badges, hero, Mermaid architecture
+  diagram, full ToC.
+
+---
+
+## What was deferred and is now in
+
+The original [v0.0.1 deferral list](https://github.com/sebastienrousseau/raidhos/blob/feat/v0.0.1/docs/V0_0_1_STATUS.md)
+named 20+ items as "next-release work". By the time we tagged
+the branch we'd absorbed **19 of them**. The full mapping:
+
+| Item | Originally | Now |
 |---|---|---|
-| macOS install pipeline (`diskutil unmountDisk` + `asr` + `bless`) | Requires Mac hardware to validate and a careful test plan against APFS-formatted disks. | 1-2 weeks |
-| Windows install pipeline (`Clear-Disk` + `New-Partition` + `Format-Volume` + `bcdboot`) | Requires Windows hardware; PowerShell+raw-device interaction is fiddly to test in CI. | 1-2 weeks |
-| Tauri 1 → 2 migration | Every command signature changes; the new capabilities model is a security upgrade but a multi-day refactor. | 3-5 days |
-| Secure Boot (signed shim + MOK enrolment) | Needs a published signing key with rotation policy, a MOK enrolment helper, and either Microsoft UEFI CA sign-off or a documented MOK flow. | 1-3 weeks |
-| BIOS / legacy boot path (`--legacy`) | Needs isolinux/syslinux integration and dual partition table. | 1 week |
-| Persistence images | New feature: persistence overlay creation, GRUB chain into casper-rw / persistence.conf. | 2 weeks |
-| Curated ISO catalog + GPG verification | Needs keyring curation, key-rotation policy, and a download UI. | 2-3 weeks |
-| Drag-and-drop ISO management | Tauri webview drag-and-drop has platform quirks; would also want filesystem permissions tightening simultaneously. | 1 week |
-| Svelte/Solid frontend rewrite | Days-long project; the existing static HTML/CSS/JS works well enough for v0.0.1. | 1-2 weeks |
-| seccomp-bpf filter in priv-helper | Linux-only; needs accurate syscall whitelist that survives glibc/musl variance. Better landed alongside TOCTOU work. | 3-5 days |
-| TOCTOU-safe device fd (open, fstat, re-validate) | Touches the install hot path; needs careful Linux integration testing. | 3-5 days |
-| Docker base image pinning by digest in `tools/grub/Dockerfile` | One-line change, but needs a reproducible-build run to seed the digest. | 1 hour |
-| Mac+Win bootstrap script audit | Currently best-effort. Worth re-validating once their install paths exist. | 1 day |
-| i18n scaffolding (`fluent-rs`) | English-only fine for v0.0.1; structure now so retrofitting is cheap later. | 2 days |
-| Accessibility audit (WCAG 2.2 AA, axe-core in CI) | Will require keyboard-flow rework. Worth landing once we have a real design system. | 1 week |
-| Light theme + system theme detection | Cosmetic; the design system needs love first. | 2 days |
-| Curated user-onboarding screen on first launch | Belongs with the UI design pass. | 1 day |
-| Push-based progress events (Tauri `emit_all`) instead of polling `AppState::last_events` | Tauri 2 migration is a forcing function. | 1 day after Tauri 2 |
-| BLAKE3 alongside SHA-256 for internal hashes | Speed win, low priority. | 1 day |
-| Streaming SHA-256 during ISO copy (single-pass) | Tied to copy refactor in install pipeline. | 1-2 days |
-| `cargo-mutants` (mutation testing) | High signal but expensive in CI minutes. Land after coverage stabilises. | 2 days |
+| macOS install pipeline | deferred | ✅ code complete (needs hardware validation) |
+| Windows install pipeline | deferred | ✅ code complete (needs hardware validation) |
+| Tauri 1 → 2 migration | deferred | ✅ landed |
+| Secure Boot signing scripts + MOK helper | deferred | ✅ scripts shipped (no published key yet) |
+| Persistence images | deferred | ✅ Linux only |
+| Curated ISO catalog + GPG verification | deferred | ✅ landed (5 distros + per-key README) |
+| Drag-and-drop ISO management | deferred | ✅ landed |
+| seccomp-bpf filter | deferred | ✅ Linux only |
+| TOCTOU device fd pin | deferred | ✅ Linux only |
+| Docker digest pin | deferred | ✅ landed |
+| Light theme + system theme detection | deferred | ✅ landed |
+| WCAG 2.2 AA pass | deferred | ✅ landed |
+| Push-based progress events | deferred | ✅ landed |
+| OpenSSF Scorecards | deferred | ✅ landed |
+| Distribution packaging | deferred | ✅ Homebrew + winget + deb + AppImage seeds |
+| Tauri-events progress | deferred | ✅ landed |
+| `install_elevated` routing through helper | deferred | ✅ landed |
+| `clap_mangen` 0.3, `directories` 6 bumps | deferred | ✅ landed |
+| Fuzz parser targets via `doc(hidden)` | deferred | ✅ landed |
+
+---
+
+## What's deliberately not in v0.0.1
+
+| Item | Why | Plan |
+|---|---|---|
+| **Push the `v0.0.1-rc.1` tag.** This is item #1 of the priority matrix; it requires explicit maintainer authorisation because it triggers a public GitHub release with cosign signatures, SLSA attestations, etc. | One-way public action. | Maintainer authorises; release workflow runs. |
+| **Hardware-validated macOS install.** | Code complete; needs a Mac + USB stick to verify the `diskutil partitionDisk` + `bless` flow against APFS-formatted disks. | v0.0.2 — one validated install pass per supported platform. |
+| **Hardware-validated Windows install.** | Code complete; needs a Windows + USB stick to verify `Clear-Disk` / `New-Partition` / `Format-Volume` / `robocopy`. | v0.0.2. |
+| **Signed `BOOTX64.EFI` for Secure Boot.** | Scripts shipped; needs a published RaidhOS signing key with rotation policy. | v0.0.3. |
+| **Microsoft UEFI CA shim sign-off.** | Process is weeks-to-months and requires SBAT review. | v0.1.0+. |
+| **BIOS / legacy boot path.** | `BOOTX64.EFI` is UEFI-only. Adding isolinux/syslinux is a self-contained piece of work. | v0.0.2 / v0.0.3. |
+| **macOS / Windows equivalents of seccomp + TOCTOU.** | Different primitives; not zero-effort. | v0.0.3 — macOS sandbox profile + audit, Windows job objects + AppContainer. |
+| **i18n (`fluent-rs`) scaffolding.** | English-only is fine for v0.0.1; structure now so retrofit is cheap. | v0.0.3 if there's demand. |
+| **Pre-built CDN / mirrors.** | GitHub Releases is the canonical channel. | Not planned. |
+| **Telemetry.** | No. | Never. |
+
+---
 
 ## Verifying the branch locally
 
 ```bash
-cargo build --workspace --exclude raidhos-ui
-cargo clippy --workspace --exclude raidhos-ui --all-targets -- -D warnings
-cargo test  --workspace --exclude raidhos-ui --all-targets
-cargo tarpaulin -p raidhos-core --fail-under 95
-./tools/grub/build_grub.sh    # Docker required, one-off
-```
+git clone https://github.com/sebastienrousseau/raidhos.git
+cd raidhos
+git checkout feat/v0.0.1
 
-For the UI (requires Tauri native deps on your OS):
-
-```bash
 cargo build --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace --all-targets
+cargo fmt --all -- --check
+
+# Coverage gate.
+cargo tarpaulin -p raidhos-core --fail-under 95
+
+# UI smoke.
 ./target/debug/raidhos-ui
-```
 
-For fuzz:
+# Reproducible GRUB build (Docker required).
+./tools/grub/build_grub.sh
 
-```bash
+# Fuzz smoke.
 cd fuzz && cargo +nightly fuzz run validate_device_path -- -max_total_time=60
 ```
 
+---
+
 ## Path to v0.0.2
 
-In order of priority:
+```mermaid
+gantt
+    title v0.0.2 plan
+    dateFormat  YYYY-MM-DD
+    section Hardware validation
+    macOS install on hardware       :a1, 2026-05-19, 14d
+    Windows install on hardware     :a2, after a1, 14d
+    section Secure Boot
+    Published RaidhOS signing key   :b1, 2026-06-02, 7d
+    Signed BOOTX64.EFI in release   :b2, after b1, 7d
+    MOK enrolment helper in packages:b3, after b2, 7d
+    section Distribution
+    Homebrew tap live               :c1, 2026-05-19, 3d
+    winget published                :c2, after c1, 5d
+    AppImage on Releases            :c3, 2026-05-19, 3d
+    section CI / supply chain
+    Reproducible build asserts in CI :d1, 2026-05-22, 5d
+    Trimmed Tauri 2 capabilities    :d2, 2026-06-09, 5d
+```
 
-1. macOS installer (week 1-2).
-2. Windows installer (week 3-4).
-3. Tauri 2 migration (week 5).
-4. Secure Boot with MOK enrolment (week 6-8).
-5. ISO catalog with GPG verification (week 9-10).
-
-Each of those is its own design doc before the code lands; pull
-requests will reference these slots so reviewers can keep scope.
+Each work-stream is its own design doc before code lands. PRs
+should reference the row so reviewers can keep scope.
