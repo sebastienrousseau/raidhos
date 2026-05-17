@@ -35,10 +35,15 @@ deciding whether to tag from it.
   9 seccomp + 6 toctou + 10 integration.
 - **`cargo fmt --check`, `cargo clippy --all-targets -D warnings`**
   both clean across the workspace.
-- **Coverage gate.** `tarpaulin -p raidhos-core --fail-under 100`
-  passes (Linux CI). `raidhos-core` is at **100% line coverage
-  on its host target** after a sweep of unit + integration tests
-  + targeted refactors:
+- **Coverage gate.** All three Rust crates gated at
+  `--fail-under 100` in CI:
+    - `raidhos-core`: 100% (940/940 lines on the host target)
+    - `raidhos-cli`: 100% (126/126 lines)
+    - `raidhos-priv-helper`: 100% (70/70 lines)
+    - **Workspace** (excluding the Tauri UI bin and the fuzz
+      harness): **100.00%, 1136/1136 lines covered**
+
+  Targeted refactors that made this achievable:
   - `validate_device_path_inner` switched from runtime `cfg!()`
     to compile-time `#[cfg(target_os)]` so each host build only
     contains its own branch.
@@ -52,6 +57,21 @@ deciding whether to tag from it.
   - `load_catalog`'s candidate search extracted into
     `load_catalog_from_candidates` so the "not found" branch is
     testable without mutating CWD.
+  - `print_disks`, `print_verified`, `handle_verify_result`
+    extracted out of `raidhos-cli::main()` so the output
+    formatters and the verify_iso Ok arm are unit-testable
+    with synthetic fixtures (no GPG keyring required).
+  - `list_disks_response`, `list_partitions_response`,
+    `install_response` extracted out of
+    `raidhos-priv-helper::main()` so the per-subcommand
+    response building is unit-testable independent of the
+    host's real disk inventory.
+  - `print_response`'s defensive serialize-error fallback
+    replaced with `.expect()` — the underlying type is
+    derive-Serialize and can't fail.
+  - CLI's `(Some, Some)` device/simulator match arm was dead
+    code (clap's `conflicts_with` catches it at parse time);
+    removed in favour of an `if let` chain.
 - **Tauri 2.** Migrated from Tauri 1 mid-branch; full workspace
   including the UI builds.
 - **Ventoy gap closures.** Sixteen of the 25 tracked gaps

@@ -52,12 +52,18 @@ the destructive paths deferred to v0.0.2.
   83, `raidhos-cli` 14 unit + 19 integration, `raidhos-priv-helper`
   9 seccomp + 6 toctou + 10 integration. Total: 378+ tests across
   the workspace.
-- `raidhos-core` coverage gate raised from 90% → **100%** in
-  CI (`cargo tarpaulin -p raidhos-core --fail-under 100`).
-  Workspace-wide (core + cli + priv-helper) sits at 96.89% on
-  the dev host; remaining uncovered lines are happy-path
-  output formatting in `raidhos-cli` that needs real disks
-  present.
+- **All three Rust crates gated at 100% line coverage** in CI:
+    - `raidhos-core` 940/940 (`--fail-under 100`)
+    - `raidhos-cli` 126/126 (`--fail-under 100`)
+    - `raidhos-priv-helper` 70/70 (`--fail-under 100`)
+  Workspace coverage (excluding the Tauri UI bin and the fuzz
+  harness): **100.00%, 1136/1136 lines covered**. The path to
+  100% required refactoring binary entry points
+  (`main()` in each crate) so the response-building / output-
+  formatter logic moved into pure functions exercised by unit
+  tests with synthetic fixtures, and gating platform pub-fn
+  wrappers with `#[cfg(target_os = ...)]` so each host build
+  only contains its own arm.
 
 ### Added
 

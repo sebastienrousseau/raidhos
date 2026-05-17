@@ -141,6 +141,30 @@ fn list_partitions_response(
     }
 }
 
+/// Build the install-subcommand response from the two underlying
+/// results: the core install pipeline outcome, and (on Linux only)
+/// the optional persistence-creation error. Three reachable cases:
+/// - install Ok, no persistence step run / succeeded → `ok` response.
+/// - install Ok, persistence step ran and failed → wrap the
+///   persistence error so the operator can re-run just the
+///   persistence step.
+/// - install Err → propagate the install error.
+fn install_response(
+    install_result: std::result::Result<(), String>,
+    persistence_result: Option<String>,
+) -> (HelperResponse<()>, bool) {
+    match (install_result, persistence_result) {
+        (Ok(()), None) => (HelperResponse::ok(()), true),
+        (Ok(()), Some(p_err)) => (
+            HelperResponse::err(format!(
+                "install succeeded but persistence creation failed: {p_err}"
+            )),
+            false,
+        ),
+        (Err(e), _) => (HelperResponse::err(e), false),
+    }
+}
+
 fn enforce_argv_budget() -> Result<(), String> {
     let total: usize = std::env::args().map(|a| a.len() + 1).sum();
     if total > MAX_ARGV_BYTES {
@@ -185,18 +209,16 @@ fn main() {
     //   0 — `{ok: true}`
     //   1 — `{ok: false, error: ...}`  (runtime / validation failure)
     //   2 — clap parse failure (already exited above)
-    let mut ok = true;
-
-    match cli.command {
+    let ok = match cli.command {
         Command::ListDisks => {
             let (resp, dispatch_ok) = list_disks_response(core::list_disks());
-            ok = dispatch_ok;
             print_response(&resp);
+            dispatch_ok
         }
         Command::ListPartitions { device } => {
             let (resp, dispatch_ok) = list_partitions_response(core::list_partitions(device));
-            ok = dispatch_ok;
             print_response(&resp);
+            dispatch_ok
         }
         Command::Install(args) => {
             // TOCTOU defence on Linux: pin the device fd before we
@@ -248,22 +270,11 @@ fn main() {
             #[cfg(not(target_os = "linux"))]
             let persistence_result: Option<String> = None;
 
-            let resp = match (install_result, persistence_result) {
-                (Ok(_), None) => HelperResponse::ok(()),
-                (Ok(_), Some(p_err)) => {
-                    ok = false;
-                    HelperResponse::<()>::err(format!(
-                        "install succeeded but persistence creation failed: {p_err}"
-                    ))
-                }
-                (Err(e), _) => {
-                    ok = false;
-                    HelperResponse::<()>::err(e)
-                }
-            };
+            let (resp, dispatch_ok) = install_response(install_result, persistence_result);
             print_response(&resp);
+            dispatch_ok
         }
-    }
+    };
 
     if !ok {
         std::process::exit(1);
@@ -388,6 +399,45 @@ mod response_tests {
         assert!(!ok);
         assert!(!resp.ok);
         assert!(resp.error.as_deref().unwrap().contains("lsblk fell over"));
+    }
+
+    #[test]
+    fn install_response_ok_no_persistence() {
+        let (resp, ok) = install_response(Ok(()), None);
+        assert!(ok);
+        assert!(resp.ok);
+        assert!(resp.error.is_none());
+    }
+
+    #[test]
+    fn install_response_ok_with_persistence_error() {
+        let (resp, ok) = install_response(Ok(()), Some("dd failed".into()));
+        assert!(!ok);
+        assert!(!resp.ok);
+        let err = resp.error.unwrap();
+        assert!(err.contains("install succeeded"), "got: {err}");
+        assert!(err.contains("persistence creation failed"), "got: {err}");
+        assert!(err.contains("dd failed"), "got: {err}");
+    }
+
+    #[test]
+    fn install_response_install_failed() {
+        let (resp, ok) = install_response(Err("device not found".into()), None);
+        assert!(!ok);
+        assert!(!resp.ok);
+        assert_eq!(resp.error.as_deref(), Some("device not found"));
+    }
+
+    #[test]
+    fn install_response_install_failed_ignores_persistence() {
+        // When install errors, persistence_result is ignored — the
+        // install error takes precedence.
+        let (resp, ok) = install_response(
+            Err("partition failed".into()),
+            Some("persistence would have failed too".into()),
+        );
+        assert!(!ok);
+        assert_eq!(resp.error.as_deref(), Some("partition failed"));
     }
 
     /// `print_response` cannot fail on any HelperResponse<T> that this

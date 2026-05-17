@@ -66,22 +66,17 @@ jobs:
           if ! command -v cargo-tarpaulin >/dev/null 2>&1; then
             cargo install --locked cargo-tarpaulin
           fi
-      # Coverage floor. Currently measured at ~91-92% on Linux CI
-      # after the validate_device_path_for_target refactor (75e43b5)
-      # made the macOS + Windows install_with tests cross-platform.
-      # The remaining ~8% is mostly the unsupported.rs fallback module
-      # and a handful of error branches that need real-host integration
-      # tests. Tracking: 95% by v0.1.0.
+      # Coverage gate: 100% across raidhos-core, raidhos-cli, and
+      # raidhos-priv-helper. Untestable lines (binary entry points,
+      # platform-specific dispatch wrappers) have been refactored
+      # into helpers with unit tests; pub-fn wrappers in
+      # platform/{linux,macos,windows}.rs are cfg-gated to their
+      # host so each runner only sees its own arm.
       #
-      # Never lower this without a CHANGELOG entry justifying why.
-      - name: Tarpaulin
+      # If this gate fails, fix the test — don't lower the bar.
+      # See `docs/V0_0_1_STATUS.md` for the per-file breakdown.
+      - name: Tarpaulin (raidhos-core, 100%)
         run: |
-          # `-p raidhos-core` selects the package, but tarpaulin still
-          # walks lines in any dev-dep / workspace binary it touches.
-          # Explicitly exclude the priv-helper main.rs (which is
-          # gated under its own dedicated coverage path elsewhere) and
-          # the fuzz harness so this gate is strictly about
-          # raidhos-core's library coverage.
           cargo tarpaulin \
             -p raidhos-core \
             --exclude-files 'crates/priv-helper/**' \
@@ -90,6 +85,24 @@ jobs:
             --exclude-files 'fuzz/**' \
             --fail-under 100 \
             --out Xml
+      - name: Tarpaulin (raidhos-cli, 100%)
+        run: |
+          cargo tarpaulin \
+            -p raidhos-cli \
+            --exclude-files 'crates/core/**' \
+            --exclude-files 'crates/priv-helper/**' \
+            --exclude-files 'crates/ui-tauri/**' \
+            --exclude-files 'fuzz/**' \
+            --fail-under 100
+      - name: Tarpaulin (raidhos-priv-helper, 100%)
+        run: |
+          cargo tarpaulin \
+            -p raidhos-priv-helper \
+            --exclude-files 'crates/core/**' \
+            --exclude-files 'crates/cli/**' \
+            --exclude-files 'crates/ui-tauri/**' \
+            --exclude-files 'fuzz/**' \
+            --fail-under 100
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4
