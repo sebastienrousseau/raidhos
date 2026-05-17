@@ -71,50 +71,63 @@ fn menuentry(entry: &BootEntryConfig) -> String {
     let tip = sanitize(&entry.tip);
 
     let mut out = String::new();
-    // Ventoy gap G11: menu_tip. Emit the help text as a GRUB
-    // comment above the menuentry so users grepping the rendered
-    // grub.cfg can see the intent; theme support (rendering it in
-    // the menu) is GRUB-theme-side.
     if !tip.is_empty() {
         out.push_str(&format!("# tip: {tip}\n"));
     }
-    // Ventoy gap G11: menu_class. GRUB's syntax is
-    // `menuentry "title" --class foo --class bar { … }`.
     if class.is_empty() {
         out.push_str(&format!("menuentry \"{title}\" {{\n"));
     } else {
         out.push_str(&format!("menuentry \"{title}\" --class {class} {{\n"));
     }
-    out.push_str(&format!(
-        "  set isofile=\"($root){}\"\n",
-        path_prefix(&path)
-    ));
-    out.push_str("  loopback loop $isofile\n");
-    out.push_str("  if [ -f (loop)/boot/grub/grub.cfg ]; then\n");
-    out.push_str("    configfile (loop)/boot/grub/grub.cfg\n");
-    out.push_str("  elif [ -f (loop)/casper/vmlinuz ]; then\n");
-    out.push_str(&format!(
-        "    linux (loop)/casper/vmlinuz {params} {kargs} iso-scan/filename=$isofile\n"
-    ));
-    if !initrd.is_empty() {
-        out.push_str(&format!("    initrd {initrd}\n"));
+    // Ventoy gap G7: chainload a `.efi` binary directly. Anything
+    // that doesn't end with `.iso` (case-insensitive) is treated
+    // as a raw UEFI binary; this is the route memtest86+ and most
+    // firmware-updater images expect.
+    if is_efi_binary(&path) {
+        out.push_str(&format!(
+            "  chainloader \"($root){}\"\n",
+            path_prefix(&path)
+        ));
     } else {
-        out.push_str("    initrd (loop)/casper/initrd\n");
+        out.push_str(&format!(
+            "  set isofile=\"($root){}\"\n",
+            path_prefix(&path)
+        ));
+        out.push_str("  loopback loop $isofile\n");
+        out.push_str("  if [ -f (loop)/boot/grub/grub.cfg ]; then\n");
+        out.push_str("    configfile (loop)/boot/grub/grub.cfg\n");
+        out.push_str("  elif [ -f (loop)/casper/vmlinuz ]; then\n");
+        out.push_str(&format!(
+            "    linux (loop)/casper/vmlinuz {params} {kargs} iso-scan/filename=$isofile\n"
+        ));
+        if !initrd.is_empty() {
+            out.push_str(&format!("    initrd {initrd}\n"));
+        } else {
+            out.push_str("    initrd (loop)/casper/initrd\n");
+        }
+        out.push_str("  elif [ -f (loop)/live/vmlinuz ]; then\n");
+        out.push_str(&format!(
+            "    linux (loop)/live/vmlinuz {params} {kargs} boot=live findiso=$isofile\n"
+        ));
+        if !initrd.is_empty() {
+            out.push_str(&format!("    initrd {initrd}\n"));
+        } else {
+            out.push_str("    initrd (loop)/live/initrd.img\n");
+        }
+        out.push_str("  else\n");
+        out.push_str("    echo \"No known kernel path found in ISO.\"\n");
+        out.push_str("  fi\n");
     }
-    out.push_str("  elif [ -f (loop)/live/vmlinuz ]; then\n");
-    out.push_str(&format!(
-        "    linux (loop)/live/vmlinuz {params} {kargs} boot=live findiso=$isofile\n"
-    ));
-    if !initrd.is_empty() {
-        out.push_str(&format!("    initrd {initrd}\n"));
-    } else {
-        out.push_str("    initrd (loop)/live/initrd.img\n");
-    }
-    out.push_str("  else\n");
-    out.push_str("    echo \"No known kernel path found in ISO.\"\n");
-    out.push_str("  fi\n");
     out.push_str("}\n");
     out
+}
+
+/// Heuristic: does the (already-sanitised) path look like a UEFI
+/// binary? Used by Ventoy gap G7 to switch between `loopback`-ISO
+/// mounting and direct `chainloader` invocation.
+fn is_efi_binary(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower.ends_with(".efi")
 }
 
 /// Strip every character that has meaning to the GRUB scripting
@@ -607,5 +620,79 @@ mod tests {
         // The sanitised username flows through, sans metachars.
         assert!(out.contains("set superusers=\"adminechobad\""));
         assert!(out.contains("password_pbkdf2 adminechobad"));
+    }
+
+    // ---------------------------------------------------------------
+    // Ventoy gap G7: .EFI binary direct chainload
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn is_efi_binary_recognises_efi_extension() {
+        assert!(is_efi_binary("bootx64.efi"));
+        assert!(is_efi_binary("memtest.efi"));
+        assert!(is_efi_binary("/path/to/SHELL.EFI"));
+        // Case-insensitive.
+        assert!(is_efi_binary("Bootmgr.eFi"));
+    }
+
+    #[test]
+    fn is_efi_binary_rejects_iso_and_other() {
+        assert!(!is_efi_binary("ubuntu.iso"));
+        assert!(!is_efi_binary("openwrt.img"));
+        assert!(!is_efi_binary(""));
+        // Substring 'efi' in the path mustn't match — needs to end
+        // with the extension.
+        assert!(!is_efi_binary("/uefi/disk.iso"));
+    }
+
+    #[test]
+    fn render_chainloads_efi_binary() {
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![entry("Memtest", "/boot/efi/memtest86.efi")],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        // The .efi path uses chainloader, not loopback.
+        assert!(
+            out.contains("chainloader \"($root)/boot/efi/memtest86.efi\""),
+            "missing chainloader in: {out}",
+        );
+        // None of the ISO boilerplate should appear for this entry.
+        assert!(!out.contains("loopback loop"));
+        assert!(!out.contains("(loop)/casper"));
+    }
+
+    #[test]
+    fn render_keeps_iso_path_for_iso_entries() {
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![entry("Ubuntu", "/boot/isos/ubuntu.iso")],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        // ISO entries still use the loopback flow.
+        assert!(out.contains("loopback loop $isofile"));
+        assert!(!out.contains("chainloader"));
+    }
+
+    #[test]
+    fn render_mixes_iso_and_efi_entries() {
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![
+                entry("Memtest", "/memtest86.efi"),
+                entry("Ubuntu", "/boot/isos/ubuntu.iso"),
+            ],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        assert!(out.contains("chainloader \"($root)/memtest86.efi\""));
+        assert!(out.contains("set isofile=\"($root)/boot/isos/ubuntu.iso\""));
+        // Each entry has its own balanced { } block.
+        assert_eq!(out.matches('{').count(), out.matches('}').count());
     }
 }
