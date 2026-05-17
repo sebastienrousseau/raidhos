@@ -91,6 +91,14 @@ pub type Result<T> = std::result::Result<T, CoreError>;
 /// Kept variant-stable and `Display`-stable across patch releases — the
 /// CLI and the privileged helper match on substrings of the rendered
 /// form, and the Tauri UI surfaces these strings directly to users.
+///
+/// # Examples
+///
+/// ```
+/// use raidhos_core::CoreError;
+/// let e = CoreError::Validation("device must be an absolute path".into());
+/// assert_eq!(format!("{e}"), "validation error: device must be an absolute path");
+/// ```
 #[derive(Debug, thiserror::Error, Serialize, Deserialize)]
 pub enum CoreError {
     /// Compiled for a target OS without a platform backend.
@@ -113,6 +121,16 @@ pub enum CoreError {
 }
 
 /// Metadata about a physical disk discovered by the platform backend.
+///
+/// # Examples
+///
+/// ```
+/// let d = raidhos_core::DiskInfo {
+///     id: "/dev/sdb".into(), model: "USB".into(), size_bytes: 16_000_000_000,
+///     removable: true, mountpoints: vec![], is_system: false,
+/// };
+/// assert!(d.removable && !d.is_system);
+/// ```
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DiskInfo {
     /// Platform-native device identifier (`/dev/sdX`, `/dev/diskN`,
@@ -134,6 +152,16 @@ pub struct DiskInfo {
 }
 
 /// Metadata about a single partition.
+///
+/// # Examples
+///
+/// ```
+/// let p = raidhos_core::PartitionInfo {
+///     id: "/dev/sdb1".into(), label: "RAIDHOS_EFI".into(),
+///     fstype: "vfat".into(), mountpoints: vec![],
+/// };
+/// assert_eq!(p.fstype, "vfat");
+/// ```
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PartitionInfo {
     /// Partition device identifier (e.g. `/dev/sdb1`).
@@ -149,6 +177,20 @@ pub struct PartitionInfo {
 /// User-supplied install request. Built by the CLI, the UI, and the
 /// privileged helper from their respective argument surfaces and handed
 /// to [`install`].
+///
+/// # Examples
+///
+/// ```
+/// // Safe defaults: dry-run with allow_write off.
+/// let req = raidhos_core::InstallRequest {
+///     device: "/dev/sdb".into(),
+///     payload_version: "0.1.0".into(),
+///     wipe: true,
+///     dry_run: true,
+///     allow_write: false,
+/// };
+/// assert!(req.dry_run && !req.allow_write);
+/// ```
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct InstallRequest {
     /// Device path. Validated against the per-OS allowlist.
@@ -165,6 +207,17 @@ pub struct InstallRequest {
 }
 
 /// Progress event emitted by the install pipeline.
+///
+/// # Examples
+///
+/// ```
+/// let e = raidhos_core::ProgressEvent {
+///     phase: "format".into(),
+///     message: "Formatting FAT32 ESP".into(),
+///     percent: Some(60),
+/// };
+/// assert_eq!(e.percent, Some(60));
+/// ```
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ProgressEvent {
     /// Coarse phase tag: `validate`, `prepare`, `partition`, `format`,
@@ -177,6 +230,18 @@ pub struct ProgressEvent {
 }
 
 /// One ISO discovered by the [`scan_isos`] helper.
+///
+/// # Examples
+///
+/// ```
+/// let iso = raidhos_core::IsoEntry {
+///     title: "ubuntu".into(),
+///     path: "/Downloads/ubuntu-24.04.iso".into(),
+///     size_bytes: 4_500_000_000,
+///     params: "quiet splash".into(),
+/// };
+/// assert!(iso.path.ends_with(".iso"));
+/// ```
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct IsoEntry {
     /// Filename stem, used as the menu title in GRUB.
@@ -192,6 +257,21 @@ pub struct IsoEntry {
 /// Trait for sinks that consume [`ProgressEvent`]s emitted by the
 /// install pipeline. The CLI prints them to stdout; the Tauri UI
 /// accumulates them in a `Mutex<Vec<…>>` and ships them back over IPC.
+///
+/// # Examples
+///
+/// ```
+/// use raidhos_core::{ProgressEvent, ProgressSink};
+/// struct StdoutSink;
+/// impl ProgressSink for StdoutSink {
+///     fn emit(&self, e: ProgressEvent) {
+///         println!("[{}] {}", e.phase, e.message);
+///     }
+/// }
+/// StdoutSink.emit(ProgressEvent {
+///     phase: "validate".into(), message: "ok".into(), percent: Some(5),
+/// });
+/// ```
 pub trait ProgressSink {
     /// Called once per emitted event. Implementations should not block
     /// for long — the install path emits events synchronously.
@@ -251,6 +331,15 @@ pub fn scan_isos(dirs: Vec<String>) -> Result<Vec<IsoEntry>> {
 
 /// List partitions on the given device. Returns an empty list on
 /// platforms where partition enumeration is not yet wired.
+///
+/// # Examples
+///
+/// ```no_run
+/// let parts = raidhos_core::list_partitions("/dev/sdb".to_string()).unwrap();
+/// for p in parts {
+///     println!("{} {} {:?}", p.id, p.fstype, p.mountpoints);
+/// }
+/// ```
 pub fn list_partitions(device: String) -> Result<Vec<PartitionInfo>> {
     platform::list_partitions(device)
 }
