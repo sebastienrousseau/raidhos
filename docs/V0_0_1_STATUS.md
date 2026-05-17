@@ -29,8 +29,8 @@ deciding whether to tag from it.
 
 - **Builds clean.** `cargo build --workspace` succeeds on
   Linux, macOS, Windows.
-- **Tests pass.** 344+ tests across the workspace:
-  `raidhos-core` 201 unit + 26 doctest, `raidhos-ui` 81,
+- **Tests pass.** 346+ tests across the workspace:
+  `raidhos-core` 201 unit + 26 doctest, `raidhos-ui` 83,
   `raidhos-cli` 14, `raidhos-priv-helper` 9 seccomp + 6 toctou
   + 7 integration.
 - **`cargo fmt --check`, `cargo clippy --all-targets -D warnings`**

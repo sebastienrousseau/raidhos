@@ -49,8 +49,8 @@ the destructive paths deferred to v0.0.2.
   host's compile-time `target_os`. CI coverage gate raised from
   65% to 90%.
 - Test count: `raidhos-core` 201 unit + 26 doctest, `raidhos-ui`
-  81, `raidhos-cli` 14, `raidhos-priv-helper` 9 seccomp + 6 toctou
-  + 7 integration. Total: 344+ tests across the workspace.
+  83, `raidhos-cli` 14, `raidhos-priv-helper` 9 seccomp + 6 toctou
+  + 7 integration. Total: 346+ tests across the workspace.
 
 ### Added
 
