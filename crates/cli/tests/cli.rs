@@ -398,6 +398,44 @@ fn scan_isos_errors_on_unreadable_dir() {
 }
 
 #[test]
+fn write_config_errors_when_target_is_a_directory() {
+    // Pre-create `<mount>/raidhos/boot.json` as a directory.
+    // create_dir_all succeeds (the dir exists), but fs::write to
+    // a path that's a directory fails — exercises cli/main.rs:166-167.
+    use std::fs;
+    let mount = std::env::temp_dir().join(format!(
+        "raidhos-cli-mount-dirpath-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::create_dir_all(mount.join("raidhos/boot.json")).unwrap();
+
+    let src = mount.join("config-src.json");
+    fs::write(&src, br#"{}"#).unwrap();
+
+    let out = cli()
+        .args([
+            "write-config",
+            "--mount-path",
+            &mount.display().to_string(),
+            "--config-path",
+            &src.display().to_string(),
+        ])
+        .output()
+        .expect("spawn");
+    assert!(!out.status.success(), "expected non-zero exit");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        err.contains("write"),
+        "missing write error in stderr: {err}",
+    );
+    let _ = fs::remove_dir_all(&mount);
+}
+
+#[test]
 fn write_config_errors_on_unwritable_mount() {
     // mount-path is a file (not a directory) → create_dir_all
     // fails. Exercises cli/main.rs:161-162.
