@@ -33,6 +33,12 @@ pub fn render_grub_cfg(config: &BootConfig, data_label: &str) -> String {
     out.push_str("export isopath\n");
 
     for entry in &config.entries {
+        // Ventoy gap G17: image_blacklist. Hidden entries are
+        // skipped before sanitisation; they never appear in the
+        // rendered output at all.
+        if entry.hidden {
+            continue;
+        }
         out.push_str(&menuentry(entry));
     }
     out
@@ -44,9 +50,24 @@ fn menuentry(entry: &BootEntryConfig) -> String {
     let params = sanitize(&entry.params);
     let initrd = sanitize(&entry.initrd);
     let kargs = sanitize(&entry.kargs);
+    let class = sanitize(&entry.class);
+    let tip = sanitize(&entry.tip);
 
     let mut out = String::new();
-    out.push_str(&format!("menuentry \"{title}\" {{\n"));
+    // Ventoy gap G11: menu_tip. Emit the help text as a GRUB
+    // comment above the menuentry so users grepping the rendered
+    // grub.cfg can see the intent; theme support (rendering it in
+    // the menu) is GRUB-theme-side.
+    if !tip.is_empty() {
+        out.push_str(&format!("# tip: {tip}\n"));
+    }
+    // Ventoy gap G11: menu_class. GRUB's syntax is
+    // `menuentry "title" --class foo --class bar { … }`.
+    if class.is_empty() {
+        out.push_str(&format!("menuentry \"{title}\" {{\n"));
+    } else {
+        out.push_str(&format!("menuentry \"{title}\" --class {class} {{\n"));
+    }
     out.push_str(&format!(
         "  set isofile=\"($root){}\"\n",
         path_prefix(&path)
@@ -200,6 +221,9 @@ mod tests {
                 params: "quiet".to_string(),
                 initrd: "".to_string(),
                 kargs: "".to_string(),
+                class: String::new(),
+                tip: String::new(),
+                hidden: false,
             }],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -217,6 +241,9 @@ mod tests {
                 params: String::new(),
                 initrd: String::new(),
                 kargs: String::new(),
+                class: String::new(),
+                tip: String::new(),
+                hidden: false,
             }],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -228,5 +255,128 @@ mod tests {
         let closes = out.matches('}').count();
         assert_eq!(opens, closes, "unbalanced braces: {out}");
         assert!(!out.contains("PWNED { "));
+    }
+
+    // ---------------------------------------------------------------
+    // Ventoy gaps G11 (menu_class / menu_tip) and G17 (image_blacklist)
+    // ---------------------------------------------------------------
+
+    fn entry(title: &str, path: &str) -> BootEntryConfig {
+        BootEntryConfig {
+            title: title.to_string(),
+            path: path.to_string(),
+            params: String::new(),
+            initrd: String::new(),
+            kargs: String::new(),
+            class: String::new(),
+            tip: String::new(),
+            hidden: false,
+        }
+    }
+
+    #[test]
+    fn render_emits_class_when_set() {
+        let mut e = entry("Ubuntu", "ubuntu.iso");
+        e.class = "linux".to_string();
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![e],
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        assert!(
+            out.contains("menuentry \"Ubuntu\" --class linux {"),
+            "missing class in: {out}",
+        );
+    }
+
+    #[test]
+    fn render_omits_class_when_empty() {
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![entry("Plain", "p.iso")],
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        assert!(out.contains("menuentry \"Plain\" {"));
+        assert!(!out.contains("--class"));
+    }
+
+    #[test]
+    fn render_sanitises_class_field() {
+        let mut e = entry("Evil", "e.iso");
+        e.class = "linux; rm -rf /".to_string();
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![e],
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        // The rendered `--class …` token must NOT carry the
+        // attacker-supplied semicolon. The output as a whole still
+        // contains semicolons from the GRUB boilerplate (`if [ … ];
+        // then` etc.), so we check the menuentry line specifically.
+        let menuentry_line = out
+            .lines()
+            .find(|l| l.starts_with("menuentry"))
+            .expect("a menuentry line");
+        assert!(
+            !menuentry_line.contains(';'),
+            "menuentry line contains semicolon: {menuentry_line}",
+        );
+        // The class still appears, just without the dangerous chars.
+        assert!(out.contains("--class linux rm -rf"));
+    }
+
+    #[test]
+    fn render_emits_tip_as_comment() {
+        let mut e = entry("Arch", "arch.iso");
+        e.tip = "Rolling-release Linux".to_string();
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![e],
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        assert!(
+            out.contains("# tip: Rolling-release Linux"),
+            "missing tip in: {out}",
+        );
+    }
+
+    #[test]
+    fn render_omits_tip_when_empty() {
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![entry("Plain", "p.iso")],
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        assert!(!out.contains("# tip:"));
+    }
+
+    #[test]
+    fn render_skips_hidden_entries_entirely() {
+        let mut hidden = entry("Hidden", "secret.iso");
+        hidden.hidden = true;
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![entry("Shown", "shown.iso"), hidden],
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        assert!(out.contains("menuentry \"Shown\""));
+        assert!(!out.contains("Hidden"));
+        assert!(!out.contains("secret.iso"));
+    }
+
+    #[test]
+    fn render_with_no_visible_entries_produces_no_menuentries() {
+        let mut hidden_a = entry("A", "a.iso");
+        hidden_a.hidden = true;
+        let mut hidden_b = entry("B", "b.iso");
+        hidden_b.hidden = true;
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![hidden_a, hidden_b],
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        // Boilerplate is still there but no menuentry blocks.
+        assert!(out.contains("search --no-floppy --label DATA"));
+        assert!(!out.contains("menuentry"));
     }
 }

@@ -52,6 +52,22 @@ pub struct BootEntryConfig {
     pub params: String,
     pub initrd: String,
     pub kargs: String,
+    /// Optional short tag used to group entries (Ventoy's
+    /// `menu_class`). When set, the renderer emits `--class TAG`
+    /// on the `menuentry` so a GRUB theme can style entries by
+    /// class. Sanitised before output. Closes Ventoy gap G11.
+    #[serde(default)]
+    pub class: String,
+    /// Optional one-line help text shown beside the entry
+    /// (Ventoy's `menu_tip`). Rendered as a GRUB comment above
+    /// the `menuentry` block. Sanitised before output.
+    #[serde(default)]
+    pub tip: String,
+    /// If `true`, the renderer skips this entry entirely
+    /// (Ventoy's `image_blacklist`). Lets users keep an ISO on
+    /// the USB but hide it from the menu. Closes Ventoy gap G17.
+    #[serde(default)]
+    pub hidden: bool,
 }
 
 /// Tauri event channel name. Frontend subscribes via
@@ -483,6 +499,9 @@ mod tests {
                 params: "quiet splash".into(),
                 initrd: String::new(),
                 kargs: String::new(),
+                class: String::new(),
+                tip: String::new(),
+                hidden: false,
             }],
             default_entry: Some("ubuntu".into()),
         };
