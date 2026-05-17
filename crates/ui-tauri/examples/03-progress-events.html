@@ -1,0 +1,58 @@
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self'; script-src 'self';
+                 connect-src 'self' ipc: tauri:" />
+  <title>raidhos-ui — progress events example</title>
+  <script defer>
+    document.addEventListener('DOMContentLoaded', async () => {
+      const { event, core } = window.__TAURI__;
+      const log = document.getElementById('log');
+
+      const unlisten = await event.listen('raidhos://progress', (ev) => {
+        const { phase, message, percent } = ev.payload;
+        const li = document.createElement('li');
+        const pct = percent != null ? ` ${percent}%` : '';
+        li.textContent = `[${phase}]${pct} ${message}`;
+        log.appendChild(li);
+      });
+
+      document.getElementById('run').addEventListener('click', async () => {
+        log.replaceChildren();
+        try {
+          await core.invoke('install', {
+            args: {
+              device: '/dev/sdb',
+              payload_version: '0.1.0',
+              wipe: true,
+              dry_run: true,        // safe
+              allow_write: false,
+            },
+          });
+        } catch (e) {
+          const li = document.createElement('li');
+          li.textContent = `error: ${e}`;
+          log.appendChild(li);
+        }
+      });
+
+      window.addEventListener('beforeunload', unlisten);
+    });
+  </script>
+</head>
+<body>
+  <h1>Progress events</h1>
+  <p>Subscribes to the typed <code>raidhos://progress</code> event
+     stream that the install pipeline emits. The button below
+     runs a dry-run install (writes nothing) so you can see the
+     phase / message / percent payloads flow through.</p>
+
+  <button id="run">Run dry-run install</button>
+
+  <h2>Log</h2>
+  <ol id="log" aria-live="polite"></ol>
+</body>
+</html>

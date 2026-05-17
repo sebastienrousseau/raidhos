@@ -1,0 +1,54 @@
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self'; script-src 'self';
+                 connect-src 'self' ipc: tauri:; frame-ancestors 'none'" />
+  <title>raidhos-ui — drag-and-drop ISOs example</title>
+  <script defer>
+    document.addEventListener('DOMContentLoaded', () => {
+      const { event } = window.__TAURI__;
+      const log = document.getElementById('log');
+
+      event.listen('tauri://drag-drop', (ev) => {
+        const all = ev.payload.paths;
+        const isos = all.filter((p) => p.toLowerCase().endsWith('.iso'));
+        appendLog(`drop: ${all.length} files, ${isos.length} ISOs`);
+        for (const p of isos) appendLog(`  - ${p}`);
+      });
+
+      document.getElementById('scan').addEventListener('click', async () => {
+        const dirs = document.getElementById('dirs').value
+          .split(',').map((s) => s.trim()).filter(Boolean);
+        try {
+          const isos = await window.__TAURI__.core.invoke('scan_isos', { dirs });
+          appendLog(`scan_isos returned ${isos.length} ISOs`);
+          for (const iso of isos) appendLog(`  - ${iso.title} (${iso.size_bytes}b)`);
+        } catch (e) {
+          appendLog(`error: ${e}`);
+        }
+      });
+
+      function appendLog(line) {
+        const li = document.createElement('li');
+        li.textContent = line;
+        log.appendChild(li);
+      }
+    });
+  </script>
+</head>
+<body>
+  <h1>Drag-and-drop ISOs</h1>
+  <p>Drop <code>.iso</code> files onto the window, or click Scan
+     after typing comma-separated directories.</p>
+
+  <label for="dirs">Directories to scan</label>
+  <input id="dirs" type="text" value="/home,/media" size="40" />
+  <button id="scan">Scan</button>
+
+  <h2>Log</h2>
+  <ul id="log" aria-live="polite"></ul>
+</body>
+</html>
