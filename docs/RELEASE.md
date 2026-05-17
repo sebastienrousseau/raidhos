@@ -160,8 +160,8 @@ flowchart TB
   BUILD --> SIGN1[cosign sign-blob]
   GRUB  --> SIGN2[cosign sign-blob]
 
-  SIGN1 --> ATTEST1[attest-build-provenance@v1]
-  SIGN2 --> ATTEST2[attest-build-provenance@v1]
+  SIGN1 --> ATTEST1["attest-build-provenance@v1"]
+  SIGN2 --> ATTEST2["attest-build-provenance@v1"]
 
   ATTEST1 --> COLLECT[publish job<br/>collect artefacts]
   ATTEST2 --> COLLECT

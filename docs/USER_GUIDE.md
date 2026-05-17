@@ -119,7 +119,7 @@ The same operation in the UI:
 ```mermaid
 %%{init: {'theme':'neutral'}}%%
 flowchart LR
-  CLICK([Click "List Disks"]) --> DISCOVER[list_disks Tauri command]
+  CLICK(["Click List Disks"]) --> DISCOVER[list_disks Tauri command]
   DISCOVER --> RENDER[render each DiskInfo as a card]
   RENDER --> FILTER{Hide system?}
   FILTER -->|on| ONLYUSB[Show removable, non-system only]

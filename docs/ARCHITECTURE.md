@@ -87,7 +87,7 @@ graph TD
 
   HELPER -->|escalated by| ELEV
 
-  CAT -->|verify via gpg(1)| PAYLOAD
+  CAT -->|verify via gpg| PAYLOAD
 ```
 
 Read top-to-bottom: user invokes UI or CLI, which call into the
@@ -198,18 +198,18 @@ USB:
 sequenceDiagram
     autonumber
     actor User
-    participant UI as raidhos-ui<br/>(unprivileged)
+    participant UI as raidhos-ui (unprivileged)
     participant CORE as raidhos-core
     participant POLKIT as pkexec / osascript / UAC
-    participant HELPER as raidhos-priv-helper<br/>(root)
+    participant HELPER as raidhos-priv-helper (root)
     participant TOCTOU as TOCTOU pin (Linux)
     participant SECCOMP as seccomp filter (Linux)
-    participant HOST as host tools<br/>(parted · mkfs · mount · cp)
+    participant HOST as host tools (parted · mkfs · mount · cp)
     participant USB as USB device
 
     User->>UI: select device + type ERASE
     UI->>CORE: list_disks()
-    CORE-->>UI: Vec<DiskInfo>
+    CORE-->>UI: list of DiskInfo
     UI->>UI: filter to removable, hide system
     UI->>UI: dry-run plan
     User->>UI: click "Install"
@@ -230,8 +230,8 @@ sequenceDiagram
     CORE->>HOST: mount + cp + umount
     HOST->>USB: write blocks
     CORE-->>HELPER: complete
-    HELPER->>HOST: optional: dd persistence overlay
-    HELPER-->>UI: JSON {ok: true}
+    HELPER->>HOST: optional dd persistence overlay
+    HELPER-->>UI: JSON ok:true
     UI-->>User: success screen
     Note over HELPER,USB: TOCTOU fd held the whole time
 ```

@@ -274,6 +274,87 @@ pub(crate) fn sha256sums_lookup(body: &str, filename: &str) -> Option<String> {
     None
 }
 
+/// Verify an ISO against a single expected SHA-256, supplied as a hex
+/// string. Used by `raidhos-cli catalog verify --iso X --sha256 Y` for
+/// ISOs that aren't in the bundled GPG-signed catalog. The trust model
+/// here is **weaker** than [`verify_iso`]: the caller is asserting
+/// "this hash is correct" without a GPG attestation. Pair with a
+/// trusted source for the hash.
+///
+/// Closes Ventoy gap G24 (per-ISO checksum file).
+///
+/// # Examples
+///
+/// ```no_run
+/// use std::path::Path;
+/// // Expected hex from the distro's website / signed checksum file.
+/// let expected = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
+/// raidhos_core::verify_iso_sha256(Path::new("/Downloads/some.iso"), expected)
+///     .expect("hash mismatch");
+/// ```
+pub fn verify_iso_sha256(
+    iso_path: &Path,
+    expected_hex: &str,
+) -> std::result::Result<String, CatalogError> {
+    let expected = expected_hex.trim().to_ascii_lowercase();
+    if expected.len() != 64 || !expected.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(CatalogError::Io(format!(
+            "expected SHA-256 must be 64 hex chars (got {} chars)",
+            expected.len()
+        )));
+    }
+    let computed = sha256_of_file(iso_path)?;
+    if !computed.eq_ignore_ascii_case(&expected) {
+        return Err(CatalogError::Sha256Mismatch { expected, computed });
+    }
+    Ok(computed)
+}
+
+/// Verify an ISO against a co-located `<file>.sha256` companion file
+/// containing either a bare hex string or a `SHA256SUMS`-style line.
+///
+/// Convention: `iso_path` is `/path/to/ubuntu-24.04.iso`; this function
+/// reads `/path/to/ubuntu-24.04.iso.sha256` (or `.sha512` if the caller
+/// passes one — though only SHA-256 is hashed) and parses the first
+/// non-comment line.
+///
+/// Closes Ventoy gap G24 (per-ISO `VENTOY_CHECKSUM` companion file)
+/// with our convention rather than Ventoy's.
+pub fn verify_iso_companion_sha256(iso_path: &Path) -> std::result::Result<String, CatalogError> {
+    let companion = {
+        let mut p = iso_path.as_os_str().to_owned();
+        p.push(".sha256");
+        std::path::PathBuf::from(p)
+    };
+    let body = fs::read_to_string(&companion)
+        .map_err(|e| CatalogError::Io(format!("read companion {}: {e}", companion.display())))?;
+    let expected = extract_first_hash(&body, iso_path).ok_or_else(|| {
+        CatalogError::Io(format!("no usable hash line in {}", companion.display()))
+    })?;
+    verify_iso_sha256(iso_path, &expected)
+}
+
+fn extract_first_hash(body: &str, iso_path: &Path) -> Option<String> {
+    let iso_filename = iso_path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+    // SHA256SUMS-style format first.
+    if let Some(h) = sha256sums_lookup(body, iso_filename) {
+        return Some(h);
+    }
+    // Bare-hex fallback: first whitespace-separated token of the first
+    // non-comment line that looks like a 64-char hex.
+    for line in body.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let tok = line.split_whitespace().next().unwrap_or("");
+        if tok.len() == 64 && tok.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Some(tok.to_string());
+        }
+    }
+    None
+}
+
 fn sha256_of_file(path: &Path) -> std::result::Result<String, CatalogError> {
     let mut f = fs::File::open(path).map_err(|e| CatalogError::Io(e.to_string()))?;
     let mut hasher = Sha256::new();

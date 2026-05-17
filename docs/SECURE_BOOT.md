@@ -54,11 +54,11 @@ sequenceDiagram
     actor User
     participant FW as UEFI firmware
     participant USB as USB stick (ESP)
-    participant SHIM as shim<br/>(MS-CA signed)
-    participant GRUB as BOOTX64.EFI<br/>(RaidhOS GRUB)
+    participant SHIM as shim (MS-CA signed)
+    participant GRUB as BOOTX64.EFI (RaidhOS GRUB)
     participant KERN as Linux kernel
     User->>FW: power on, pick USB
-    FW->>USB: read \EFI\BOOT\BOOTX64.EFI
+    FW->>USB: read /EFI/BOOT/BOOTX64.EFI
     alt Secure Boot OFF
         FW->>GRUB: execute (unsigned OK)
         GRUB->>KERN: load chosen ISO's kernel

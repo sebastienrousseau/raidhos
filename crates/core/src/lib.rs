@@ -66,7 +66,8 @@ mod runtime;
 
 pub use catalog::{
     find_entry, load_catalog, load_catalog_from, sha256sums_lookup_pub as sha256sums_lookup,
-    verify_iso, verify_iso_with, CatalogEntry, CatalogError, VerifiedIso,
+    verify_iso, verify_iso_companion_sha256, verify_iso_sha256, verify_iso_with, CatalogEntry,
+    CatalogError, VerifiedIso,
 };
 pub use payload::{verify_payload, ManifestError, PayloadManifest};
 pub use runtime::{Invocation, MockOutcome, MockRuntime, RealRuntime, Runtime};
