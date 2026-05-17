@@ -89,6 +89,7 @@ fn main() {
             wipe,
             dry_run,
             allow_write,
+            bios_compat,
         } => {
             struct StdoutSink;
             impl core::ProgressSink for StdoutSink {
@@ -126,6 +127,7 @@ fn main() {
                 dry_run,
                 allow_write,
                 simulator: simulator_mode,
+                bios_compat,
             };
             if let Err(e) = core::install(req, &StdoutSink) {
                 eprintln!("install failed: {e}");

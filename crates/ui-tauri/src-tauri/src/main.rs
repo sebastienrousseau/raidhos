@@ -119,6 +119,7 @@ fn install(window: Window, args: InstallArgs) -> Result<(), String> {
         // simulator preview should use `raidhos-cli install
         // --simulator …` from a terminal.
         simulator: false,
+        bios_compat: false,
     };
     core::install(req, &sink).map_err(|e| e.to_string())?;
     Ok(())

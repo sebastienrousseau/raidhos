@@ -54,6 +54,7 @@ fn main() {
         dry_run: false,    // we actually want to write — to the file, not a device
         allow_write: true, // safe because simulator mode bypasses /dev/* targeting
         simulator: true,
+        bios_compat: false,
     };
 
     println!("Running install pipeline against {path} ({size_mb} MiB sparse)…");

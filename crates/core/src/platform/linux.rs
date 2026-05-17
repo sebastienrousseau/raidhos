@@ -68,7 +68,11 @@ pub(crate) fn install_with(
     if req.dry_run {
         sink.emit(ProgressEvent {
             phase: "complete".to_string(),
-            message: "Dry-run complete. No changes made.".to_string(),
+            message: if req.bios_compat {
+                "Dry-run complete. Hybrid BIOS+UEFI layout will be requested.".to_string()
+            } else {
+                "Dry-run complete. No changes made.".to_string()
+            },
             percent: Some(100),
         });
         return Ok(());
@@ -76,6 +80,21 @@ pub(crate) fn install_with(
     if !req.allow_write {
         return Err(CoreError::Validation(
             "write blocked: set allow_write to proceed".to_string(),
+        ));
+    }
+
+    // Ventoy gap G1: Legacy-BIOS-bootable layout requires an
+    // `i386-pc` GRUB build alongside the existing `x86_64-efi` one,
+    // plus a BIOS Boot Partition at the front of the disk. The
+    // partition planner is wired below behind `bios_compat`, but the
+    // actual `grub-install --target=i386-pc` embedding is v0.0.2
+    // work. Surface a clear NotImplemented to callers in v0.0.1.
+    if req.bios_compat {
+        return Err(CoreError::NotImplemented(
+            "Legacy-BIOS install (--bios-compat) is scaffolded but the \
+             i386-pc GRUB embedding lands in v0.0.2; use --dry-run or \
+             --simulator to validate the request shape until then"
+                .to_string(),
         ));
     }
 
@@ -339,6 +358,7 @@ mod tests {
             dry_run,
             allow_write: allow,
             simulator: false,
+            bios_compat: false,
         }
     }
 

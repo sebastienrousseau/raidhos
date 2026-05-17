@@ -69,6 +69,11 @@ struct InstallArgs {
     /// Persistence overlay size in MiB. 0 disables persistence.
     #[arg(long, default_value_t = 0)]
     persistence_mb: u64,
+    /// Opt-in Legacy-BIOS-bootable layout (Ventoy gap G1). v0.0.1
+    /// plumbs the flag through validation only; actual BIOS GRUB
+    /// embedding is v0.0.2 work.
+    #[arg(long, default_value_t = false)]
+    bios_compat: bool,
 }
 
 #[derive(Serialize)]
@@ -199,6 +204,7 @@ fn main() {
                 // preview against a sparse file; the helper exists
                 // solely to write real block devices behind pkexec.
                 simulator: false,
+                bios_compat: args.bios_compat,
             };
             let sink = StderrSink;
             let install_result = core::install(req, &sink).map_err(|e| e.to_string());

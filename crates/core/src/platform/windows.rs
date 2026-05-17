@@ -280,6 +280,7 @@ mod tests {
             dry_run,
             allow_write: allow,
             simulator: false,
+            bios_compat: false,
         }
     }
 

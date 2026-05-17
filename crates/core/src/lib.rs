@@ -48,6 +48,7 @@
 //!     dry_run: true,
 //!     allow_write: false,
 //!     simulator: false,
+//!     bios_compat: false,
 //! };
 //! let _ = raidhos_core::install(req, &StdoutSink);
 //! ```
@@ -191,6 +192,7 @@ pub struct PartitionInfo {
 ///     dry_run: true,
 ///     allow_write: false,
 ///     simulator: false,
+///     bios_compat: false,
 /// };
 /// assert!(req.dry_run && !req.allow_write);
 /// ```
@@ -213,6 +215,19 @@ pub struct InstallRequest {
     /// `raidhos-cli install --simulator`.
     #[serde(default)]
     pub simulator: bool,
+    /// If `true`, install a Legacy-BIOS-bootable layout in addition
+    /// to UEFI: a protective MBR + hybrid GPT, with a BIOS Boot
+    /// Partition (1 MiB, type `ef02`) at the front so `grub-install
+    /// --target=i386-pc` has somewhere to embed.
+    ///
+    /// Closes Ventoy gap G1. v0.0.1 plumbs the request through the
+    /// validate stage and the partition planner; the actual BIOS
+    /// GRUB embedding is gated to v0.0.2 once we vendor an
+    /// `i386-pc` GRUB build alongside the existing `x86_64-efi` one.
+    /// In v0.0.1 this flag is accepted but produces a documented
+    /// `CoreError::NotImplemented` when `dry_run` is false.
+    #[serde(default)]
+    pub bios_compat: bool,
 }
 
 /// Progress event emitted by the install pipeline.
@@ -316,6 +331,7 @@ pub fn list_disks() -> Result<Vec<DiskInfo>> {
 ///     dry_run: true,     // never writes
 ///     allow_write: false,
 ///     simulator: false,
+///     bios_compat: false,
 /// };
 /// let _ = raidhos_core::install(req, &Quiet);
 /// ```
@@ -674,6 +690,7 @@ mod cross_platform_tests {
             dry_run: true,
             allow_write: false,
             simulator: false,
+            bios_compat: false,
         };
         let json = serde_json::to_string(&req).unwrap();
         let back: InstallRequest = serde_json::from_str(&json).unwrap();

@@ -60,6 +60,14 @@ pub enum Commands {
         /// Required to actually touch the device. Defaults to false.
         #[arg(long, default_value_t = false)]
         allow_write: bool,
+        /// Opt-in Legacy-BIOS-bootable layout (hybrid GPT + BIOS
+        /// Boot Partition). Closes Ventoy gap G1. In v0.0.1 the flag
+        /// is plumbed through the validator and partition planner;
+        /// the actual `grub-install --target=i386-pc` embedding lands
+        /// in v0.0.2. Until then, requesting `--bios-compat` with
+        /// `--allow-write=true` yields a documented NotImplemented.
+        #[arg(long, default_value_t = false)]
+        bios_compat: bool,
     },
     /// Write a previously-saved boot.json into a mounted partition.
     WriteConfig {

@@ -32,6 +32,7 @@ fn main() {
         dry_run: true,
         allow_write: false,
         simulator: false,
+        bios_compat: false,
     };
 
     match core::install(req, &StdoutSink) {
