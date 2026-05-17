@@ -38,6 +38,14 @@ pub fn render_grub_cfg(config: &BootConfig, data_label: &str) -> String {
     out.push_str("insmod part_gpt\n");
     out.push_str("insmod fat\n");
     out.push_str("insmod exfat\n");
+    // Ventoy gaps G8/G9 — keep boot-time readable when the DATA
+    // partition is one of the non-default filesystems.
+    out.push_str("insmod ntfs\n");
+    out.push_str("insmod ext2\n");
+    out.push_str("insmod btrfs\n");
+    out.push_str("insmod xfs\n");
+    // Ventoy gap G10 — UDF for Blu-ray rescue / install images.
+    out.push_str("insmod udf\n");
     out.push_str("insmod iso9660\n");
     out.push_str("insmod loopback\n");
     out.push_str("insmod search\n");
@@ -981,6 +989,39 @@ mod tests {
         );
         // The sanitised class name still flows through.
         assert!(out.contains("submenu \"linux echo bad\" {"));
+    }
+
+    // ---------------------------------------------------------------
+    // Ventoy gap G10: UDF + multi-fs insmod coverage
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn render_loads_udf_and_data_partition_filesystems() {
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![entry("X", "/x.iso")],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+            tree_view: false,
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        // UDF for Blu-ray rescue ISOs (G10).
+        assert!(out.contains("insmod udf\n"), "missing insmod udf");
+        // NTFS / ext / btrfs / xfs for the corresponding --data-fs
+        // choices (G8 / G9).
+        for module in ["ntfs", "ext2", "btrfs", "xfs"] {
+            assert!(
+                out.contains(&format!("insmod {module}\n")),
+                "missing insmod {module}",
+            );
+        }
+        // The existing default modules are still loaded.
+        for module in ["part_gpt", "fat", "exfat", "iso9660", "loopback", "search"] {
+            assert!(
+                out.contains(&format!("insmod {module}\n")),
+                "regressed: missing insmod {module}",
+            );
+        }
     }
 
     #[test]

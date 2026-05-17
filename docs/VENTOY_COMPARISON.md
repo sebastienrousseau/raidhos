@@ -90,8 +90,12 @@ link to the section that documents what's needed.
   it's mountable read-write from a host distro. Ventoy
   supports all of these; we support FAT32 + exFAT only.
 
-- **G10. UDF support** — Niche, mostly Blu-ray rescue images.
-  Documented as a low-priority gap.
+- **G10. UDF support** — ✅ **Closed in v0.0.1.** `insmod udf`
+  is loaded by the rendered grub.cfg and `udf` is embedded in
+  the EFI binary by `tools/grub/build_grub.sh`. NTFS / ext2 /
+  Btrfs / XFS modules are loaded too so the DATA partition
+  remains readable across the `--data-fs` variants (tightens
+  G8 / G9).
 
 ### Plugin / configuration system
 
@@ -288,6 +292,7 @@ priorities aligned to user impact and security risk:
 | G2 ARM64 UEFI | P1 — Raspberry Pi support | v0.1.0 |
 | G4 WIM boot | P1 — Windows installer ISOs | v0.0.2 |
 | **G7 .EFI binary boot** | **P2 — firmware tools** | **✅ closed in v0.0.1** |
+| **G10 UDF support** | **P3 — Blu-ray rescue** | **✅ closed in v0.0.1** (`insmod udf` + embedded in EFI) |
 | **G8 NTFS data partition** | **P1 — Windows-only hosts** | **✅ closed in v0.0.1** (`--data-fs ntfs`) |
 | **G9 ext4 / Btrfs / XFS data partition** | **P1 — Linux power users** | **✅ closed in v0.0.1** (`--data-fs ext4|btrfs|xfs`) |
 | **G11 menu_class + menu_tip** | **P1 — feature parity** | **✅ closed in v0.0.1** |
@@ -303,7 +308,7 @@ priorities aligned to user impact and security risk:
 | **G24 User-supplied checksum** | **P3 — flexibility** | **✅ closed in v0.0.1** (`verify_iso_sha256` / companion file) |
 | G25 Tested ISO catalog growth | continuous | — |
 
-**v0.0.1 closed:** G7, G8, G9 (partial), G11, G13, G17, G18, G19, G20, G24 — ten gaps.
+**v0.0.1 closed:** G7, G8, G9 (partial), G10, G11, G13, G17, G18, G19, G20, G24 — eleven gaps.
 **v0.0.1 scaffolded:** G1, G3 — two gaps with the API surface, validation, and tooling in place; the destructive write path or the third-party shim signing remain for v0.0.2.
 
 ---

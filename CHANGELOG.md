@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Ventoy gap closures
 
-Ten of the 25 gaps tracked in
+Eleven of the 25 gaps tracked in
 [`docs/VENTOY_COMPARISON.md`](docs/VENTOY_COMPARISON.md) are
 closed in v0.0.1; two are scaffolded with API surface +
 tooling, with the destructive paths deferred to v0.0.2.
@@ -19,6 +19,7 @@ tooling, with the destructive paths deferred to v0.0.2.
 | G7 .EFI binary chainload | closed | grub.cfg renderer detects `.efi` and emits `chainloader` |
 | G8 NTFS data partition | closed | `--data-fs ntfs` (Linux pipeline) |
 | G9 ext4 / Btrfs / XFS data partition | closed | `--data-fs ext4 \| btrfs \| xfs` (Linux pipeline) |
+| G10 UDF support | closed | `insmod udf` emitted by grub.cfg + `udf` embedded in EFI |
 | G11 menu_class + menu_tip per ISO | closed | `BootEntryConfig.class` + `tip` |
 | G13 GRUB password protection | closed | `BootConfig.grub_superuser` + `grub_password_pbkdf2` (PBKDF2 only) |
 | G17 image_blacklist | closed | `BootEntryConfig.hidden=true` |
@@ -39,8 +40,8 @@ tooling, with the destructive paths deferred to v0.0.2.
   host's compile-time `target_os`. CI coverage gate raised from
   65% to 90%.
 - Test count: `raidhos-core` 201 unit + 26 doctest, `raidhos-ui`
-  54, `raidhos-cli` 14, `raidhos-priv-helper` 9 seccomp + 6 toctou
-  + 7 integration. Total: 317+ tests across the workspace.
+  55, `raidhos-cli` 14, `raidhos-priv-helper` 9 seccomp + 6 toctou
+  + 7 integration. Total: 318+ tests across the workspace.
 
 ### Added
 
@@ -84,6 +85,12 @@ tooling, with the destructive paths deferred to v0.0.2.
   `hidden = true` still suppresses entries inside submenus, and
   class names go through the same metachar filter as everything
   else. Closes Ventoy gap G20.
+- `insmod udf` / `ntfs` / `ext2` / `btrfs` / `xfs` emitted by
+  the grub.cfg renderer, and the same module list is embedded
+  in the EFI binary via `tools/grub/build_grub.sh`. Closes
+  Ventoy gap G10 (Blu-ray rescue ISOs) and tightens G8 / G9
+  by keeping the DATA partition readable at boot when the user
+  picks a non-default `--data-fs`.
 - GRUB password protection: `grub_superuser` + `grub_password_pbkdf2`
   on `BootConfig`. PBKDF2-only — plaintext passwords are refused
   by `is_grub_pbkdf2_hash()`. The username is sanitised to
