@@ -47,6 +47,7 @@
 //!     wipe: true,
 //!     dry_run: true,
 //!     allow_write: false,
+//!     simulator: false,
 //! };
 //! let _ = raidhos_core::install(req, &StdoutSink);
 //! ```
@@ -188,6 +189,7 @@ pub struct PartitionInfo {
 ///     wipe: true,
 ///     dry_run: true,
 ///     allow_write: false,
+///     simulator: false,
 /// };
 /// assert!(req.dry_run && !req.allow_write);
 /// ```
@@ -204,6 +206,12 @@ pub struct InstallRequest {
     pub dry_run: bool,
     /// Must be `true` to actually touch the device. Defaults to `false`.
     pub allow_write: bool,
+    /// If `true`, `device` is a sparse-file simulator (not a real
+    /// block device). The per-OS path-shape check is skipped; the
+    /// shell-metachar / length / `..` checks still apply. Used by
+    /// `raidhos-cli install --simulator`.
+    #[serde(default)]
+    pub simulator: bool,
 }
 
 /// Progress event emitted by the install pipeline.
@@ -306,6 +314,7 @@ pub fn list_disks() -> Result<Vec<DiskInfo>> {
 ///     wipe: true,
 ///     dry_run: true,     // never writes
 ///     allow_write: false,
+///     simulator: false,
 /// };
 /// let _ = raidhos_core::install(req, &Quiet);
 /// ```
@@ -367,6 +376,21 @@ pub fn list_partitions(device: String) -> Result<Vec<PartitionInfo>> {
 /// # }
 /// ```
 pub fn validate_device_path(device: &str) -> Result<()> {
+    validate_device_path_inner(device, false)
+}
+
+/// Variant of [`validate_device_path`] that accepts a sparse-file
+/// simulator path. The shell-metachar / length / `..` checks still
+/// apply, but the per-OS path-shape gate (`/dev/` on Linux,
+/// `/dev/disk` on macOS, `\\.\PhysicalDrive` on Windows) is skipped.
+///
+/// Used by `raidhos-cli install --simulator` and by callers
+/// constructing an [`InstallRequest`] with `simulator: true`.
+pub fn validate_device_path_simulator(device: &str) -> Result<()> {
+    validate_device_path_inner(device, true)
+}
+
+fn validate_device_path_inner(device: &str, simulator: bool) -> Result<()> {
     if device.is_empty() {
         return Err(CoreError::Validation("device path is empty".to_string()));
     }
@@ -394,6 +418,12 @@ pub fn validate_device_path(device: &str) -> Result<()> {
         return Err(CoreError::Validation(
             "device path may not contain '..'".to_string(),
         ));
+    }
+
+    if simulator {
+        // Simulator mode: skip the per-OS shape gate. The caller is
+        // explicitly opting in to targeting a sparse file outside /dev.
+        return Ok(());
     }
 
     #[cfg(target_os = "linux")]
@@ -573,6 +603,7 @@ mod cross_platform_tests {
             wipe: true,
             dry_run: true,
             allow_write: false,
+            simulator: false,
         };
         let json = serde_json::to_string(&req).unwrap();
         let back: InstallRequest = serde_json::from_str(&json).unwrap();

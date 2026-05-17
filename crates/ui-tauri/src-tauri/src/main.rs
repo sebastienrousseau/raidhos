@@ -114,6 +114,11 @@ fn install(window: Window, args: InstallArgs) -> Result<(), String> {
         wipe: args.wipe,
         dry_run: args.dry_run,
         allow_write: args.allow_write,
+        // The GUI runs the install via the privileged helper; it
+        // doesn't expose simulator mode. End-users who want
+        // simulator preview should use `raidhos-cli install
+        // --simulator …` from a terminal.
+        simulator: false,
     };
     core::install(req, &sink).map_err(|e| e.to_string())?;
     Ok(())

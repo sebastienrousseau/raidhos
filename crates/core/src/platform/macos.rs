@@ -120,7 +120,11 @@ fn validate_install(
     sink: &dyn ProgressSink,
     disks: &[DiskInfo],
 ) -> Result<()> {
-    validate_device_path(&req.device)?;
+    if req.simulator {
+        crate::validate_device_path_simulator(&req.device)?;
+    } else {
+        validate_device_path(&req.device)?;
+    }
 
     sink.emit(ProgressEvent {
         phase: "validate".to_string(),
@@ -131,6 +135,10 @@ fn validate_install(
         return Err(CoreError::Validation(
             "wipe flag must be set for destructive install".to_string(),
         ));
+    }
+    if req.simulator {
+        // Simulator targets a regular file; not in the disk inventory.
+        return Ok(());
     }
     let target = disks
         .iter()
@@ -235,6 +243,7 @@ mod tests {
             wipe,
             dry_run,
             allow_write: allow,
+            simulator: false,
         }
     }
 

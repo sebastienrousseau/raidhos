@@ -194,6 +194,11 @@ fn main() {
                 wipe: !args.no_wipe,
                 dry_run: args.dry_run,
                 allow_write: args.allow_write,
+                // The privileged helper never accepts simulator paths.
+                // Simulator mode is a CLI-only convenience for safe
+                // preview against a sparse file; the helper exists
+                // solely to write real block devices behind pkexec.
+                simulator: false,
             };
             let sink = StderrSink;
             let install_result = core::install(req, &sink).map_err(|e| e.to_string());

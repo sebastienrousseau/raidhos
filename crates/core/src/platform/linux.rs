@@ -147,7 +147,11 @@ fn validate_install(
     sink: &dyn ProgressSink,
     disks: &[DiskInfo],
 ) -> Result<()> {
-    validate_device_path(&req.device)?;
+    if req.simulator {
+        crate::validate_device_path_simulator(&req.device)?;
+    } else {
+        validate_device_path(&req.device)?;
+    }
 
     sink.emit(ProgressEvent {
         phase: "validate".to_string(),
@@ -161,20 +165,25 @@ fn validate_install(
         ));
     }
 
-    let target = disks
-        .iter()
-        .find(|d| d.id == req.device)
-        .ok_or_else(|| CoreError::Validation("device not found".to_string()))?;
+    // Simulator mode: the target is a sparse file the user provided.
+    // Skip the list_disks lookup (the file isn't in lsblk) and the
+    // is_system / mounted checks (they don't apply to a file).
+    if !req.simulator {
+        let target = disks
+            .iter()
+            .find(|d| d.id == req.device)
+            .ok_or_else(|| CoreError::Validation("device not found".to_string()))?;
 
-    if target.is_system {
-        return Err(CoreError::Validation(
-            "refusing to operate on system disk".to_string(),
-        ));
-    }
-    if !target.mountpoints.is_empty() {
-        return Err(CoreError::Validation(
-            "device has mounted partitions; unmount first".to_string(),
-        ));
+        if target.is_system {
+            return Err(CoreError::Validation(
+                "refusing to operate on system disk".to_string(),
+            ));
+        }
+        if !target.mountpoints.is_empty() {
+            return Err(CoreError::Validation(
+                "device has mounted partitions; unmount first".to_string(),
+            ));
+        }
     }
 
     sink.emit(ProgressEvent {
@@ -330,6 +339,7 @@ mod tests {
             wipe,
             dry_run,
             allow_write: allow,
+            simulator: false,
         }
     }
 

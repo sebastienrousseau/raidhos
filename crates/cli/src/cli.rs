@@ -31,9 +31,23 @@ pub enum Commands {
     /// Run the install pipeline. Defaults to dry-run.
     Install {
         /// Target device path (`/dev/sdX`, `/dev/diskN`,
-        /// `\\.\PhysicalDriveN`).
-        #[arg(long)]
-        device: String,
+        /// `\\.\PhysicalDriveN`). Mutually exclusive with `--simulator`.
+        #[arg(long, conflicts_with = "simulator")]
+        device: Option<String>,
+        /// Simulate the install against a sparse file instead of a real
+        /// block device. Same code path as the CI virtual-disk workflow.
+        /// Creates the file if missing (default size 256 MiB; override
+        /// with `--simulator-size-mb`).
+        ///
+        /// Examples:
+        ///   raidhos-cli install --simulator /tmp/raidhos.img
+        ///   raidhos-cli install --simulator /tmp/r.img --simulator-size-mb 1024
+        #[arg(long, conflicts_with = "device")]
+        simulator: Option<String>,
+        /// Size in MiB for a newly-created `--simulator` file. Ignored
+        /// if the file already exists.
+        #[arg(long, default_value_t = 256)]
+        simulator_size_mb: u64,
         /// Payload version string (must match `payload/manifest.json`).
         #[arg(long, default_value = "0.1.0")]
         payload_version: String,
@@ -138,13 +152,16 @@ mod tests {
         let cli = Cli::try_parse_from(["raidhos-cli", "install", "--device", "/dev/sdb"]).unwrap();
         if let Commands::Install {
             device,
+            simulator,
             payload_version,
             wipe,
             dry_run,
             allow_write,
+            ..
         } = cli.command
         {
-            assert_eq!(device, "/dev/sdb");
+            assert_eq!(device.as_deref(), Some("/dev/sdb"));
+            assert!(simulator.is_none());
             assert_eq!(payload_version, "0.1.0");
             assert!(wipe);
             assert!(dry_run);
@@ -155,9 +172,61 @@ mod tests {
     }
 
     #[test]
-    fn install_requires_device() {
-        let res = Cli::try_parse_from(["raidhos-cli", "install"]);
+    fn parses_install_with_simulator() {
+        let cli = Cli::try_parse_from([
+            "raidhos-cli",
+            "install",
+            "--simulator",
+            "/tmp/raidhos-sim.img",
+            "--simulator-size-mb",
+            "512",
+        ])
+        .unwrap();
+        if let Commands::Install {
+            device,
+            simulator,
+            simulator_size_mb,
+            ..
+        } = cli.command
+        {
+            assert!(device.is_none());
+            assert_eq!(simulator.as_deref(), Some("/tmp/raidhos-sim.img"));
+            assert_eq!(simulator_size_mb, 512);
+        } else {
+            panic!("expected Install");
+        }
+    }
+
+    #[test]
+    fn install_device_and_simulator_are_mutually_exclusive() {
+        let res = Cli::try_parse_from([
+            "raidhos-cli",
+            "install",
+            "--device",
+            "/dev/sdb",
+            "--simulator",
+            "/tmp/x.img",
+        ]);
         assert!(res.is_err());
+    }
+
+    #[test]
+    fn install_accepts_bare_then_requires_device_or_simulator_at_runtime() {
+        // `--device` and `--simulator` are both Option<String> so clap
+        // doesn't fail bare `install` parsing — main.rs gates this at
+        // runtime with a clear error and exits 2. The test here just
+        // confirms clap is happy; the runtime gate is covered by
+        // tests/cli.rs spawning the binary.
+        let cli = Cli::try_parse_from(["raidhos-cli", "install"]).unwrap();
+        if let Commands::Install {
+            device, simulator, ..
+        } = cli.command
+        {
+            assert!(device.is_none());
+            assert!(simulator.is_none());
+        } else {
+            panic!("expected Install");
+        }
     }
 
     #[test]

@@ -7,6 +7,45 @@ use raidhos_core as core;
 mod cli;
 use cli::{CatalogAction, Cli, Commands};
 
+/// Create or reuse a sparse file at `path` and return it as a device
+/// path the install pipeline can target. The file is sized to
+/// `size_mb` MiB if it does not exist; otherwise its existing size
+/// is preserved. The path is returned as-is so the install pipeline's
+/// validator sees it the same way it would see `/dev/sdX`.
+///
+/// This is the "non-destructive preview" the README points at — same
+/// install code path as the CI virtual-disk workflow, but the
+/// destruction happens to a file the user owns.
+fn prepare_simulator(path: &str, size_mb: u64) -> Result<String, String> {
+    use std::fs::OpenOptions;
+    use std::io::{Seek, SeekFrom, Write};
+    use std::path::Path;
+
+    let p = Path::new(path);
+    if !p.exists() {
+        let bytes = size_mb.saturating_mul(1024).saturating_mul(1024);
+        if bytes == 0 {
+            return Err("simulator size must be > 0 MiB".to_string());
+        }
+        let mut f = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(p)
+            .map_err(|e| format!("create {path}: {e}"))?;
+        // Seek + single-byte write produces a sparse file on every
+        // supported filesystem.
+        f.seek(SeekFrom::Start(bytes - 1))
+            .map_err(|e| format!("seek {path}: {e}"))?;
+        f.write_all(&[0u8])
+            .map_err(|e| format!("write {path}: {e}"))?;
+        eprintln!("simulator: created sparse file {path} ({size_mb} MiB)");
+    } else {
+        eprintln!("simulator: reusing existing file {path}");
+    }
+    Ok(path.to_string())
+}
+
 fn main() {
     let cli = Cli::parse();
     match cli.command {
@@ -44,6 +83,8 @@ fn main() {
         }
         Commands::Install {
             device,
+            simulator,
+            simulator_size_mb,
             payload_version,
             wipe,
             dry_run,
@@ -57,12 +98,34 @@ fn main() {
                 }
             }
 
+            // Resolve a real device path or set up a sparse-file simulator.
+            let simulator_mode = simulator.is_some();
+            let device_path = match (device, simulator) {
+                (Some(d), None) => d,
+                (None, Some(s)) => match prepare_simulator(&s, simulator_size_mb) {
+                    Ok(path) => path,
+                    Err(e) => {
+                        eprintln!("simulator setup failed: {e}");
+                        std::process::exit(1);
+                    }
+                },
+                (Some(_), Some(_)) => {
+                    eprintln!("--device and --simulator are mutually exclusive");
+                    std::process::exit(2);
+                }
+                (None, None) => {
+                    eprintln!("install: one of --device or --simulator is required");
+                    std::process::exit(2);
+                }
+            };
+
             let req = core::InstallRequest {
-                device,
+                device: device_path,
                 payload_version,
                 wipe,
                 dry_run,
                 allow_write,
+                simulator: simulator_mode,
             };
             if let Err(e) = core::install(req, &StdoutSink) {
                 eprintln!("install failed: {e}");

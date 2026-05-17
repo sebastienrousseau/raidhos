@@ -31,6 +31,7 @@ fn main() {
         wipe: true,
         dry_run: true,
         allow_write: false,
+        simulator: false,
     };
 
     match core::install(req, &StdoutSink) {
