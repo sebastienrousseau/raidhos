@@ -30,6 +30,7 @@ not public issues.
 ## Quick diagnostic flow
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 flowchart TD
   START([Error]) --> CAT{Which message?}
   CAT -->|device not found / system / mounted / forbidden / wipe / write blocked| VAL[Validation errors]

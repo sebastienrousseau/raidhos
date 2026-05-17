@@ -48,6 +48,7 @@ roadmap item.
 ## Where Secure Boot fits in the boot chain
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 sequenceDiagram
     autonumber
     actor User
@@ -105,6 +106,7 @@ verified against a key the user has either pre-enrolled via MOK
 (Machine Owner Key) or distributed in the shim's own database.
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 flowchart LR
   KEYGEN["Generate RaidhOS<br/>signing keypair"] --> SIGN["Sign BOOTX64.EFI<br/>tools/secureboot/sign-bootx64.sh"]
   KEYGEN --> ASCII["Distribute<br/>RaidhOS-MOK.crt"]

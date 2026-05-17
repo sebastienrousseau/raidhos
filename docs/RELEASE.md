@@ -52,6 +52,7 @@ possible.
 ## Cutting a release — the runbook
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 sequenceDiagram
   autonumber
   actor M as Maintainer
@@ -139,6 +140,7 @@ Typical wall time: 20–30 minutes.
 ## Release pipeline diagram
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 flowchart TB
   subgraph trigger
     TAG([git tag vX.Y.Z])

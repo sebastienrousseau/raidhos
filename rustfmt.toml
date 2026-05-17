@@ -1,0 +1,9 @@
+# Project rustfmt config. Stable-only options so local fmt and CI fmt
+# agree byte-for-byte.
+edition = "2021"
+max_width = 100
+tab_spaces = 4
+newline_style = "Unix"
+match_block_trailing_comma = false
+use_field_init_shorthand = true
+use_try_shorthand = true

@@ -16,7 +16,7 @@ fn main() {
                 Err(e) => {
                     eprintln!("list-disks failed: {e}");
                     std::process::exit(1);
-                },
+                }
             };
             for d in disks {
                 println!(
@@ -29,19 +29,19 @@ fn main() {
                     d.mountpoints.join(",")
                 );
             }
-        },
+        }
         Commands::ScanIsos { dirs } => {
             let entries = match core::scan_isos(dirs) {
                 Ok(e) => e,
                 Err(e) => {
                     eprintln!("scan-isos failed: {e}");
                     std::process::exit(1);
-                },
+                }
             };
             for e in entries {
                 println!("{} {} {} {}", e.title, e.path, e.size_bytes, e.params);
             }
-        },
+        }
         Commands::Install {
             device,
             payload_version,
@@ -68,7 +68,7 @@ fn main() {
                 eprintln!("install failed: {e}");
                 std::process::exit(1);
             }
-        },
+        }
         Commands::WriteConfig {
             mount_path,
             config_path,
@@ -78,7 +78,7 @@ fn main() {
                 Err(e) => {
                     eprintln!("read {config_path}: {e}");
                     std::process::exit(1);
-                },
+                }
             };
             let dir = std::path::Path::new(&mount_path).join("raidhos");
             if let Err(e) = std::fs::create_dir_all(&dir) {
@@ -90,7 +90,7 @@ fn main() {
                 eprintln!("write {}: {e}", path.display());
                 std::process::exit(1);
             }
-        },
+        }
         Commands::Catalog { action } => match action {
             CatalogAction::List => {
                 let catalog = match core::load_catalog() {
@@ -98,12 +98,12 @@ fn main() {
                     Err(e) => {
                         eprintln!("catalog: {e}");
                         std::process::exit(1);
-                    },
+                    }
                 };
                 for entry in catalog {
                     println!("{}\t{}", entry.slug, entry.name);
                 }
-            },
+            }
             CatalogAction::Verify {
                 slug,
                 iso,
@@ -116,14 +116,14 @@ fn main() {
                     Err(e) => {
                         eprintln!("catalog: {e}");
                         std::process::exit(1);
-                    },
+                    }
                 };
                 let entry = match core::find_entry(&catalog, &slug) {
                     Some(e) => e.clone(),
                     None => {
                         eprintln!("no catalog entry with slug {slug}");
                         std::process::exit(1);
-                    },
+                    }
                 };
                 match core::verify_iso(
                     &entry,
@@ -134,13 +134,13 @@ fn main() {
                 ) {
                     Ok(v) => {
                         println!("ok\t{}\tsha256={}", v.entry.name, v.computed_sha256);
-                    },
+                    }
                     Err(e) => {
                         eprintln!("verify failed: {e}");
                         std::process::exit(1);
-                    },
+                    }
                 }
-            },
+            }
         },
     }
 }

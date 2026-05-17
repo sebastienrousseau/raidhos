@@ -82,6 +82,7 @@ security-sensitive).
 ## Verification
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 flowchart LR
   STAGED["$RAIDHOS_PAYLOAD_DIR<br/>esp/ + data/ + manifest.json"] -->|read manifest.json| MAN[PayloadManifest]
   STAGED -->|walk + hash| TREE[hash_tree<br/>path-prefixed SHA-256]
@@ -117,6 +118,7 @@ pins the checksum, mismatch becomes fatal.
 ## Partition layout on the target USB
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 graph LR
   subgraph USB["USB device (e.g. /dev/sdb)"]
     direction TB

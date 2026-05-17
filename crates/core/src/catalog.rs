@@ -109,14 +109,19 @@ pub fn load_catalog() -> Result<Vec<CatalogEntry>> {
         PathBuf::from("../catalog/catalog.json"),
         PathBuf::from("../../catalog/catalog.json"),
     ];
-    for path in candidates {
-        if let Ok(body) = fs::read(&path) {
-            let parsed: Vec<CatalogEntry> = serde_json::from_slice(&body)
-                .map_err(|e| CoreError::Parse(format!("catalog.json: {e}")))?;
-            return Ok(parsed);
+    for path in &candidates {
+        if path.exists() {
+            return load_catalog_from(path);
         }
     }
     Err(CoreError::Io("catalog.json not found".to_string()))
+}
+
+/// Load a catalog file from a specific path. Useful for tests and for
+/// hosts that ship the catalog under a non-default location.
+pub fn load_catalog_from(path: &Path) -> Result<Vec<CatalogEntry>> {
+    let body = fs::read(path).map_err(|e| CoreError::Io(format!("read {}: {e}", path.display())))?;
+    serde_json::from_slice(&body).map_err(|e| CoreError::Parse(format!("catalog.json: {e}")))
 }
 
 /// Resolve a catalog entry by its `slug`.
@@ -329,5 +334,149 @@ mod tests {
             err,
             CatalogError::GpgMissing | CatalogError::KeyMissing(_)
         ));
+    }
+
+    fn sample_entry() -> CatalogEntry {
+        CatalogEntry {
+            name: "Sample".into(),
+            slug: "sample".into(),
+            iso_url: "https://example/x.iso".into(),
+            sha256sums_url: "https://example/SHA256SUMS".into(),
+            sha256sums_sig_url: "https://example/SHA256SUMS.gpg".into(),
+            gpg_fingerprint: "DEADBEEF".into(),
+            iso_filename: "x.iso".into(),
+        }
+    }
+
+    fn rand_suffix() -> String {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        format!("{nanos:x}")
+    }
+
+    #[test]
+    fn find_entry_locates_by_slug() {
+        let catalog = vec![sample_entry()];
+        let hit = find_entry(&catalog, "sample");
+        assert!(hit.is_some());
+        assert_eq!(hit.unwrap().name, "Sample");
+    }
+
+    #[test]
+    fn find_entry_returns_none_for_unknown_slug() {
+        let catalog = vec![sample_entry()];
+        assert!(find_entry(&catalog, "no-such-slug").is_none());
+    }
+
+    #[test]
+    fn find_entry_works_with_empty_catalog() {
+        let catalog: Vec<CatalogEntry> = vec![];
+        assert!(find_entry(&catalog, "anything").is_none());
+    }
+
+    #[test]
+    fn catalog_error_into_core_error_keeps_string() {
+        let ce: crate::CoreError = CatalogError::MissingFilename("foo.iso".into()).into();
+        let s = ce.to_string();
+        assert!(s.contains("foo.iso"));
+    }
+
+    #[test]
+    fn catalog_error_variants_all_render_non_empty() {
+        let cases = [
+            CatalogError::Io("disk".into()),
+            CatalogError::Parse("json".into()),
+            CatalogError::GpgMissing,
+            CatalogError::SignatureRejected("bad sig".into()),
+            CatalogError::MissingFilename("file.iso".into()),
+            CatalogError::Sha256Mismatch {
+                expected: "aa".into(),
+                computed: "bb".into(),
+            },
+            CatalogError::KeyMissing("FP".into()),
+        ];
+        for case in cases {
+            assert!(!case.to_string().is_empty());
+        }
+    }
+
+    #[test]
+    fn sha256sums_lookup_pub_alias_works() {
+        let body = "deadbeef  a.iso\n";
+        assert_eq!(
+            crate::sha256sums_lookup(body, "a.iso").as_deref(),
+            Some("deadbeef")
+        );
+    }
+
+    #[test]
+    fn sha256sums_lookup_handles_tabs() {
+        let body = "deadbeef\ta.iso\n";
+        assert_eq!(
+            sha256sums_lookup(body, "a.iso").as_deref(),
+            Some("deadbeef")
+        );
+    }
+
+    #[test]
+    fn catalog_entry_round_trips_via_json() {
+        let entry = sample_entry();
+        let s = serde_json::to_string(&entry).unwrap();
+        let back: CatalogEntry = serde_json::from_str(&s).unwrap();
+        assert_eq!(back.slug, entry.slug);
+        assert_eq!(back.gpg_fingerprint, entry.gpg_fingerprint);
+    }
+
+    #[test]
+    fn load_catalog_from_missing_path_errors() {
+        let res = load_catalog_from(Path::new("/nonexistent/catalog-xyz.json"));
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn load_catalog_from_invalid_json_errors() {
+        let tmp = std::env::temp_dir().join(format!(
+            "raidhos-bad-{}-{}",
+            std::process::id(),
+            rand_suffix()
+        ));
+        std::fs::write(&tmp, b"not json").unwrap();
+        let res = load_catalog_from(&tmp);
+        let _ = std::fs::remove_file(&tmp);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn load_catalog_from_reads_valid_file() {
+        let tmp = std::env::temp_dir().join(format!(
+            "raidhos-good-{}-{}",
+            std::process::id(),
+            rand_suffix()
+        ));
+        std::fs::write(
+            &tmp,
+            br#"[{"name":"X","slug":"x","iso_url":"u","sha256sums_url":"u","sha256sums_sig_url":"u","gpg_fingerprint":"FP","iso_filename":"x.iso"}]"#,
+        )
+        .unwrap();
+        let entries = load_catalog_from(&tmp).expect("should load");
+        let _ = std::fs::remove_file(&tmp);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].slug, "x");
+    }
+
+    #[test]
+    fn load_catalog_finds_repo_catalog_when_present() {
+        // This test runs against the actual repo catalog if it exists.
+        // We don't assert a specific shape because the file changes
+        // between releases.
+        match load_catalog() {
+            Ok(entries) => assert!(!entries.is_empty(), "shipped catalog must be non-empty"),
+            Err(_) => {
+                // Running outside the repo (e.g. doctest harness). Fine.
+            }
+        }
     }
 }

@@ -41,6 +41,7 @@ deciding whether to tag from it.
   authorisation to push the `v0.0.1-rc.1` tag.
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 pie title v0.0.1 priority matrix status
     "Completed" : 19
     "Awaiting authorisation (push rc tag)" : 1
@@ -306,6 +307,7 @@ cd fuzz && cargo +nightly fuzz run validate_device_path -- -max_total_time=60
 ## Path to v0.0.2
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 gantt
     title v0.0.2 plan
     dateFormat  YYYY-MM-DD

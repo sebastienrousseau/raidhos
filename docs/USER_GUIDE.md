@@ -53,6 +53,7 @@ The full safety model is in [`THREAT_MODEL.md`](THREAT_MODEL.md).
 The high-level flow:
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 flowchart LR
   A([Start]) --> B[list disks]
   B --> C{Pick removable<br/>non-system disk}
@@ -116,6 +117,7 @@ plug it back in, and re-run.
 The same operation in the UI:
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 flowchart LR
   CLICK([Click "List Disks"]) --> DISCOVER[list_disks Tauri command]
   DISCOVER --> RENDER[render each DiskInfo as a card]
@@ -183,6 +185,7 @@ on payload size and host kernel.
 Sequence:
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 sequenceDiagram
     autonumber
     actor You
@@ -273,6 +276,7 @@ The UI has a **toggleable wizard mode** that walks you through
 two steps:
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 flowchart LR
   W1["Step 1<br/>Pick ISO entries"] --> W2["Step 2<br/>Pick USB &amp; confirm"]
   W2 --> DONE([Install runs])
@@ -317,6 +321,7 @@ Verification runs in an **ephemeral GPG home** — it does not
 touch your normal keyring.
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 flowchart LR
   ISO[Local ISO] --> SHA[Compute SHA-256]
   KEYS["catalog/keys/<fp>.asc"] --> GPGHOME[temp GNUPGHOME]

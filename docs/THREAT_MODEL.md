@@ -55,6 +55,7 @@ themselves, with `file:line` citations).
 ## Attackers in scope
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 flowchart TD
   subgraph In["In scope — RaidhOS defends against these"]
     A1["Local unprivileged user<br/>(no shell on the same TTY)"]
@@ -86,6 +87,7 @@ flowchart TD
 ## Attackers explicitly out of scope
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 flowchart TD
   subgraph Out["Out of scope — RaidhOS does not defend"]
     O1["Pre-existing root<br/>(installed rootkit)"]
@@ -123,6 +125,7 @@ These are well-known limitations, not surprise gaps.
 ## Boundaries and controls
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 flowchart LR
   classDef boundary fill:#fff3e0,stroke:#e90,stroke-width:2px
   classDef control fill:#dff7df,stroke:#3a3
@@ -157,6 +160,7 @@ Detailed mapping with `file:line` references:
 What an attacker controls vs what RaidhOS controls, end-to-end:
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 flowchart TD
   classDef att fill:#ffe3d4,stroke:#a33
   classDef ours fill:#dff7df,stroke:#3a3

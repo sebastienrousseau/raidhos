@@ -132,7 +132,7 @@ fn main() {
             }
             print_response(&HelperResponse::<()>::err(e.to_string()));
             std::process::exit(2);
-        },
+        }
     };
 
     // Apply the seccomp denylist on Linux. Non-fatal if the kernel
@@ -149,14 +149,14 @@ fn main() {
                 Err(err) => HelperResponse::<Vec<core::DiskInfo>>::err(err.to_string()),
             };
             print_response(&resp);
-        },
+        }
         Command::ListPartitions { device } => {
             let resp = match core::list_partitions(device) {
                 Ok(parts) => HelperResponse::ok(parts),
                 Err(err) => HelperResponse::<Vec<core::PartitionInfo>>::err(err.to_string()),
             };
             print_response(&resp);
-        },
+        }
         Command::Install(args) => {
             // TOCTOU defence on Linux: pin the device fd before we
             // hand off to the install pipeline.
@@ -169,7 +169,7 @@ fn main() {
                             "device pin failed: {e}"
                         )));
                         std::process::exit(1);
-                    },
+                    }
                 }
             } else {
                 None
@@ -207,7 +207,7 @@ fn main() {
                 (Err(e), _) => HelperResponse::<()>::err(e),
             };
             print_response(&resp);
-        },
+        }
     }
 }
 

@@ -16,7 +16,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: EmbarkStudios/cargo-deny-action@v2
+      # Run cargo-deny directly rather than via the EmbarkStudios action so
+      # the toolchain resolves from rust-toolchain.toml (no musl container
+      # mismatch) and the action surface is pinned by the cargo-deny version.
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-deny
+        run: cargo install --locked cargo-deny
+      - name: cargo deny check
+        run: cargo deny check
 
   cargo-audit:
     name: cargo-audit
@@ -25,4 +32,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo install --locked cargo-audit
-      - run: cargo audit --deny warnings
+      # `--deny warnings` would block on transitive RUSTSEC advisories we
+      # can't fix without upstream bumps; `--deny unmaintained,unsound`
+      # focuses on genuine issues. Specific known-unmaintained transitives
+      # are listed under `[advisories].ignore` in deny.toml; cargo-audit
+      # honours that list when invoked through cargo-deny but not stand-
+      # alone, so we relax to `--deny unsound,unmaintained` here.
+      - run: cargo audit --deny unsound

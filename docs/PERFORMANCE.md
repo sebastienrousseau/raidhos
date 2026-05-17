@@ -87,6 +87,7 @@ path beyond the resulting `Vec<DiskInfo>`.
 ## Install pipeline
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 gantt
     title Linux install timeline (16 GiB stick, 2.4 GiB Ubuntu payload)
     dateFormat HH:mm:ss

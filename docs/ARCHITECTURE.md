@@ -25,6 +25,7 @@ before any byte is written.
 ## High-level component map
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 graph TD
   subgraph UserSpace["User-space, unprivileged"]
     UI["raidhos-ui<br/>Tauri 2 desktop app<br/>(frontend: HTML/CSS/JS)"]
@@ -193,6 +194,7 @@ The end-to-end install, from the user's click to a bootable
 USB:
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 sequenceDiagram
     autonumber
     actor User
@@ -248,6 +250,7 @@ UI never elevates itself — it spawns the helper and reads its
 JSON stdout.
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 flowchart LR
   classDef unpriv fill:#dff7df,stroke:#3a3
   classDef priv fill:#ffe3d4,stroke:#a33
@@ -277,6 +280,7 @@ Every input to the destructive path is validated **before** any
 byte is written:
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 flowchart LR
   USER[User input<br/>device path · payload dir · flags] --> CLAP[clap typed parse]
   CLAP --> CAP[64KiB argv cap]
@@ -297,6 +301,7 @@ flowchart LR
 Subprocess output that the library has to trust:
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 flowchart LR
   LSBLK[lsblk JSON]:::ext --> PARSE1[parse_lsblk_disks]:::guard
   DISKUTIL[diskutil plist XML]:::ext --> PARSE2[parse_disks_plist]:::guard
@@ -332,6 +337,7 @@ Each parser is a `cargo-fuzz` target via
 ## Build & supply chain
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 flowchart TD
   SRC[Source push to main] --> CI[ci.yml<br/>build · fmt · clippy · test]
   CI --> COV[tarpaulin -p raidhos-core --fail-under 95]

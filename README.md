@@ -175,6 +175,7 @@ Per-crate READMEs cover the surface specific to each artifact:
 ## Architecture
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 graph TD
   subgraph User space
     UI["raidhos-ui<br/>Tauri 2 desktop app"]

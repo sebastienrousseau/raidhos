@@ -30,6 +30,7 @@ milestones is fixed.
 maintainer authorisation to push the `v0.0.1-rc.1` tag.
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 flowchart LR
   PRESENT([feat/v0.0.1 today])
   PRESENT --> RC[v0.0.1-rc.1 tag]
@@ -62,6 +63,7 @@ Highlights of what's in v0.0.1 (full list in
 **Target window**: 2026-05-19 → 2026-06-16 (≈4 weeks).
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 gantt
     title v0.0.2 work-streams
     dateFormat YYYY-MM-DD
@@ -104,6 +106,7 @@ Definition of done:
 **Target window**: ~2 months after v0.0.2.
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 flowchart LR
   KEYGEN["Generate RaidhOS<br/>signing key + cert<br/>(rotation policy in repo)"]
   SIGN["Release-time signing<br/>of BOOTX64.EFI"]
@@ -160,6 +163,7 @@ Highlights:
 **Target window**: ~12 months after v0.0.1.
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 flowchart LR
   PREP[Prepare submission<br/>SBAT entries · audited build] --> SUBMIT[Submit to Microsoft]
   SUBMIT --> WAIT[Wait for sign-off<br/>weeks to months]

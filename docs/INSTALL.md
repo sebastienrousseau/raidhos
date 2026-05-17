@@ -22,6 +22,7 @@ see [`USER_GUIDE.md`](USER_GUIDE.md) once you have the binary.
 ## Quick install (per OS)
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 flowchart LR
   USER([You]) --> OS{Your OS}
   OS -->|Linux Debian/Ubuntu| DEB[sudo dpkg -i raidhos_*.deb]

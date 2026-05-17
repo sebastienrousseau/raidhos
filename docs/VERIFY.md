@@ -231,6 +231,7 @@ Note this is **separate** from Secure Boot signing — see
 ## Trust model
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 flowchart TD
   GH[GitHub Actions runner] -->|fresh OIDC token| FULCIO[Sigstore Fulcio CA]
   FULCIO -->|short-lived cert| RUNNER[builds + signs artefacts]

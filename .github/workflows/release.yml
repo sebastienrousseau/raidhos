@@ -98,7 +98,7 @@ jobs:
           fi
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@f713795cb21599bc4e5c4b58cbad1da852d7eeb9 # v3.7.0
 
       - name: cosign sign (keyless via OIDC)
         shell: bash
@@ -153,7 +153,7 @@ jobs:
       - name: SHA-256
         run: sha256sum BOOTX64.EFI > BOOTX64.EFI.sha256
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@f713795cb21599bc4e5c4b58cbad1da852d7eeb9 # v3.7.0
       - name: cosign sign
         env:
           COSIGN_YES: "true"
@@ -199,7 +199,7 @@ jobs:
           sha256sum * > SHA256SUMS
 
       - name: Create / update GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.0.8
         with:
           name: ${{ github.event.inputs.tag || github.ref_name }}
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}

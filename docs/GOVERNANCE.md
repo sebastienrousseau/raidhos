@@ -36,6 +36,7 @@ that may evolve and what the rules are in the meantime.
 For now, the maintainer makes calls. The process is:
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 flowchart LR
   ISSUE([Issue / RFC]) --> READ[Maintainer reads]
   READ --> SIZE{Scope}

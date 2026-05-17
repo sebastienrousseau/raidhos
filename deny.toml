@@ -11,7 +11,13 @@ feature-depth = 1
 db-path = "$CARGO_HOME/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
 yanked = "warn"
-ignore = []
+ignore = [
+    # proc-macro-error is unmaintained, but it's pulled transitively by
+    # `windows-implement` / tauri-build → tauri-macros. We don't control
+    # the transitive. Upstream tracking issue:
+    #   https://github.com/dtolnay/proc-macro2/issues/485
+    "RUSTSEC-2024-0370",
+]
 
 [licenses]
 confidence-threshold = 0.8
@@ -29,12 +35,22 @@ allow = [
   "MPL-2.0",
   "CC0-1.0",
   "0BSD",
+  # The project itself is GPL-3.0-only. License is asserted via
+  # workspace.package.license.
+  "GPL-3.0",
 ]
 
 [bans]
 multiple-versions = "warn"
 wildcards = "warn"
 highlight = "all"
+# Specific duplicates we expect because of transitives we don't control.
+skip = [
+  # thiserror v1 is still pulled by some Tauri 2 transitives. We're on
+  # v2 in our own code; the duplicate is harmless.
+  { name = "thiserror", version = "1" },
+  { name = "thiserror-impl", version = "1" },
+]
 
 [sources]
 unknown-registry = "deny"

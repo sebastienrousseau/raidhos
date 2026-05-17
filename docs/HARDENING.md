@@ -151,6 +151,7 @@ without compromising the asset. Every destructive operation in RaidhOS
 clears at least two of the following pairings:
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 flowchart LR
   classDef ok fill:#dff7df,stroke:#3a3
   classDef pair fill:#fff3e0,stroke:#e90,stroke-width:2px
@@ -203,6 +204,7 @@ flowchart LR
 ## Layered view
 
 ```mermaid
+%%{init: {'theme':'neutral'}}%%
 flowchart TB
   classDef compile fill:#d4eaff,stroke:#2a78b3
   classDef supply  fill:#ffe6cc,stroke:#c97a1a
