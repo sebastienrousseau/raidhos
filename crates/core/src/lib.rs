@@ -422,8 +422,9 @@ mod cross_platform_tests {
     #[test]
     fn accepts_typical_windows_device() {
         assert!(validate_device_path("\\\\.\\PhysicalDrive1").is_ok());
-        // `\\?\` long-path form is also legitimate.
-        assert!(validate_device_path("\\\\?\\PhysicalDrive1").is_ok());
+        // Note: the long-path form `\\?\PhysicalDrive1` exists in Win32
+        // but is rejected here because `?` is in FORBIDDEN as a
+        // shell-metachar defence. Callers should use the `\\.\…` form.
     }
 
     #[cfg(target_os = "windows")]

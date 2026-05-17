@@ -372,11 +372,13 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn real_runtime_create_dir_all_errors_on_unwritable_parent() {
         let rt = RealRuntime;
-        // /nonexistent-root/foo can't be created because /nonexistent-root
-        // doesn't exist and we can't mkdir under /.
-        // On most systems this fails with EACCES or ENOENT.
+        // /proc/<x>/y is a kernel-managed namespace; mkdir there fails
+        // with EACCES on Linux and ENOTDIR on macOS. Windows has no
+        // equivalent universally-unwritable path, so this test is
+        // Unix-only.
         let res = rt.create_dir_all(Path::new("/proc/cannot-create-here/x"));
         assert!(res.is_err());
     }
@@ -405,9 +407,11 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn mock_runtime_create_dir_all_real_io_branch_errors() {
         let mut rt = MockRuntime::new();
         rt.fake_mkdir = false;
+        // Unix-only — /proc is unwritable by definition on Linux/macOS.
         let res = rt.create_dir_all(Path::new("/proc/cannot-create-here/x"));
         assert!(res.is_err());
     }

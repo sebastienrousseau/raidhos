@@ -397,9 +397,11 @@ mod tests {
     fn install_errors_on_unparseable_device_path() {
         let rt = MockRuntime::new();
         let disks = vec![disk("\\\\.\\PhysicalDriveBOGUS", false)];
-        // validate_device_path rejects the bogus suffix before we ever
-        // reach extract_disk_number; the failure mode there is
-        // "validation: device must be a \\\\.\\PhysicalDriveN path".
+        // install_with skips the lib-level validate_device_path (that
+        // gate runs in the public install() wrapper), so it actually
+        // reaches extract_disk_number, which fails to parse "BOGUS"
+        // into a u64 and bubbles the "could not extract disk number"
+        // validation error.
         let err = install_with(
             req("\\\\.\\PhysicalDriveBOGUS", true, false, true),
             &NopSink,
@@ -407,7 +409,8 @@ mod tests {
             &disks,
         )
         .unwrap_err();
-        assert!(format!("{err}").contains("PhysicalDriveN"));
+        let s = format!("{err}");
+        assert!(s.contains("could not extract disk number"), "got: {s}");
     }
 
     #[test]
