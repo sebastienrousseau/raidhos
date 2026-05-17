@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=RaidhOS
+GenericName=Multi-ISO USB Imager
+Comment=Memory-safe multi-ISO USB imager
+Exec=raidhos-ui
+Icon=io.github.sebastienrousseau.raidhos
+Terminal=false
+Categories=System;Utility;DiskUtility;
+Keywords=USB;Ventoy;ISO;Image;Bootable;Multiboot;Live;
+StartupNotify=true
+StartupWMClass=raidhos-ui

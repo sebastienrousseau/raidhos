@@ -1,0 +1,78 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Maintainer: Sebastien Rousseau <sebastian.rousseau@gmail.com>
+#
+# Binary AUR PKGBUILD: installs the pre-built, cosign-signed
+# release tarball instead of compiling from source. Useful for
+# CachyOS / Manjaro / EndeavourOS users who want fast install
+# without pulling rustup and a full LLVM toolchain.
+#
+# Verification flow before installing:
+#   cosign verify-blob \
+#     --certificate-identity-regexp 'https://github.com/sebastienrousseau/raidhos/.*' \
+#     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+#     --signature raidhos-${pkgver}-x86_64.tar.gz.sig \
+#     raidhos-${pkgver}-x86_64.tar.gz
+
+pkgname=raidhos-bin
+_pkgname=raidhos
+pkgver=0.0.1
+pkgrel=1
+pkgdesc="Memory-safe multi-ISO USB imager — cosign-signed pre-built binary"
+arch=('x86_64' 'aarch64')
+url="https://github.com/sebastienrousseau/raidhos"
+license=('GPL-3.0-only')
+
+depends=(
+    'parted'
+    'dosfstools'
+    'exfatprogs'
+    'polkit'
+    'webkit2gtk-4.1'
+    'gtk3'
+    'libsoup3'
+)
+optdepends=(
+    'gnupg: catalog verify command'
+    'cosign: verify the release signature before install'
+)
+provides=("$_pkgname=$pkgver")
+conflicts=("$_pkgname" "$_pkgname-git")
+
+source_x86_64=(
+    "raidhos-$pkgver-x86_64.tar.gz::$url/releases/download/v$pkgver/raidhos-$pkgver-x86_64-unknown-linux-gnu.tar.gz"
+)
+source_aarch64=(
+    "raidhos-$pkgver-aarch64.tar.gz::$url/releases/download/v$pkgver/raidhos-$pkgver-aarch64-unknown-linux-gnu.tar.gz"
+)
+sha256sums_x86_64=('SKIP')
+sha256sums_aarch64=('SKIP')
+
+package() {
+    cd "$srcdir/raidhos-$pkgver"
+
+    install -Dm755 raidhos-cli         "$pkgdir/usr/bin/raidhos-cli"
+    install -Dm755 raidhos-priv-helper "$pkgdir/usr/libexec/raidhos-priv-helper"
+    install -Dm644 polkit/org.raidhos.priv.policy \
+        "$pkgdir/usr/share/polkit-1/actions/org.raidhos.priv.policy"
+
+    # Man page + completions
+    install -Dm644 man/raidhos-cli.1   "$pkgdir/usr/share/man/man1/raidhos-cli.1"
+    install -Dm644 completions/raidhos-cli.bash "$pkgdir/usr/share/bash-completion/completions/raidhos-cli"
+    install -Dm644 completions/_raidhos-cli     "$pkgdir/usr/share/zsh/site-functions/_raidhos-cli"
+    install -Dm644 completions/raidhos-cli.fish "$pkgdir/usr/share/fish/vendor_completions.d/raidhos-cli.fish"
+
+    # Catalog (GPG keyring + catalog.json) ships under /usr/share so
+    # `raidhos-cli catalog list` finds it without a build-time
+    # CARGO_TARGET_DIR.
+    install -d "$pkgdir/usr/share/raidhos/catalog/keys"
+    install -Dm644 catalog/catalog.json "$pkgdir/usr/share/raidhos/catalog/catalog.json"
+    for k in catalog/keys/*.asc; do
+        install -Dm644 "$k" "$pkgdir/usr/share/raidhos/catalog/keys/$(basename "$k")"
+    done
+
+    install -Dm644 LICENSE      "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 README.md    "$pkgdir/usr/share/doc/$pkgname/README.md"
+    install -Dm644 CHANGELOG.md "$pkgdir/usr/share/doc/$pkgname/CHANGELOG.md"
+}
+
+# vim:set ts=4 sw=4 et:
