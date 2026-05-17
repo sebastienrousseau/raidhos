@@ -374,3 +374,119 @@ fn main() {
         .run(tauri::generate_context!())
         .expect("error while running RaidhOS");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shell_quote_escapes_double_quote() {
+        let q = shell_quote_for_osascript(r#"hello"world"#);
+        assert_eq!(q, r#"hello\"world"#);
+    }
+
+    #[test]
+    fn shell_quote_escapes_backslash() {
+        let q = shell_quote_for_osascript(r"path\with\slash");
+        assert_eq!(q, r"path\\with\\slash");
+    }
+
+    #[test]
+    fn shell_quote_escapes_backslash_before_quote() {
+        // Order matters — backslashes must escape first so a literal
+        // `\` immediately followed by `"` becomes `\\` then `\"`.
+        let q = shell_quote_for_osascript(r#"a\"b"#);
+        assert_eq!(q, r#"a\\\"b"#);
+    }
+
+    #[test]
+    fn shell_quote_passes_through_plain_text() {
+        let q = shell_quote_for_osascript("just text 123");
+        assert_eq!(q, "just text 123");
+    }
+
+    #[test]
+    fn shell_quote_handles_empty_string() {
+        assert_eq!(shell_quote_for_osascript(""), "");
+    }
+
+    #[test]
+    fn project_config_dir_returns_some_path_on_supported_host() {
+        // directories::ProjectDirs::from returns Some on Linux / macOS /
+        // Windows. We don't pin the actual path because it varies by
+        // host; we just verify the function succeeds and yields
+        // something that looks like a config directory.
+        let p = project_config_dir();
+        assert!(p.is_ok(), "got {p:?}");
+        let pb = p.unwrap();
+        let s = pb.to_string_lossy();
+        // It either ends with our org/app segment, or it lives somewhere
+        // sensible under the user's home / appdata / xdg-config.
+        assert!(
+            s.contains("raidhos") || !pb.as_os_str().is_empty(),
+            "unexpected config dir: {s}",
+        );
+    }
+
+    #[test]
+    fn copy_isos_to_data_copies_existing_iso_and_skips_missing() {
+        let scratch = std::env::temp_dir().join(format!(
+            "raidhos-ui-copy-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&scratch).unwrap();
+        let mount = scratch.join("mount");
+        let real_iso = scratch.join("ubuntu.iso");
+        std::fs::write(&real_iso, b"fake-iso-bytes").unwrap();
+
+        let copied = copy_isos_to_data(
+            mount.display().to_string(),
+            vec![
+                real_iso.display().to_string(),
+                "/no/such/missing.iso".to_string(),
+            ],
+        )
+        .expect("copy");
+
+        assert_eq!(copied.len(), 1);
+        assert!(copied[0].ends_with("ubuntu.iso"));
+        assert!(mount.join("boot").join("isos").join("ubuntu.iso").exists());
+        let _ = std::fs::remove_dir_all(&scratch);
+    }
+
+    #[test]
+    fn write_grub_cfg_to_esp_writes_file_under_efi_boot() {
+        let scratch = std::env::temp_dir().join(format!(
+            "raidhos-ui-grubcfg-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&scratch).unwrap();
+
+        let cfg = BootConfig {
+            entries: vec![BootEntryConfig {
+                title: "ubuntu".into(),
+                path: "boot/isos/ubuntu.iso".into(),
+                params: "quiet splash".into(),
+                initrd: String::new(),
+                kargs: String::new(),
+            }],
+            default_entry: Some("ubuntu".into()),
+        };
+        let res = write_grub_cfg_to_esp(scratch.display().to_string(), cfg, "DATA".into());
+        assert!(res.is_ok(), "got {res:?}");
+        let path = scratch.join("EFI").join("BOOT").join("grub.cfg");
+        assert!(path.exists(), "missing grub.cfg at {}", path.display());
+
+        let body = std::fs::read_to_string(&path).unwrap();
+        assert!(body.contains("ubuntu"));
+        let _ = std::fs::remove_dir_all(&scratch);
+    }
+}
