@@ -9,12 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `raidhos-core` line coverage jumped from ~68% to **91.62%**
-  (722/788 lines covered) after the
-  `validate_device_path_for_target` refactor. The macOS + Windows
-  `install_with` test modules no longer need a matching `target_os`
-  to run; the path-shape gate is decoupled from the host's
-  compile-time `target_os`. CI coverage gate raised from 65% to 90%.
+- `raidhos-core` line coverage jumped from ~68% to **92.45%**
+  (735/795 lines covered) after the
+  `validate_device_path_for_target` refactor. The macOS, Windows,
+  *and* Linux `install_with` test modules no longer need a matching
+  `target_os` to run; the path-shape gate is decoupled from the
+  host's compile-time `target_os`. CI coverage gate raised from
+  65% to 90%.
 
 ### Added
 
@@ -23,6 +24,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `"macos"`, `"windows"`, or `"simulator"`. Public-but-crate-internal;
   the public `validate_device_path` / `validate_device_path_simulator`
   still delegate through it.
+- `verify_iso_sha256(iso, hex)` and
+  `verify_iso_companion_sha256(iso)` — public functions in
+  `raidhos-core` for verifying ISOs against a user-supplied
+  SHA-256 hex string or a co-located `<iso>.sha256` companion
+  file (SHA256SUMS-style or bare-hex). Closes Ventoy gap G24.
+- `bios_compat: bool` field on `InstallRequest` and the
+  `--bios-compat` flag on both `raidhos-cli install` and
+  `raidhos-priv-helper install`. The Linux platform pipeline
+  accepts the request shape and emits the dry-run completion
+  event; the actual `grub-install --target=i386-pc` embedding
+  is deferred to v0.0.2 (scaffolds Ventoy gap G1).
+- `--simulator <FILE>` + `--simulator-size-mb N` on
+  `raidhos-cli install` — non-destructive preview against a
+  sparse file. Targets the same install pipeline as a real USB.
+- AUR (`PKGBUILD` + `PKGBUILD.bin`), Fedora COPR
+  (`raidhos.spec`), and Flatpak
+  (`io.github.sebastienrousseau.raidhos.yml` + .desktop +
+  metainfo). Covers CachyOS / Arch / Manjaro / EndeavourOS /
+  Garuda / Fedora / RHEL / Rocky / Alma / openSUSE / Silverblue
+  / Bazzite / SteamOS / NixOS.
+- Secure Boot signing tooling: `tools/secure-boot/generate-mok.sh`
+  (RSA-2048 keypair + X.509 cert), `tools/secure-boot/sign-bootx64.sh`
+  (sbsign), and the rewritten `scripts/raidhos-mok-enroll.sh` with
+  auto-discovery of the `.cer` file. Scaffolds Ventoy gap G3.
+- `docs/VENTOY_COMPARISON.md` — honest feature gap analysis
+  against Ventoy 1.1.12 with 25 gaps (G1–G25) tagged with
+  v0.0.2 / v0.1.0 / v0.2.0 priorities and 16 RaidhOS
+  advantages (R1–R16).
+- 25 new `raidhos-core` unit tests (parsers, runtime, lib.rs
+  validators, catalog edge cases) bringing the total to 179.
+- 36 Mermaid diagrams across `docs/` and per-crate doc folders
+  validated locally via `mmdc`; three syntax-error fixes (edge
+  labels, `@` in node text, embedded quotes in stadium nodes).
+
+### Fixed
+
+- `docs/ARCHITECTURE.md` sequence diagram: dropped `<br/>`
+  from participant aliases and rephrased the `Vec<DiskInfo>`
+  message text — Mermaid's sequenceDiagram parser doesn't
+  accept either.
+- `docs/RELEASE.md` flowchart: quoted node label
+  `[attest-build-provenance@v1]` so the `@` isn't read as a
+  link-id separator.
+- `docs/USER_GUIDE.md` flowchart: quoted the whole stadium
+  node `(["Click List Disks"])` instead of mixing quotes
+  inside parens.
+- `docs/SECURE_BOOT.md`: backslashes in shown file paths
+  replaced with forward slashes (irrelevant glyph for a
+  conceptual diagram).
 
 ## [0.0.1] — 2026-05-17 (release candidate)
 
