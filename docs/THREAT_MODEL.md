@@ -222,6 +222,8 @@ single guard has a bug, the install still fails closed.
 | `verify_payload` SHA-256 | Everything else | A swapped payload mirror after the binaries were verified |
 | seccomp-bpf denylist | Everything else | Post-compromise escalation primitives (ptrace, bpf, kexec…) |
 | TOCTOU fd pin | All path-based checks | A symlink swap or USB hot-plug after validate |
+| `sanitize()` + `sanitize_username()` + `is_grub_pbkdf2_hash()` | Hostile ISO filenames, hostile boot-entry titles, hostile auto-install paths | GRUB metachar escape into the rendered grub.cfg (every field that flows in: title, path, params, kargs, class, tip, persistence_backend, conf_replace_path, autoinstall.path, grub_superuser, default_entry, data_label) |
+| Property test sweeps every byte 0..128 + CVE-corpus payloads against the sanitiser | Field-by-field test gaps | A new field added later that skips the sanitiser |
 
 ---
 

@@ -73,6 +73,12 @@ control addresses).
 | `serde_json::Value` walk for `Get-Disk` output | [`crates/core/src/parsers.rs`](../crates/core/src/parsers.rs) (`parse_get_disk_json`) |
 | Fuzz targets over every parser | [`fuzz/fuzz_targets/`](../fuzz/fuzz_targets/) |
 | GRUB-config sanitiser rejects 20+ metacharacters + all C0 control bytes | [`crates/ui-tauri/src-tauri/src/grub.rs`](../crates/ui-tauri/src-tauri/src/grub.rs) (`sanitize`) |
+| Sanitiser invariants pinned by property test (every byte 0..128 standalone, pairwise combos, CVE-corpus payloads; idempotence) | [`crates/ui-tauri/src-tauri/src/grub.rs`](../crates/ui-tauri/src-tauri/src/grub.rs) (`sanitize_invariants_across_byte_range`) |
+| Whole-renderer metachar property test against a maximally-hostile BootConfig | [`crates/ui-tauri/src-tauri/src/grub.rs`](../crates/ui-tauri/src-tauri/src/grub.rs) (`render_never_emits_metachars_in_user_controlled_positions`) |
+| GRUB password gate: PBKDF2 hash format strictly validated (`grub.pbkdf2.sha512.<rounds>.<salt-hex>.<hash-hex>`); plaintext rejected | [`crates/ui-tauri/src-tauri/src/grub.rs`](../crates/ui-tauri/src-tauri/src/grub.rs) (`is_grub_pbkdf2_hash`) |
+| GRUB superuser name restricted to `[A-Za-z0-9_-]+` | [`crates/ui-tauri/src-tauri/src/grub.rs`](../crates/ui-tauri/src-tauri/src/grub.rs) (`sanitize_username`) |
+| Auto-install path + DATA label sanitised before kickstart / preseed / autoinstall / autoyast / cloud-init kargs emit | [`crates/ui-tauri/src-tauri/src/grub.rs`](../crates/ui-tauri/src-tauri/src/grub.rs) (`autoinstall_kargs`) |
+| `conf_replace_path` (G16) sanitised + leading-`/` enforced before `configfile ($root)<path>` emit | [`crates/ui-tauri/src-tauri/src/grub.rs`](../crates/ui-tauri/src-tauri/src/grub.rs) (`menuentry`) |
 
 ---
 
