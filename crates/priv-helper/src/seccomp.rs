@@ -241,4 +241,15 @@ mod tests {
         let arch = target_arch();
         assert!(arch.is_ok(), "unexpected unsupported arch in test");
     }
+
+    /// Cover the `_ => None` arm of `lookup_syscall` (seccomp.rs:108)
+    /// by passing a TargetArch value other than x86_64/aarch64.
+    /// seccompiler 0.5 has a `riscv64` variant — we don't ship
+    /// a riscv64 syscall table because RaidhOS doesn't build for
+    /// riscv64, and the wildcard arm correctly returns None.
+    #[test]
+    fn lookup_syscall_returns_none_for_unsupported_target_arch() {
+        assert_eq!(lookup_syscall("ptrace", TargetArch::riscv64), None);
+        assert_eq!(lookup_syscall("bpf", TargetArch::riscv64), None);
+    }
 }

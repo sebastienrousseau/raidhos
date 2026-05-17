@@ -193,4 +193,51 @@ mod tests {
         let err = assert_matches(&h, "/no/such/path-raidhos-xyz").unwrap_err();
         assert!(err.contains("re-stat"));
     }
+
+    /// Cover the rdev-changed Err arm in assert_matches (lines
+    /// 69-73). Create a real file, get its rdev (0 for regular
+    /// files), construct a DeviceHandle with a DIFFERENT rdev,
+    /// and assert that assert_matches surfaces the mismatch.
+    #[test]
+    fn assert_matches_rejects_rdev_mismatch() {
+        let p = std::env::temp_dir().join(format!(
+            "raidhos-toctou-mismatch-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::write(&p, b"x").unwrap();
+        // synthetic_handle stores any rdev value; the path is a
+        // regular file with rdev=0, so any non-zero handle rdev
+        // triggers the mismatch arm.
+        let h = synthetic_handle(0xbeef, 1024);
+        let res = assert_matches(&h, p.to_str().unwrap());
+        let _ = std::fs::remove_file(&p);
+        let err = res.unwrap_err();
+        assert!(err.contains("rdev changed"), "got: {err}");
+        assert!(err.contains("0xbeef"), "missing old rdev: {err}");
+    }
+
+    /// Cover the Ok arm of assert_matches (line 76). Same path
+    /// re-stat returns the same rdev → Ok(()).
+    #[test]
+    fn assert_matches_accepts_matching_rdev() {
+        let p = std::env::temp_dir().join(format!(
+            "raidhos-toctou-match-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::write(&p, b"x").unwrap();
+        // Regular file has rdev == 0; synthesise a handle with
+        // the same rdev so assert_matches succeeds.
+        let h = synthetic_handle(0, 1024);
+        let res = assert_matches(&h, p.to_str().unwrap());
+        let _ = std::fs::remove_file(&p);
+        assert!(res.is_ok(), "got: {res:?}");
+    }
 }
