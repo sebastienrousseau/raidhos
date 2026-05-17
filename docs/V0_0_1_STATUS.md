@@ -29,17 +29,29 @@ deciding whether to tag from it.
 
 - **Builds clean.** `cargo build --workspace` succeeds on
   Linux, macOS, Windows.
-- **Tests pass.** 346+ tests across the workspace:
-  `raidhos-core` 201 unit + 26 doctest, `raidhos-ui` 83,
-  `raidhos-cli` 14, `raidhos-priv-helper` 9 seccomp + 6 toctou
-  + 7 integration.
+- **Tests pass.** 378+ tests across the workspace:
+  `raidhos-core` 228 unit + 26 doctest, `raidhos-ui` 83,
+  `raidhos-cli` 14 unit + 19 integration, `raidhos-priv-helper`
+  9 seccomp + 6 toctou + 10 integration.
 - **`cargo fmt --check`, `cargo clippy --all-targets -D warnings`**
   both clean across the workspace.
-- **Coverage gate.** `tarpaulin -p raidhos-core --fail-under 90`
-  passes (Linux CI). `raidhos-core` jumped from ~68% to 91.21%
-  (778/853 lines covered) after the
-  `validate_device_path_for_target` refactor decoupled the
-  path-shape gate from host `target_os`.
+- **Coverage gate.** `tarpaulin -p raidhos-core --fail-under 100`
+  passes (Linux CI). `raidhos-core` is at **100% line coverage
+  on its host target** after a sweep of unit + integration tests
+  + targeted refactors:
+  - `validate_device_path_inner` switched from runtime `cfg!()`
+    to compile-time `#[cfg(target_os)]` so each host build only
+    contains its own branch.
+  - `hash_tree` skips the payload-root `manifest.json` so the
+    self-referential fixed-point goes away and `verify_payload`
+    can return `Ok(())` cleanly.
+  - Platform pub-fn wrappers (`list_disks` / `list_partitions` /
+    `install`) on each of `linux.rs` / `macos.rs` / `windows.rs`
+    are now `#[cfg(target_os = ...)]` so they only exist on
+    their target host, eliminating cross-host dead-code.
+  - `load_catalog`'s candidate search extracted into
+    `load_catalog_from_candidates` so the "not found" branch is
+    testable without mutating CWD.
 - **Tauri 2.** Migrated from Tauri 1 mid-branch; full workspace
   including the UI builds.
 - **Ventoy gap closures.** Sixteen of the 25 tracked gaps

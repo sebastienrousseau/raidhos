@@ -48,9 +48,16 @@ the destructive paths deferred to v0.0.2.
   `target_os` to run; the path-shape gate is decoupled from the
   host's compile-time `target_os`. CI coverage gate raised from
   65% to 90%.
-- Test count: `raidhos-core` 201 unit + 26 doctest, `raidhos-ui`
-  83, `raidhos-cli` 14, `raidhos-priv-helper` 9 seccomp + 6 toctou
-  + 7 integration. Total: 346+ tests across the workspace.
+- Test count: `raidhos-core` 228 unit + 26 doctest, `raidhos-ui`
+  83, `raidhos-cli` 14 unit + 19 integration, `raidhos-priv-helper`
+  9 seccomp + 6 toctou + 10 integration. Total: 378+ tests across
+  the workspace.
+- `raidhos-core` coverage gate raised from 90% → **100%** in
+  CI (`cargo tarpaulin -p raidhos-core --fail-under 100`).
+  Workspace-wide (core + cli + priv-helper) sits at 96.89% on
+  the dev host; remaining uncovered lines are happy-path
+  output formatting in `raidhos-cli` that needs real disks
+  present.
 
 ### Added
 

@@ -76,7 +76,7 @@ jobs:
       # Never lower this without a CHANGELOG entry justifying why.
       - name: Tarpaulin
         run: |
-          cargo tarpaulin -p raidhos-core --fail-under 90 --out Xml
+          cargo tarpaulin -p raidhos-core --fail-under 100 --out Xml
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4
