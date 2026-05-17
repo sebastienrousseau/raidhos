@@ -33,7 +33,8 @@
 
 **Getting started**
 
-- [Install](#install) — Homebrew, winget, deb, AppImage, Cargo, source
+- [Install](#install) — Homebrew, winget, deb, AUR, Fedora COPR, Flatpak, AppImage, Cargo, source
+- [Preview without flashing](#preview-without-flashing) — `--simulator` mode against a sparse file
 - [Quick start](#quick-start) — list disks, dry-run, install in five lines
 - [Verifying a release](#verifying-a-release) — cosign + SLSA + SHA-256
 
@@ -69,15 +70,18 @@
 > wired but **needs hardware validation** before being declared
 > stable. See [`docs/V0_0_1_STATUS.md`](docs/V0_0_1_STATUS.md).
 
-| Channel | Install |
-|---|---|
-| Homebrew (personal tap) | `brew tap sebastienrousseau/tap && brew install raidhos` |
-| winget (Windows) | `winget install sebastienrousseau.RaidhOS` |
-| Debian/Ubuntu (.deb) | `sudo dpkg -i raidhos_0.0.1_amd64.deb` |
-| AppImage (portable) | Download from [Releases](https://github.com/sebastienrousseau/raidhos/releases), `chmod +x`, run |
-| Cargo (from source) | `cargo install --git https://github.com/sebastienrousseau/raidhos raidhos-cli` |
-| Container (GHCR) | `docker run --rm ghcr.io/sebastienrousseau/raidhos-cli:latest list-disks` |
-| Source | `git clone … && cargo build --release --workspace --exclude raidhos-ui` |
+| Channel | Install | Covers |
+|---|---|---|
+| Homebrew (personal tap) | `brew tap sebastienrousseau/tap && brew install raidhos` | macOS, Linuxbrew |
+| winget (Windows) | `winget install sebastienrousseau.RaidhOS` | Windows 10/11 |
+| Debian/Ubuntu (.deb) | `sudo dpkg -i raidhos_0.0.1_amd64.deb` | Debian, Ubuntu, Mint, Pop!_OS |
+| AUR (`raidhos` / `raidhos-bin`) | `yay -S raidhos` *(source)* or `yay -S raidhos-bin` *(prebuilt)* | Arch, CachyOS, Manjaro, EndeavourOS, Garuda |
+| Fedora COPR | `sudo dnf copr enable sebastienrousseau/raidhos && sudo dnf install raidhos` | Fedora, RHEL 9+, Rocky, Alma, CentOS Stream |
+| Flatpak (Flathub) | `flatpak install flathub io.github.sebastienrousseau.raidhos` | Silverblue, Kinoite, Bazzite, SteamOS, NixOS, openSUSE Aeon |
+| AppImage (portable) | Download from [Releases](https://github.com/sebastienrousseau/raidhos/releases), `chmod +x`, run | Any glibc Linux |
+| Cargo (from source) | `cargo install --git https://github.com/sebastienrousseau/raidhos raidhos-cli` | Anywhere with Rust ≥ 1.78 |
+| Container (GHCR) | `docker run --rm ghcr.io/sebastienrousseau/raidhos-cli:latest list-disks` | Read-only discovery only — destructive ops need host /dev access |
+| Source | `git clone … && cargo build --release --workspace --exclude raidhos-ui` | Build from a tag locally |
 
 GitHub Releases publish pre-built tarballs for Linux (x86_64,
 aarch64), macOS (Intel + Apple Silicon) and Windows (x86_64,
@@ -119,6 +123,38 @@ default) **and** `--allow-write=true` (off by default). The CLI
 defaults to `--dry-run`. Belt and braces. The full walkthrough
 is in [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md); if anything
 fails, [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).
+
+---
+
+## Preview without flashing
+
+If you want to *see* what RaidhOS does — partition table, ESP
+layout, payload copy — without putting any real hardware at
+risk, run the install pipeline against a sparse file:
+
+```bash
+# Create a 1 GiB sparse file and run the full pipeline against it.
+raidhos-cli install --simulator /tmp/raidhos.img --simulator-size-mb 1024
+
+# The result is a real GPT-formatted disk image you can inspect.
+parted -m /tmp/raidhos.img print           # show the partition table
+sudo losetup -fP /tmp/raidhos.img          # attach as a loop device
+ls /dev/loop*p*                            # the partitions appear
+sudo umount /dev/loopXpY                   # detach when done
+sudo losetup -d /dev/loopX
+```
+
+The `--simulator` path is the same code the CI virtual-disk
+tests use (Linux loop device, macOS `hdiutil` sparse image,
+Windows VHD). The per-OS device-shape gate is bypassed; the
+shell-metachar / length / `..` gates still apply. The
+privileged helper does **not** accept `--simulator` — only the
+CLI does, and only against files the calling user owns.
+
+This is the answer to "I want to try it before I trust it with
+my USB stick." It is *not* a permission to run RaidhOS in a
+container as a safety wrapper — containers don't change the
+destructive contract on the host's `/dev/sdX`; sparse files do.
 
 ---
 

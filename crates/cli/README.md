@@ -94,6 +94,9 @@ raidhos-cli scan-isos --dirs /home,/media,/Downloads
 # Dry-run an install. Validates every safety check, never writes.
 raidhos-cli install --device /dev/sdX --dry-run
 
+# Preview against a sparse file (no real hardware touched).
+raidhos-cli install --simulator /tmp/raidhos.img --simulator-size-mb 1024 --allow-write
+
 # Verify a downloaded Ubuntu ISO against the bundled catalog.
 raidhos-cli catalog verify \
     --slug ubuntu-24.04-desktop-amd64 \
@@ -117,6 +120,8 @@ Commands:
   list-disks        Enumerate physical disks visible to the current user.
   scan-isos         Walk directories for *.iso files (one level deep).
   install           Run the install pipeline (defaults to --dry-run).
+                    Accepts --device <DEV> OR --simulator <FILE>; the
+                    latter targets a sparse file for safe preview.
   write-config      Write a previously-saved boot.json into a mounted
                     partition.
   catalog list      List bundled catalog entries.

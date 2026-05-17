@@ -24,6 +24,7 @@ export PATH=$PWD/target/release:$PATH
 | [`05-catalog-verify.sh`](05-catalog-verify.sh) | `catalog verify` | GPG-verify + SHA-256-check a downloaded ISO. |
 | [`06-write-config.sh`](06-write-config.sh) | `write-config` | Push a saved `boot.json` into a mounted partition. |
 | [`07-validate-device.sh`](07-validate-device.sh) | `validate-device` | Probe the `validate_device_path()` gate. |
+| [`08-install-simulator.sh`](08-install-simulator.sh) | `install --simulator` | Run the full pipeline against a sparse file — partition + format + payload copy without touching real hardware. |
 
 Larger end-to-end flows that combine multiple subcommands live
 in the top-level [`examples/`](../../../examples/) directory.
