@@ -23,7 +23,7 @@ expect and which they need to wait for or contribute.
 | Boot modes | Legacy BIOS, IA32/x86_64/ARM64/MIPS64 UEFI, Secure Boot | UEFI x86_64 (Secure Boot scaffolded, not signed) |
 | Filesystems on data partition | FAT32, exFAT, NTFS, UDF, XFS, Btrfs, ext2/3/4 | FAT32 (ESP) + exFAT / NTFS / ext4 / Btrfs / XFS (DATA, opt-in via `--data-fs`) |
 | Plugin system | 15+ plugin types | Subset: `menu_class`, `menu_tip`, password (PBKDF2), image_blacklist, persistence map — closed in v0.0.1 |
-| Themes | GRUB2 themes, ListView / TreeView toggle | Single grub.cfg generator (theme support via the standard GRUB theme file) |
+| Themes | GRUB2 themes, ListView / TreeView toggle | Single grub.cfg generator (theme support via the standard GRUB theme file); ListView / TreeView toggle closed in v0.0.1 via `BootConfig.tree_view` |
 | Persistence | Per-ISO backend file map (Ubuntu, MX, Arch, Mint, Kali, …) | Per-ISO `persistence_backend` + 30-entry per-distro label table (`expected_persistence_label`); single overlay also still supported |
 | Auto-install | Kickstart / preseed / autounattend.xml + variable expansion | Not implemented |
 | Browse local disk | F2 hotkey, boot files from internal drives | Not implemented |
@@ -140,10 +140,14 @@ link to the section that documents what's needed.
 
 ### Menu UX
 
-- **G20. ListView ↔ TreeView toggle** — Ventoy shows ISOs
-  either as a flat list (sorted) or a directory tree (matches
-  the on-USB folder structure). Our v0.0.1 wizard does not
-  surface a tree view.
+- **G20. ListView ↔ TreeView toggle** — ✅ **Closed in
+  v0.0.1.** `BootConfig.tree_view = true` groups entries by
+  sanitised `class` into `submenu "<class>" { … }` blocks.
+  Classless entries float to the top level so power-user
+  entries remain one keypress away. `hidden = true` still
+  hides entries inside submenus (G17 honoured) and class
+  names go through the same metachar filter as everything
+  else.
 
 - **G21. Multi-language boot menu** — Ventoy ships `en_US`,
   `zh_CN`, `de_DE`, plus 20+ others. RaidhOS GRUB menu is
@@ -293,13 +297,13 @@ priorities aligned to user impact and security risk:
 | **G17 image_blacklist** | **P2 — UX** | **✅ closed in v0.0.1** (`hidden: true` on entries) |
 | **G18 Per-ISO persistence backend** | **P2 — power users** | **✅ closed in v0.0.1** (`persistence_backend` on entries) |
 | **G19 Per-distro persistence labels** | **P2 — power users** | **✅ closed in v0.0.1** (`expected_persistence_label`) |
-| G20 ListView/TreeView | P2 — UX | v0.1.0 |
+| **G20 ListView/TreeView** | **P2 — UX** | **✅ closed in v0.0.1** (`BootConfig.tree_view`) |
 | G21 Multi-language menu | P2 — i18n | v0.1.0 |
 | G22 Browse local disk | P3 — convenience | v0.2.0 |
 | **G24 User-supplied checksum** | **P3 — flexibility** | **✅ closed in v0.0.1** (`verify_iso_sha256` / companion file) |
 | G25 Tested ISO catalog growth | continuous | — |
 
-**v0.0.1 closed:** G7, G8, G9 (partial), G11, G13, G17, G18, G19, G24 — nine gaps.
+**v0.0.1 closed:** G7, G8, G9 (partial), G11, G13, G17, G18, G19, G20, G24 — ten gaps.
 **v0.0.1 scaffolded:** G1, G3 — two gaps with the API surface, validation, and tooling in place; the destructive write path or the third-party shim signing remain for v0.0.2.
 
 ---

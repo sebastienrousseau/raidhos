@@ -49,14 +49,50 @@ pub fn render_grub_cfg(config: &BootConfig, data_label: &str) -> String {
     out.push_str("export root\n");
     out.push_str("export isopath\n");
 
-    for entry in &config.entries {
-        // Ventoy gap G17: image_blacklist. Hidden entries are
-        // skipped before sanitisation; they never appear in the
-        // rendered output at all.
-        if entry.hidden {
-            continue;
+    if config.tree_view {
+        // Ventoy gap G20: TreeView. Group entries by sanitised
+        // `class`. Entries with no class render at the top level
+        // (so power-user entries stay one keypress from boot).
+        let mut by_class: std::collections::BTreeMap<String, Vec<&BootEntryConfig>> =
+            std::collections::BTreeMap::new();
+        let mut flat: Vec<&BootEntryConfig> = Vec::new();
+        for entry in &config.entries {
+            if entry.hidden {
+                continue;
+            }
+            let class = sanitize(&entry.class);
+            if class.is_empty() {
+                flat.push(entry);
+            } else {
+                by_class.entry(class).or_default().push(entry);
+            }
         }
-        out.push_str(&menuentry(entry));
+        for entry in flat {
+            out.push_str(&menuentry(entry));
+        }
+        for (class, entries) in by_class {
+            out.push_str(&format!("submenu \"{class}\" {{\n"));
+            for entry in entries {
+                // Indent two spaces inside the submenu block for
+                // readability; GRUB doesn't care about whitespace.
+                for line in menuentry(entry).lines() {
+                    out.push_str("  ");
+                    out.push_str(line);
+                    out.push('\n');
+                }
+            }
+            out.push_str("}\n");
+        }
+    } else {
+        for entry in &config.entries {
+            // Ventoy gap G17: image_blacklist. Hidden entries are
+            // skipped before sanitisation; they never appear in
+            // the rendered output at all.
+            if entry.hidden {
+                continue;
+            }
+            out.push_str(&menuentry(entry));
+        }
     }
     out
 }
@@ -295,6 +331,7 @@ mod tests {
             default_entry: None,
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
+            tree_view: false,
             entries: vec![],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -307,6 +344,7 @@ mod tests {
             default_entry: None,
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
+            tree_view: false,
             entries: vec![BootEntryConfig {
                 title: "Test".to_string(),
                 path: "/boot/isos/test.iso".to_string(),
@@ -330,6 +368,7 @@ mod tests {
             default_entry: None,
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
+            tree_view: false,
             entries: vec![BootEntryConfig {
                 title: "evil\" } echo PWNED { ".to_string(),
                 path: "test.iso".to_string(),
@@ -379,6 +418,7 @@ mod tests {
             default_entry: None,
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
+            tree_view: false,
             entries: vec![e],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -394,6 +434,7 @@ mod tests {
             default_entry: None,
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
+            tree_view: false,
             entries: vec![entry("Plain", "p.iso")],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -409,6 +450,7 @@ mod tests {
             default_entry: None,
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
+            tree_view: false,
             entries: vec![e],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -436,6 +478,7 @@ mod tests {
             default_entry: None,
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
+            tree_view: false,
             entries: vec![e],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -451,6 +494,7 @@ mod tests {
             default_entry: None,
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
+            tree_view: false,
             entries: vec![entry("Plain", "p.iso")],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -465,6 +509,7 @@ mod tests {
             default_entry: None,
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
+            tree_view: false,
             entries: vec![entry("Shown", "shown.iso"), hidden],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -483,6 +528,7 @@ mod tests {
             default_entry: None,
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
+            tree_view: false,
             entries: vec![hidden_a, hidden_b],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -564,6 +610,7 @@ mod tests {
             entries: vec![entry("Plain", "p.iso")],
             grub_superuser: "admin".to_string(),
             grub_password_pbkdf2: VALID_HASH.to_string(),
+            tree_view: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         assert!(out.contains("set superusers=\"admin\""));
@@ -577,6 +624,7 @@ mod tests {
             entries: vec![entry("Plain", "p.iso")],
             grub_superuser: String::new(),
             grub_password_pbkdf2: VALID_HASH.to_string(),
+            tree_view: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         assert!(!out.contains("set superusers"));
@@ -590,6 +638,7 @@ mod tests {
             entries: vec![entry("Plain", "p.iso")],
             grub_superuser: "admin".to_string(),
             grub_password_pbkdf2: "hunter2".to_string(), // plaintext — rejected
+            tree_view: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         assert!(!out.contains("set superusers"));
@@ -606,6 +655,7 @@ mod tests {
             // Hostile superuser name containing GRUB metachars.
             grub_superuser: "admin\"; echo bad".to_string(),
             grub_password_pbkdf2: VALID_HASH.to_string(),
+            tree_view: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         // The injection metachars must not survive in any
@@ -664,6 +714,7 @@ mod tests {
             entries: vec![entry("Memtest", "/boot/efi/memtest86.efi")],
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
+            tree_view: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         // The .efi path uses chainloader, not loopback.
@@ -683,6 +734,7 @@ mod tests {
             entries: vec![entry("Ubuntu", "/boot/isos/ubuntu.iso")],
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
+            tree_view: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         // ISO entries still use the loopback flow.
@@ -700,6 +752,7 @@ mod tests {
             ],
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
+            tree_view: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         assert!(out.contains("chainloader \"($root)/memtest86.efi\""));
@@ -719,6 +772,7 @@ mod tests {
             entries: vec![entry("Ubuntu", "/boot/isos/ubuntu.iso")],
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
+            tree_view: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         assert!(!out.contains("persistent persistent-path"));
@@ -733,6 +787,7 @@ mod tests {
             entries: vec![e],
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
+            tree_view: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         // Both the casper and the live kernel command lines pick up
@@ -760,6 +815,7 @@ mod tests {
             entries: vec![e],
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
+            tree_view: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         // Look at the linux line specifically. The sanitiser strips ;.
@@ -782,9 +838,167 @@ mod tests {
             entries: vec![e],
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
+            tree_view: false,
         };
         let out = render_grub_cfg(&config, "DATA");
         assert!(out.contains("chainloader \"($root)/memtest86.efi\""));
         assert!(!out.contains("persistent persistent-path"));
+    }
+
+    // ---------------------------------------------------------------
+    // Ventoy gap G20: ListView ↔ TreeView toggle
+    // ---------------------------------------------------------------
+
+    fn classed_entry(title: &str, path: &str, class: &str) -> BootEntryConfig {
+        let mut e = entry(title, path);
+        e.class = class.to_string();
+        e
+    }
+
+    #[test]
+    fn render_tree_view_off_renders_flat_list() {
+        // Default (tree_view = false) must keep the existing flat
+        // layout — no `submenu` directive in the output.
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![
+                classed_entry("Ubuntu 24.04", "/u.iso", "linux"),
+                classed_entry("Fedora 41", "/f.iso", "linux"),
+                entry("Memtest", "/memtest.efi"),
+            ],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+            tree_view: false,
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        assert!(
+            !out.contains("submenu "),
+            "tree_view=false must not emit submenu: {out}"
+        );
+        // All three entries appear as top-level menuentries.
+        assert_eq!(out.matches("menuentry \"").count(), 3);
+    }
+
+    #[test]
+    fn render_tree_view_on_groups_by_class() {
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![
+                classed_entry("Ubuntu", "/u.iso", "linux"),
+                classed_entry("Fedora", "/f.iso", "linux"),
+                classed_entry("Win10", "/w.iso", "windows"),
+            ],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+            tree_view: true,
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        // Each class produces one submenu block.
+        assert!(
+            out.contains("submenu \"linux\" {"),
+            "missing linux submenu: {out}"
+        );
+        assert!(
+            out.contains("submenu \"windows\" {"),
+            "missing windows submenu: {out}"
+        );
+        // All three menuentries still appear inside the submenus.
+        assert_eq!(out.matches("menuentry \"").count(), 3);
+        // Braces still balance with the extra submenu wrappers.
+        assert_eq!(out.matches('{').count(), out.matches('}').count());
+    }
+
+    #[test]
+    fn render_tree_view_classless_entries_float_to_top() {
+        // Power-user entries with no class stay one keypress from
+        // boot; classed entries get tucked into submenus.
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![
+                entry("Memtest", "/memtest.efi"),
+                classed_entry("Ubuntu", "/u.iso", "linux"),
+            ],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+            tree_view: true,
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        // The top-level menuentry must appear before the submenu line.
+        let memtest_pos = out
+            .find("menuentry \"Memtest\"")
+            .expect("memtest entry missing");
+        let submenu_pos = out
+            .find("submenu \"linux\"")
+            .expect("linux submenu missing");
+        assert!(
+            memtest_pos < submenu_pos,
+            "classless entry should appear before submenu (memtest at {memtest_pos}, submenu at {submenu_pos})",
+        );
+    }
+
+    #[test]
+    fn render_tree_view_skips_hidden_entries() {
+        // Ventoy gap G17 still applies under TreeView — hidden
+        // entries must not appear in any submenu.
+        let mut hidden = classed_entry("Secret", "/secret.iso", "linux");
+        hidden.hidden = true;
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![hidden, classed_entry("Ubuntu", "/u.iso", "linux")],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+            tree_view: true,
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        assert!(!out.contains("Secret"), "hidden entry leaked: {out}");
+        assert!(out.contains("menuentry \"Ubuntu\""));
+    }
+
+    #[test]
+    fn render_tree_view_sanitises_class_in_submenu_label() {
+        // Attacker-controlled class names must not escape the
+        // submenu quote context.
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![classed_entry("X", "/x.iso", "linux\"; echo bad")],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+            tree_view: true,
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        let submenu_line = out
+            .lines()
+            .find(|l| l.starts_with("submenu \""))
+            .expect("submenu line");
+        assert!(
+            !submenu_line.contains(';'),
+            "semicolon survived: {submenu_line}"
+        );
+        assert_eq!(
+            submenu_line.matches('"').count(),
+            2,
+            "submenu must have exactly one quoted label: {submenu_line}",
+        );
+        // The sanitised class name still flows through.
+        assert!(out.contains("submenu \"linux echo bad\" {"));
+    }
+
+    #[test]
+    fn render_tree_view_with_no_classed_entries_emits_no_submenu() {
+        // If every visible entry is classless, the tree view
+        // degenerates into a flat list — no empty submenu blocks.
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![entry("A", "/a.iso"), entry("B", "/b.iso")],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+            tree_view: true,
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        assert!(
+            !out.contains("submenu "),
+            "empty tree view should not emit submenu: {out}"
+        );
+        assert_eq!(out.matches("menuentry \"").count(), 2);
     }
 }

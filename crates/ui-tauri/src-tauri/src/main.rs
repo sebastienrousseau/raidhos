@@ -55,6 +55,13 @@ pub struct BootConfig {
     /// rejected by `is_grub_pbkdf2_hash()`.
     #[serde(default)]
     pub grub_password_pbkdf2: String,
+    /// If `true`, the renderer groups entries by their `class`
+    /// field into GRUB `submenu` blocks instead of a flat list.
+    /// Entries without a class fall through to the top level so
+    /// power-user entries stay one keypress away. Closes Ventoy
+    /// gap G20 (ListView ↔ TreeView toggle).
+    #[serde(default)]
+    pub tree_view: bool,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -528,6 +535,7 @@ mod tests {
             default_entry: Some("ubuntu".into()),
             grub_superuser: String::new(),
             grub_password_pbkdf2: String::new(),
+            tree_view: false,
         };
         let res = write_grub_cfg_to_esp(scratch.display().to_string(), cfg, "DATA".into());
         assert!(res.is_ok(), "got {res:?}");
