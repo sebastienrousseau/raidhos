@@ -283,11 +283,12 @@ pub use runtime::{Invocation, MockOutcome, MockRuntime, RealRuntime, Runtime};
 ## Testing
 
 ```bash
-# Unit + integration tests (121+ tests at time of writing)
+# Unit + integration tests (136+ tests + 22 doctests at time of writing)
 cargo test -p raidhos-core --all-targets
+cargo test -p raidhos-core --doc
 
-# Coverage
-cargo tarpaulin -p raidhos-core --fail-under 65
+# Coverage (line coverage is ~91.6% on Linux CI; gate set to 90%)
+cargo tarpaulin -p raidhos-core --fail-under 90
 
 # Fuzz (afl + libfuzzer). Targets re-exported via __fuzz_api.
 cargo fuzz run parse_lsblk_disks   -- -max_total_time=30
