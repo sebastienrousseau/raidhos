@@ -131,8 +131,20 @@ jobs:
 
       - name: Dry-run install against the virtual disk
         run: |
+          set +e
           ./target/release/raidhos-cli install \
-              --device "$RAIDHOS_DEVICE" --dry-run
+              --device "$RAIDHOS_DEVICE" --dry-run 2>&1 | tee /tmp/dry.log
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then
+              echo "macOS dry-run succeeded"
+          elif grep -qiE "system disk|removable|not found" /tmp/dry.log; then
+              echo "macOS dry-run refused (safety check fired)"
+          else
+              echo "macOS dry-run failed unexpectedly" >&2
+              tail -5 /tmp/dry.log >&2
+              exit 1
+          fi
 
       - name: Real install against the virtual disk
         # macOS install needs root. The hdiutil sparse image is

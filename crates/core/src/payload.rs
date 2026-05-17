@@ -346,7 +346,7 @@ mod tests {
     #[test]
     fn manifest_error_io_conversion() {
         // From<io::Error> for ManifestError
-        let io_err = std::io::Error::new(std::io::ErrorKind::Other, "boom");
+        let io_err = std::io::Error::other("boom");
         let m: ManifestError = io_err.into();
         assert!(matches!(m, ManifestError::Io(_)));
         // Round-trip through Display
