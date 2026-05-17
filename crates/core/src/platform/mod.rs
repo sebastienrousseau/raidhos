@@ -1,30 +1,28 @@
 //! Platform backends.
 //!
-//! Each `target_os` selects exactly one submodule. The public API
-//! surfaced by [`super::list_disks`] / [`super::install`] /
-//! [`super::scan_isos`] / [`super::list_partitions`] is identical across
-//! platforms, but the implementations are wildly different — `lsblk` vs
-//! `diskutil` vs `Get-Disk`, etc.
+//! Each backend module is compiled on every host (so its
+//! Runtime-driven tests can run under tarpaulin on a Linux CI
+//! runner), but only one set of public functions is **re-exported**
+//! at any time — picked by `#[cfg(target_os = "...")]` at the
+//! re-export level.
 
-#![allow(missing_docs)] // internal module; public surface is re-exported through lib.rs
+#![allow(missing_docs)]
 
 use super::IsoEntry;
 use crate::Result;
 
 mod scan;
 
-#[cfg(target_os = "linux")]
 mod linux;
+mod macos;
+mod windows;
+
 #[cfg(target_os = "linux")]
 pub use linux::{install, list_disks, list_partitions};
 
 #[cfg(target_os = "macos")]
-mod macos;
-#[cfg(target_os = "macos")]
 pub use macos::{install, list_disks, list_partitions};
 
-#[cfg(target_os = "windows")]
-mod windows;
 #[cfg(target_os = "windows")]
 pub use windows::{install, list_disks, list_partitions};
 

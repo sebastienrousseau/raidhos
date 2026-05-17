@@ -61,12 +61,14 @@ mod catalog;
 mod parsers;
 mod payload;
 mod platform;
+mod runtime;
 
 pub use catalog::{
     find_entry, load_catalog, load_catalog_from, sha256sums_lookup_pub as sha256sums_lookup,
     verify_iso, CatalogEntry, CatalogError, VerifiedIso,
 };
 pub use payload::{verify_payload, ManifestError, PayloadManifest};
+pub use runtime::{Invocation, MockOutcome, MockRuntime, RealRuntime, Runtime};
 
 /// Hand-rolled subprocess-output parsers, exposed for fuzzing.
 ///

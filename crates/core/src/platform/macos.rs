@@ -4,32 +4,28 @@
 //! in [`crate::parsers::parse_disks_plist`]. The install pipeline uses
 //! `diskutil` for partitioning + formatting and `bless` to mark the
 //! ESP bootable.
+//!
+//! The module compiles on every host (so its Runtime-driven tests
+//! run under tarpaulin) — only the public re-export in
+//! [`crate::platform`] is gated by `target_os`.
+
+#![allow(dead_code)]
 
 use crate::parsers::parse_disks_plist;
+use crate::runtime::{RealRuntime, Runtime};
 use crate::{
     validate_device_path, CoreError, DiskInfo, InstallRequest, PartitionInfo, ProgressEvent,
     ProgressSink, Result,
 };
 use std::path::PathBuf;
-use std::process::Command;
-
-fn run_diskutil(args: &[&str]) -> Result<Vec<u8>> {
-    let out = Command::new("diskutil")
-        .args(args)
-        .output()
-        .map_err(|e| CoreError::Io(format!("diskutil: {e}")))?;
-    if !out.status.success() {
-        return Err(CoreError::Io(format!(
-            "diskutil failed: {}",
-            String::from_utf8_lossy(&out.stderr)
-        )));
-    }
-    Ok(out.stdout)
-}
 
 pub fn list_disks() -> Result<Vec<DiskInfo>> {
-    let stdout = run_diskutil(&["list", "-plist", "external"])?;
-    parse_disks_plist(&stdout)
+    list_disks_with(&RealRuntime)
+}
+
+pub(crate) fn list_disks_with(rt: &dyn Runtime) -> Result<Vec<DiskInfo>> {
+    let bytes = rt.run_output("diskutil", &["list", "-plist", "external"])?;
+    parse_disks_plist(&bytes)
 }
 
 pub fn list_partitions(_device: String) -> Result<Vec<PartitionInfo>> {
@@ -37,13 +33,15 @@ pub fn list_partitions(_device: String) -> Result<Vec<PartitionInfo>> {
 }
 
 pub fn install(req: InstallRequest, sink: &dyn ProgressSink) -> Result<()> {
-    let disks = list_disks()?;
-    install_with_disks(req, sink, &disks)
+    let rt = RealRuntime;
+    let disks = list_disks_with(&rt)?;
+    install_with(req, sink, &rt, &disks)
 }
 
-fn install_with_disks(
+pub(crate) fn install_with(
     req: InstallRequest,
     sink: &dyn ProgressSink,
+    rt: &dyn Runtime,
     disks: &[DiskInfo],
 ) -> Result<()> {
     validate_install(&req, sink, disks)?;
@@ -62,34 +60,33 @@ fn install_with_disks(
         ));
     }
 
-    // `diskutil unmountDisk` releases anything currently mounted.
     sink.emit(ProgressEvent {
         phase: "unmount".to_string(),
         message: format!("Unmounting {}", req.device),
         percent: Some(25),
     });
-    let _ = run_diskutil(&["unmountDisk", "force", &req.device]);
+    let _ = rt.run("diskutil", &["unmountDisk", "force", &req.device]);
 
-    // Partition the whole disk: GPT, ESP (FAT32, 32 MiB) named
-    // RAIDHOS_EFI, then a DATA (exFAT) partition for the rest.
     sink.emit(ProgressEvent {
         phase: "partition".to_string(),
         message: "Creating GPT partitions".to_string(),
         percent: Some(45),
     });
-    run_diskutil(&[
-        "partitionDisk",
-        &req.device,
-        "GPT",
-        "FAT32",
-        "RAIDHOS_EFI",
-        "33M",
-        "ExFAT",
-        "DATA",
-        "0", // 0 = remaining space
-    ])?;
+    rt.run(
+        "diskutil",
+        &[
+            "partitionDisk",
+            &req.device,
+            "GPT",
+            "FAT32",
+            "RAIDHOS_EFI",
+            "33M",
+            "ExFAT",
+            "DATA",
+            "0",
+        ],
+    )?;
 
-    // ESP and DATA partition paths on macOS.
     let part1 = format!("{}s1", req.device);
     let part2 = format!("{}s2", req.device);
 
@@ -98,17 +95,17 @@ fn install_with_disks(
         message: "Verifying volume names".to_string(),
         percent: Some(60),
     });
-    let _ = run_diskutil(&["rename", &part1, "RAIDHOS_EFI"]);
-    let _ = run_diskutil(&["rename", &part2, "DATA"]);
+    let _ = rt.run("diskutil", &["rename", &part1, "RAIDHOS_EFI"]);
+    let _ = rt.run("diskutil", &["rename", &part2, "DATA"]);
 
-    payload_copy(sink, &part1, &part2)?;
+    payload_copy(sink, rt, &part1, &part2)?;
 
-    // Mark the ESP as bootable via `bless`. Failure is non-fatal —
-    // Macs will still see the disk and most can boot from an unblessed
-    // FAT32 ESP under the firmware boot picker.
-    let _ = Command::new("bless")
-        .args(["--device", &format!("/dev/{}", part1), "--setBoot"])
-        .status();
+    // bless is non-fatal — Macs will still boot from an unblessed
+    // FAT32 ESP via the firmware boot picker.
+    let _ = rt.run(
+        "bless",
+        &["--device", &format!("/dev/{}", part1), "--setBoot"],
+    );
 
     sink.emit(ProgressEvent {
         phase: "complete".to_string(),
@@ -152,18 +149,19 @@ fn validate_install(
     Ok(())
 }
 
-fn payload_copy(sink: &dyn ProgressSink, part1: &str, part2: &str) -> Result<()> {
-    let payload_dir = std::env::var("RAIDHOS_PAYLOAD_DIR")
-        .map_err(|_| CoreError::Validation("RAIDHOS_PAYLOAD_DIR is not set".to_string()))?;
+fn payload_copy(sink: &dyn ProgressSink, rt: &dyn Runtime, part1: &str, part2: &str) -> Result<()> {
+    let payload_dir = rt
+        .env_var("RAIDHOS_PAYLOAD_DIR")
+        .ok_or_else(|| CoreError::Validation("RAIDHOS_PAYLOAD_DIR is not set".to_string()))?;
     let payload = PathBuf::from(payload_dir);
-    if !payload.exists() {
+    if !rt.path_exists(&payload) {
         return Err(CoreError::Validation(
             "RAIDHOS_PAYLOAD_DIR does not exist".to_string(),
         ));
     }
     let esp_payload = payload.join("esp");
     let data_payload = payload.join("data");
-    if !esp_payload.exists() || !data_payload.exists() {
+    if !rt.path_exists(&esp_payload) || !rt.path_exists(&data_payload) {
         return Err(CoreError::Validation(
             "RAIDHOS_PAYLOAD_DIR must contain esp/ and data/ directories".to_string(),
         ));
@@ -176,15 +174,10 @@ fn payload_copy(sink: &dyn ProgressSink, part1: &str, part2: &str) -> Result<()>
         });
     }
 
-    // macOS auto-mounts new partitions under /Volumes/<label>.
-    // Mount points after `diskutil rename`.
     let esp_mount = PathBuf::from("/Volumes/RAIDHOS_EFI");
     let data_mount = PathBuf::from("/Volumes/DATA");
-
-    // Make sure they're mounted (a fresh format usually does this
-    // automatically, but defensive).
-    let _ = Command::new("diskutil").args(["mount", part1]).status();
-    let _ = Command::new("diskutil").args(["mount", part2]).status();
+    let _ = rt.run("diskutil", &["mount", part1]);
+    let _ = rt.run("diskutil", &["mount", part2]);
 
     sink.emit(ProgressEvent {
         phase: "payload".to_string(),
@@ -192,41 +185,33 @@ fn payload_copy(sink: &dyn ProgressSink, part1: &str, part2: &str) -> Result<()>
         percent: Some(85),
     });
 
-    cp_recursive(&esp_payload, &esp_mount)?;
-    cp_recursive(&data_payload, &data_mount)?;
+    cp_recursive(rt, &esp_payload, &esp_mount)?;
+    cp_recursive(rt, &data_payload, &data_mount)?;
 
-    let _ = Command::new("diskutil").args(["unmount", part1]).status();
-    let _ = Command::new("diskutil").args(["unmount", part2]).status();
+    let _ = rt.run("diskutil", &["unmount", part1]);
+    let _ = rt.run("diskutil", &["unmount", part2]);
 
     Ok(())
 }
 
-fn cp_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<()> {
-    let status = Command::new("cp")
-        .args([
+fn cp_recursive(rt: &dyn Runtime, src: &std::path::Path, dst: &std::path::Path) -> Result<()> {
+    rt.run(
+        "cp",
+        &[
             "-R",
             &format!("{}/", src.to_string_lossy()),
             &dst.to_string_lossy(),
-        ])
-        .status()
-        .map_err(|e| CoreError::Io(format!("cp: {e}")))?;
-    if !status.success() {
-        return Err(CoreError::Io(format!(
-            "cp -R {} {} failed",
-            src.display(),
-            dst.display()
-        )));
-    }
-    Ok(())
+        ],
+    )
 }
 
-#[cfg(test)]
+// macOS-shape device paths are only accepted by `validate_device_path`
+// on macOS hosts; gate to keep these tests Mac-only.
+#[cfg(all(test, target_os = "macos"))]
 mod tests {
     use super::*;
+    use crate::runtime::{MockOutcome, MockRuntime};
 
-    fn nop_sink() -> NopSink {
-        NopSink
-    }
     struct NopSink;
     impl ProgressSink for NopSink {
         fn emit(&self, _: ProgressEvent) {}
@@ -234,7 +219,7 @@ mod tests {
 
     fn disk(id: &str, mounts: Vec<&str>, is_system: bool) -> DiskInfo {
         DiskInfo {
-            id: id.to_string(),
+            id: id.into(),
             model: "Test".into(),
             size_bytes: 1024,
             removable: true,
@@ -253,50 +238,144 @@ mod tests {
         }
     }
 
+    fn payload_dir_mock(esp: bool, data: bool) -> MockRuntime {
+        let tmp = std::env::temp_dir().join(format!(
+            "raidhos-macos-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut rt = MockRuntime::new();
+        rt.env
+            .push(("RAIDHOS_PAYLOAD_DIR".into(), tmp.display().to_string()));
+        rt.existing_paths.push(tmp.clone());
+        if esp {
+            rt.existing_paths.push(tmp.join("esp"));
+        }
+        if data {
+            rt.existing_paths.push(tmp.join("data"));
+        }
+        rt
+    }
+
     #[test]
     fn validate_rejects_system_disk() {
         let disks = vec![disk("/dev/disk0", vec!["/"], true)];
-        let err = validate_install(&req("/dev/disk0", true, true, false), &nop_sink(), &disks)
-            .unwrap_err();
+        let err =
+            validate_install(&req("/dev/disk0", true, true, false), &NopSink, &disks).unwrap_err();
         assert!(format!("{err}").contains("system disk"));
     }
 
     #[test]
     fn validate_rejects_mounted_disk() {
         let disks = vec![disk("/dev/disk2", vec!["/Volumes/USB"], false)];
-        let err = validate_install(&req("/dev/disk2", true, true, false), &nop_sink(), &disks)
-            .unwrap_err();
+        let err =
+            validate_install(&req("/dev/disk2", true, true, false), &NopSink, &disks).unwrap_err();
         assert!(format!("{err}").contains("mounted"));
     }
 
     #[test]
     fn validate_rejects_unknown_device() {
         let disks = vec![disk("/dev/disk2", vec![], false)];
-        let err = validate_install(&req("/dev/disk9", true, true, false), &nop_sink(), &disks)
-            .unwrap_err();
+        let err =
+            validate_install(&req("/dev/disk9", true, true, false), &NopSink, &disks).unwrap_err();
         assert!(format!("{err}").contains("not found"));
     }
 
     #[test]
     fn validate_rejects_without_wipe() {
         let disks = vec![disk("/dev/disk2", vec![], false)];
-        let err = validate_install(&req("/dev/disk2", false, true, false), &nop_sink(), &disks)
-            .unwrap_err();
+        let err =
+            validate_install(&req("/dev/disk2", false, true, false), &NopSink, &disks).unwrap_err();
         assert!(format!("{err}").contains("wipe flag"));
     }
 
     #[test]
     fn dry_run_succeeds() {
+        let rt = MockRuntime::new();
         let disks = vec![disk("/dev/disk2", vec![], false)];
-        let res = install_with_disks(req("/dev/disk2", true, true, false), &nop_sink(), &disks);
+        let res = install_with(req("/dev/disk2", true, true, false), &NopSink, &rt, &disks);
         assert!(res.is_ok());
     }
 
     #[test]
     fn install_rejects_when_allow_write_unset() {
+        let rt = MockRuntime::new();
         let disks = vec![disk("/dev/disk2", vec![], false)];
-        let err = install_with_disks(req("/dev/disk2", true, false, false), &nop_sink(), &disks)
-            .unwrap_err();
+        let err =
+            install_with(req("/dev/disk2", true, false, false), &NopSink, &rt, &disks).unwrap_err();
         assert!(format!("{err}").contains("write blocked"));
+    }
+
+    #[test]
+    fn install_full_pipeline_against_mock() {
+        let rt = payload_dir_mock(true, true);
+        let disks = vec![disk("/dev/disk2", vec![], false)];
+        let res = install_with(req("/dev/disk2", true, false, true), &NopSink, &rt, &disks);
+        assert!(res.is_ok(), "install failed: {res:?}");
+        let inv = rt.invocations.borrow();
+        assert!(inv
+            .iter()
+            .any(|i| i.cmd == "diskutil" && i.args.iter().any(|a| a == "partitionDisk")));
+        assert!(inv.iter().any(|i| i.cmd == "cp"));
+        assert!(inv.iter().any(|i| i.cmd == "bless"));
+    }
+
+    #[test]
+    fn install_propagates_partition_failure() {
+        let mut rt = payload_dir_mock(true, true);
+        // First mock call is `diskutil unmountDisk` (non-fatal),
+        // second is `diskutil partitionDisk` — return Err.
+        rt.outcomes = std::cell::RefCell::new(vec![
+            MockOutcome::Ok(vec![]),                   // unmountDisk (non-fatal)
+            MockOutcome::Err("partition boom".into()), // partitionDisk
+        ]);
+        let disks = vec![disk("/dev/disk2", vec![], false)];
+        let err =
+            install_with(req("/dev/disk2", true, false, true), &NopSink, &rt, &disks).unwrap_err();
+        assert!(format!("{err}").contains("partition boom"));
+    }
+
+    #[test]
+    fn payload_copy_errors_without_env_var() {
+        let rt = MockRuntime::new();
+        let disks = vec![disk("/dev/disk2", vec![], false)];
+        let err =
+            install_with(req("/dev/disk2", true, false, true), &NopSink, &rt, &disks).unwrap_err();
+        assert!(format!("{err}").contains("RAIDHOS_PAYLOAD_DIR is not set"));
+    }
+
+    #[test]
+    fn payload_copy_errors_with_missing_subdirs() {
+        let rt = payload_dir_mock(true, false); // missing data/
+        let disks = vec![disk("/dev/disk2", vec![], false)];
+        let err =
+            install_with(req("/dev/disk2", true, false, true), &NopSink, &rt, &disks).unwrap_err();
+        assert!(format!("{err}").contains("must contain esp/ and data/"));
+    }
+
+    #[test]
+    fn list_disks_with_mock_parses_plist() {
+        let rt = MockRuntime::new();
+        rt.push_outcome(MockOutcome::Ok(
+            br#"<plist><array><dict><key>DeviceIdentifier</key><string>disk2</string><key>Size</key><integer>16000000000</integer><key>Removable</key><true/><key>Internal</key><false/></dict></array></plist>"#.to_vec()));
+        let disks = list_disks_with(&rt).unwrap();
+        assert!(disks.iter().any(|d| d.id == "/dev/disk2"));
+    }
+
+    #[test]
+    fn list_disks_with_mock_propagates_io_error() {
+        let rt = MockRuntime::new();
+        rt.push_outcome(MockOutcome::Err("diskutil: not found".into()));
+        let err = list_disks_with(&rt).unwrap_err();
+        assert!(format!("{err}").contains("diskutil"));
+    }
+
+    #[test]
+    fn list_partitions_returns_empty() {
+        // macOS returns empty for now (per implementation note).
+        assert!(list_partitions("/dev/disk2".into()).unwrap().is_empty());
     }
 }

@@ -25,8 +25,8 @@ fn main() {
     }
 
     println!(
-        "{:<28} {:<24} {:>14} {:>10} {:>8} {}",
-        "DEVICE", "MODEL", "SIZE", "REMOVABLE", "SYSTEM", "MOUNTS"
+        "{:<28} {:<24} {:>14} {:>10} {:>8} MOUNTS",
+        "DEVICE", "MODEL", "SIZE", "REMOVABLE", "SYSTEM"
     );
     for d in disks {
         println!(
