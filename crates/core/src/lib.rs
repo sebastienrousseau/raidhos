@@ -62,8 +62,14 @@ use serde::{Deserialize, Serialize};
 mod catalog;
 mod parsers;
 mod payload;
+mod persistence_labels;
 mod platform;
 mod runtime;
+
+pub use persistence_labels::{
+    all_labels as persistence_labels, expected_persistence_label,
+    DEFAULT_LABEL as DEFAULT_PERSISTENCE_LABEL,
+};
 
 pub use catalog::{
     find_entry, load_catalog, load_catalog_from, sha256sums_lookup_pub as sha256sums_lookup,
