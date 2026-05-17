@@ -390,15 +390,149 @@ mod cross_platform_tests {
         assert!(validate_device_path("/dev/nvme0n1").is_ok());
     }
 
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn rejects_relative_path_on_linux() {
+        assert!(matches!(
+            validate_device_path("sdb"),
+            Err(CoreError::Validation(_))
+        ));
+        assert!(matches!(
+            validate_device_path("dev/sdb"),
+            Err(CoreError::Validation(_))
+        ));
+    }
+
     #[cfg(target_os = "macos")]
     #[test]
     fn accepts_typical_macos_device() {
         assert!(validate_device_path("/dev/disk2").is_ok());
     }
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn rejects_non_disk_path_on_macos() {
+        assert!(matches!(
+            validate_device_path("/dev/null"),
+            Err(CoreError::Validation(_))
+        ));
+    }
+
     #[cfg(target_os = "windows")]
     #[test]
     fn accepts_typical_windows_device() {
         assert!(validate_device_path("\\\\.\\PhysicalDrive1").is_ok());
+        // `\\?\` long-path form is also legitimate.
+        assert!(validate_device_path("\\\\?\\PhysicalDrive1").is_ok());
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn rejects_drive_letter_path_on_windows() {
+        // C:\… is not a physical-drive handle; refuse.
+        assert!(matches!(
+            validate_device_path("C:\\Windows"),
+            Err(CoreError::Validation(_))
+        ));
+    }
+
+    #[test]
+    fn rejects_each_forbidden_metacharacter() {
+        for ch in [
+            ';', '|', '&', '$', '`', '\n', '\r', '\t', '<', '>', '"', '\'', '*', '?', '(', ')',
+        ] {
+            let s = format!("/dev/sdb{ch}");
+            assert!(
+                matches!(validate_device_path(&s), Err(CoreError::Validation(_))),
+                "expected rejection for {ch:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn coreerror_display_renders_each_variant() {
+        // Lock in the wire-stable text so the CLI / UI grep paths keep
+        // matching across releases.
+        assert_eq!(
+            format!("{}", CoreError::UnsupportedPlatform),
+            "unsupported platform"
+        );
+        assert_eq!(
+            format!("{}", CoreError::Io("boom".into())),
+            "io error: boom"
+        );
+        assert_eq!(
+            format!("{}", CoreError::Validation("x".into())),
+            "validation error: x"
+        );
+        assert_eq!(
+            format!("{}", CoreError::NotImplemented("y".into())),
+            "not implemented: y"
+        );
+        assert_eq!(
+            format!("{}", CoreError::Parse("z".into())),
+            "parse error: z"
+        );
+    }
+
+    #[test]
+    fn install_request_round_trips_through_json() {
+        let req = InstallRequest {
+            device: "/dev/sdb".into(),
+            payload_version: "0.1.0".into(),
+            wipe: true,
+            dry_run: true,
+            allow_write: false,
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        let back: InstallRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.device, "/dev/sdb");
+        assert!(back.wipe);
+        assert!(back.dry_run);
+        assert!(!back.allow_write);
+    }
+
+    #[test]
+    fn progress_event_round_trips_through_json() {
+        let ev = ProgressEvent {
+            phase: "format".into(),
+            message: "exFAT".into(),
+            percent: Some(42),
+        };
+        let json = serde_json::to_string(&ev).unwrap();
+        let back: ProgressEvent = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.phase, "format");
+        assert_eq!(back.percent, Some(42));
+    }
+
+    #[test]
+    fn disk_info_round_trips_through_json() {
+        let d = DiskInfo {
+            id: "/dev/sdb".into(),
+            model: "USB".into(),
+            size_bytes: 16_000_000_000,
+            removable: true,
+            mountpoints: vec!["/mnt/x".into()],
+            is_system: false,
+        };
+        let s = serde_json::to_string(&d).unwrap();
+        let back: DiskInfo = serde_json::from_str(&s).unwrap();
+        assert_eq!(back.id, "/dev/sdb");
+        assert_eq!(back.size_bytes, 16_000_000_000);
+        assert!(back.removable);
+    }
+
+    #[test]
+    fn iso_entry_round_trips_through_json() {
+        let e = IsoEntry {
+            title: "ubuntu".into(),
+            path: "/iso/ubuntu.iso".into(),
+            size_bytes: 4096,
+            params: "boot=casper".into(),
+        };
+        let s = serde_json::to_string(&e).unwrap();
+        let back: IsoEntry = serde_json::from_str(&s).unwrap();
+        assert_eq!(back.title, "ubuntu");
+        assert_eq!(back.params, "boot=casper");
     }
 }
