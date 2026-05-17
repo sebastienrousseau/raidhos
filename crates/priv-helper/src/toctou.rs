@@ -29,6 +29,7 @@ use std::os::unix::fs::MetadataExt;
 
 /// Snapshot of the device's identity at validate time. Held alongside
 /// the open fd so subsequent operations can compare against it.
+#[derive(Debug)]
 pub struct DeviceHandle {
     /// Open fd on the device. Kept alive for the install duration so
     /// the kernel keeps the underlying object reachable even if the
