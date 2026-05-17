@@ -530,23 +530,45 @@ plugin ecosystem.
 
 The full feature-by-feature gap analysis lives at
 [`docs/VENTOY_COMPARISON.md`](docs/VENTOY_COMPARISON.md) —
-**read it before adopting** if you need any of the following
-today, which Ventoy still handles and RaidhOS does not yet:
+**fifteen of the twenty-five tracked gaps are closed in
+v0.0.1, two are scaffolded.** Headline summary:
 
-- Legacy BIOS boot (RaidhOS is UEFI-only in v0.0.1)
-- ARM64 / IA32 UEFI
-- A working Secure Boot signed shim
-- WIM / VHD(x) / IMG / raw EFI image boot
-- NTFS / ext4 / Btrfs / XFS on the data partition
-- A plugin system: themes, per-ISO menu aliases, password
-  protection, file injection, conf replacement, driver
-  update disks
-- Kickstart / preseed / autounattend.xml auto-install
-- Per-ISO persistence backend files (Ventoy maps each
-  distro to its native persistence label)
-- Multi-language boot menu
-- "F2 — browse files on a local disk"
-- A library of 1300+ tested ISOs
+**Closed in v0.0.1:**
+
+- Per-ISO `class` / tip / hidden flag — G11, G17
+- GRUB superuser + PBKDF2 password gate — G13
+- Per-ISO persistence backend + per-distro persistence
+  label table (30 distros) — G18, G19
+- ListView ↔ TreeView toggle — G20
+- F2-hotkeyed "Browse local disks" — G22 (chain into
+  discovered grub.cfg; full file picker → v0.1.0)
+- GUI plugin configurator (Tauri UI surfaces every
+  BootConfig field) — G23
+- User-supplied SHA-256 / companion-file checksum
+  verification — G24
+- `.efi` direct chainload — G7
+- `.img` / `.raw` raw disk image boot — G6
+- NTFS / ext4 / Btrfs / XFS on the DATA partition — G8, G9
+- UDF (Blu-ray rescue) + boot-time `insmod` for every
+  data-partition filesystem — G10
+- Typed auto-install descriptor (kickstart / preseed /
+  autoinstall / autoyast / cloud-init) — G12 (Linux
+  distros; Windows `autounattend.xml` → v0.1.0)
+
+**Scaffolded in v0.0.1 (destructive path → v0.0.2):**
+
+- Legacy BIOS layout (`--bios-compat`) — G1
+- Secure Boot signed shim (MOK keypair, sbsign, enrol
+  helper) — G3
+
+**Still gaps Ventoy handles and RaidhOS does not yet:**
+
+- ARM64 / IA32 UEFI — G2
+- WIM / VHD(x) boot — G4 / G5
+- Plugin system: file injection, conf replacement, driver
+  update disks — G14, G15, G16
+- Multi-language boot menu — G21
+- A library of 1300+ tested ISOs — G25
 
 On the other side, things RaidhOS does that Ventoy does not:
 
