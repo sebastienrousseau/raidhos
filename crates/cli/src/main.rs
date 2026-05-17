@@ -5,7 +5,7 @@ use clap::Parser;
 use raidhos_core as core;
 
 mod cli;
-use cli::{Cli, Commands};
+use cli::{CatalogAction, Cli, Commands};
 
 fn main() {
     let cli = Cli::parse();
@@ -90,6 +90,57 @@ fn main() {
                 eprintln!("write {}: {e}", path.display());
                 std::process::exit(1);
             }
+        },
+        Commands::Catalog { action } => match action {
+            CatalogAction::List => {
+                let catalog = match core::load_catalog() {
+                    Ok(c) => c,
+                    Err(e) => {
+                        eprintln!("catalog: {e}");
+                        std::process::exit(1);
+                    },
+                };
+                for entry in catalog {
+                    println!("{}\t{}", entry.slug, entry.name);
+                }
+            },
+            CatalogAction::Verify {
+                slug,
+                iso,
+                sums,
+                sig,
+                key_dir,
+            } => {
+                let catalog = match core::load_catalog() {
+                    Ok(c) => c,
+                    Err(e) => {
+                        eprintln!("catalog: {e}");
+                        std::process::exit(1);
+                    },
+                };
+                let entry = match core::find_entry(&catalog, &slug) {
+                    Some(e) => e.clone(),
+                    None => {
+                        eprintln!("no catalog entry with slug {slug}");
+                        std::process::exit(1);
+                    },
+                };
+                match core::verify_iso(
+                    &entry,
+                    std::path::Path::new(&iso),
+                    std::path::Path::new(&sums),
+                    std::path::Path::new(&sig),
+                    std::path::Path::new(&key_dir),
+                ) {
+                    Ok(v) => {
+                        println!("ok\t{}\tsha256={}", v.entry.name, v.computed_sha256);
+                    },
+                    Err(e) => {
+                        eprintln!("verify failed: {e}");
+                        std::process::exit(1);
+                    },
+                }
+            },
         },
     }
 }

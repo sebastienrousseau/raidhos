@@ -7,16 +7,18 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="splash" id="splash">
+    <a class="sr-only" href="#main">Skip to main content</a>
+
+    <div class="splash" id="splash" role="status" aria-live="polite" aria-label="RaidhOS loading">
       <div class="splash-logo">
-        <div class="splash-glyph">ᚱ</div>
+        <div class="splash-glyph" aria-hidden="true">ᚱ</div>
       </div>
     </div>
 
-    <div class="shell app" id="app">
-      <div class="modal" id="resetModal">
+    <main class="shell app" id="app" aria-label="RaidhOS">
+      <div class="modal" id="resetModal" role="dialog" aria-modal="true" aria-labelledby="resetModalTitle">
         <div class="modal-card">
-          <strong>Reset all parameters?</strong>
+          <strong id="resetModalTitle">Reset all parameters?</strong>
           <p class="subtitle">This will revert params, initrd, and kernel args for all entries.</p>
           <div class="modal-actions">
             <button class="ghost" id="cancelReset">Cancel</button>
@@ -38,19 +40,28 @@
           <div class="disks" id="entriesConfig"></div>
         </details>
       </section>
+      <nav class="wizard-nav" role="tablist" aria-label="Install steps">
+        <button class="wizard-step" data-step="1" role="tab" aria-selected="true"><span class="wizard-num">1</span>Pick ISO</button>
+        <button class="wizard-step" data-step="2" role="tab" aria-selected="false"><span class="wizard-num">2</span>Pick USB &amp; confirm</button>
+        <label class="wizard-toggle">
+          <input type="checkbox" id="wizardToggle" />
+          Guided mode
+        </label>
+      </nav>
+
       <header>
-        <div class="brand">
-          <div class="logo">ᚱ</div>
+        <div class="brand" aria-label="RaidhOS">
+          <div class="logo" aria-hidden="true">ᚱ</div>
         </div>
-        <div class="actions">
-          <button class="ghost" id="saveConfig">Save Config</button>
-          <span class="subtitle" id="lastSaved"></span>
-          <button class="ghost" id="refresh">Refresh</button>
-          <button class="primary" id="load">List Disks</button>
+        <div class="actions" role="toolbar" aria-label="Top actions">
+          <button class="ghost" id="saveConfig" aria-label="Save boot configuration">Save Config</button>
+          <span class="subtitle" id="lastSaved" aria-live="polite"></span>
+          <button class="ghost" id="refresh" aria-label="Refresh disks">Refresh</button>
+          <button class="primary" id="load" aria-label="Re-list disks">List Disks</button>
         </div>
       </header>
 
-      <section class="card">
+      <section class="card" data-wizard-step="1">
         <h2>Boot Entries</h2>
         <p class="subtitle">Use ↑/↓ to move. Enter to select. <span id="defaultLabel"></span></p>
         <div class="boot-progress" id="bootProgress">
@@ -60,8 +71,8 @@
         <p class="subtitle" id="entryNote"></p>
       </section>
 
-      <section class="card panel">
-        <h2>Install</h2>
+      <section class="card panel" id="main" data-wizard-step="2" aria-labelledby="installHeading">
+        <h2 id="installHeading">Install</h2>
         <p class="subtitle">Dry-run only for now. No changes are made. <span id="payloadLabel"></span></p>
         <div class="confirm">
           <div><strong>ISO scan paths</strong></div>
@@ -77,7 +88,7 @@
         <div class="confirm">
           <div><strong>Selected:</strong> <span id="selected">None</span></div>
           <div><small>Type the device path to confirm (e.g. /dev/sdb).</small></div>
-          <input id="confirmInput" placeholder="/dev/sdX" />
+          <input id="confirmInput" placeholder="/dev/sdX" aria-label="Confirm target device path" />
           <div class="confirm">
             <label>
               <input type="checkbox" id="acceptWrite" />
@@ -88,18 +99,18 @@
               Enable actual write (not a dry-run).
             </label>
             <div><small>Type ERASE to proceed with actual write.</small></div>
-            <input id="confirmErase" placeholder="ERASE" />
+            <input id="confirmErase" placeholder="ERASE" aria-label="Type ERASE to confirm destructive write" />
           </div>
-          <button class="primary" id="installBtn" disabled>Run Dry-Run Install</button>
+          <button class="primary" id="installBtn" disabled aria-label="Run install (dry-run by default)">Run Dry-Run Install</button>
         </div>
-        <div class="banner" id="configBanner"></div>
-        <div class="progress" id="progress"></div>
+        <div class="banner" id="configBanner" role="status" aria-live="polite"></div>
+        <div class="progress" id="progress" role="log" aria-live="polite" aria-label="Install progress"></div>
       </section>
 
       <section class="card footer">
         Cross-platform core in Rust. UI powered by Tauri.
       </section>
-    </div>
+    </main>
 
     <script src="app.js"></script>
   </body>

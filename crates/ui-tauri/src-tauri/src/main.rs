@@ -4,13 +4,7 @@ use raidhos_core as core;
 mod grub;
 
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
-use tauri::State;
-
-#[derive(Clone, Default)]
-struct AppState {
-    last_events: Mutex<Vec<ProgressEvent>>,
-}
+use tauri::{Emitter, WebviewWindow as Window};
 
 #[derive(Serialize)]
 struct DiskInfo {
@@ -60,18 +54,27 @@ pub struct BootEntryConfig {
     pub kargs: String,
 }
 
-struct VecSink<'a> {
-    events: &'a Mutex<Vec<ProgressEvent>>,
+/// Tauri event channel name. Frontend subscribes via
+/// `window.__TAURI__.event.listen("raidhos://progress", ...)`.
+const PROGRESS_EVENT: &str = "raidhos://progress";
+
+/// Push events from the install pipeline straight to the frontend
+/// via Tauri's event bus. Replaces the `Mutex<Vec<…>>` polling
+/// pattern.
+struct WindowSink {
+    window: Window,
 }
 
-impl<'a> core::ProgressSink for VecSink<'a> {
+impl core::ProgressSink for WindowSink {
     fn emit(&self, event: core::ProgressEvent) {
-        let mut guard = self.events.lock().expect("lock events");
-        guard.push(ProgressEvent {
+        let payload = ProgressEvent {
             phase: event.phase,
             message: event.message,
             percent: event.percent,
-        });
+        };
+        // Log but never panic — a failed event must not abort the
+        // install. The frontend will fall back to the return value.
+        let _ = self.window.emit(PROGRESS_EVENT, payload);
     }
 }
 
@@ -101,16 +104,10 @@ fn list_disks() -> Result<Vec<DiskInfo>, String> {
 }
 
 #[tauri::command]
-fn install(args: InstallArgs, state: State<'_, AppState>) -> Result<Vec<ProgressEvent>, String> {
-    {
-        let mut guard = state.last_events.lock().expect("lock events");
-        guard.clear();
-    }
-
-    let sink = VecSink {
-        events: &state.last_events,
+fn install(window: Window, args: InstallArgs) -> Result<(), String> {
+    let sink = WindowSink {
+        window: window.clone(),
     };
-
     let req = core::InstallRequest {
         device: args.device,
         payload_version: args.payload_version,
@@ -118,11 +115,8 @@ fn install(args: InstallArgs, state: State<'_, AppState>) -> Result<Vec<Progress
         dry_run: args.dry_run,
         allow_write: args.allow_write,
     };
-
     core::install(req, &sink).map_err(|e| e.to_string())?;
-
-    let guard = state.last_events.lock().expect("lock events");
-    Ok(guard.clone())
+    Ok(())
 }
 
 #[tauri::command]
@@ -198,20 +192,113 @@ fn get_payload_version() -> Result<String, String> {
     Ok("unknown".to_string())
 }
 
+/// Locate the privileged helper binary next to this executable.
+///
+/// In dev (`cargo run`), it lives at `target/debug/raidhos-priv-helper`
+/// alongside `raidhos-ui`. In packaged builds (deb/Homebrew/AppImage)
+/// it lives in the same install prefix as the UI binary.
+fn locate_priv_helper() -> Result<std::path::PathBuf, String> {
+    let exe = std::env::current_exe().map_err(|e| format!("current_exe: {e}"))?;
+    let dir = exe
+        .parent()
+        .ok_or_else(|| "no parent dir for current_exe".to_string())?;
+    let candidates: &[&str] = if cfg!(windows) {
+        &["raidhos-priv-helper.exe"]
+    } else {
+        &["raidhos-priv-helper"]
+    };
+    for name in candidates {
+        let candidate = dir.join(name);
+        if candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+    Err(format!(
+        "raidhos-priv-helper not found next to {}",
+        exe.display()
+    ))
+}
+
 #[tauri::command]
-fn install_elevated(device: String, payload_version: String) -> Result<String, String> {
-    let current_exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let output = std::process::Command::new("pkexec")
-        .arg(current_exe)
-        .arg("internal-worker")
-        .arg("--task")
-        .arg("install")
-        .arg("--device")
-        .arg(device)
-        .arg("--payload-version")
-        .arg(payload_version)
+fn install_elevated(
+    window: Window,
+    device: String,
+    payload_version: String,
+) -> Result<String, String> {
+    let helper = locate_priv_helper()?;
+
+    // Emit a "starting elevation" event so the UI can show a spinner.
+    let _ = window.emit(
+        PROGRESS_EVENT,
+        ProgressEvent {
+            phase: "elevate".to_string(),
+            message: "Requesting administrator privileges".to_string(),
+            percent: Some(1),
+        },
+    );
+
+    #[cfg(target_os = "linux")]
+    let mut cmd = {
+        let mut c = std::process::Command::new("pkexec");
+        c.arg(&helper);
+        c
+    };
+
+    #[cfg(target_os = "macos")]
+    let mut cmd = {
+        // osascript with "do shell script with administrator privileges"
+        // returns the command's stdout. Quote the helper path defensively.
+        let helper_str = helper.to_string_lossy().to_string();
+        let script = format!(
+            r#"do shell script "{} install --device {} --payload-version {} --allow-write" with administrator privileges"#,
+            helper_str,
+            shell_quote_for_osascript(&device),
+            shell_quote_for_osascript(&payload_version),
+        );
+        let mut c = std::process::Command::new("osascript");
+        c.arg("-e").arg(script);
+        c
+    };
+
+    #[cfg(target_os = "windows")]
+    let mut cmd = {
+        // PowerShell Start-Process -Verb RunAs triggers UAC.
+        let script = format!(
+            "Start-Process -FilePath '{}' -ArgumentList 'install','--device','{}','--payload-version','{}','--allow-write' -Verb RunAs -Wait -PassThru",
+            helper.to_string_lossy(),
+            device.replace('\'', "''"),
+            payload_version.replace('\'', "''"),
+        );
+        let mut c = std::process::Command::new("powershell");
+        c.args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            &script,
+        ]);
+        c
+    };
+
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    let mut cmd = std::process::Command::new(&helper);
+
+    // For Linux, we still need to append the install args after pkexec
+    // gets the helper path.
+    #[cfg(target_os = "linux")]
+    {
+        cmd.arg("install")
+            .arg("--device")
+            .arg(&device)
+            .arg("--payload-version")
+            .arg(&payload_version)
+            .arg("--allow-write");
+    }
+
+    let output = cmd
         .output()
-        .map_err(|e| format!("Failed to launch pkexec: {e}"))?;
+        .map_err(|e| format!("failed to launch elevation: {e}"))?;
 
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
@@ -225,89 +312,11 @@ fn install_elevated(device: String, payload_version: String) -> Result<String, S
     }
 }
 
-fn maybe_run_internal_worker() -> bool {
-    let args: Vec<String> = std::env::args().collect();
-    if args.get(1).map(|s| s.as_str()) != Some("internal-worker") {
-        return false;
-    }
-
-    let mut task = String::new();
-    let mut device = String::new();
-    let mut payload_version = String::new();
-    let mut i = 2;
-    while i < args.len() {
-        match args[i].as_str() {
-            "--task" => {
-                if let Some(v) = args.get(i + 1) {
-                    task = v.clone();
-                }
-                i += 2;
-            },
-            "--device" => {
-                if let Some(v) = args.get(i + 1) {
-                    device = v.clone();
-                }
-                i += 2;
-            },
-            "--payload-version" => {
-                if let Some(v) = args.get(i + 1) {
-                    payload_version = v.clone();
-                }
-                i += 2;
-            },
-            _ => i += 1,
-        }
-    }
-
-    if task == "install" && !device.is_empty() {
-        let res = run_worker_install(&device, &payload_version);
-        match res {
-            Ok(msg) => {
-                println!("{msg}");
-                std::process::exit(0);
-            },
-            Err(err) => {
-                eprintln!("{err}");
-                std::process::exit(1);
-            },
-        }
-    }
-
-    eprintln!("invalid internal-worker invocation");
-    std::process::exit(2);
-}
-
-fn run_worker_install(device: &str, payload_version: &str) -> Result<String, String> {
-    // attempt to unmount partitions
-    if let Ok(parts) = core::list_partitions(device.to_string()) {
-        for p in parts {
-            for mp in p.mountpoints {
-                let _ = std::process::Command::new("umount").arg(&mp).status();
-            }
-        }
-    }
-    let _ = std::process::Command::new("wipefs")
-        .args(["-a", device])
-        .status();
-
-    struct StdoutSink;
-    impl core::ProgressSink for StdoutSink {
-        fn emit(&self, event: core::ProgressEvent) {
-            let pct = event.percent.map(|p| format!("{p}%")).unwrap_or_default();
-            println!("{} {} {}", event.phase, event.message, pct);
-        }
-    }
-
-    let req = core::InstallRequest {
-        device: device.to_string(),
-        payload_version: payload_version.to_string(),
-        wipe: true,
-        dry_run: false,
-        allow_write: true,
-    };
-
-    core::install(req, &StdoutSink).map_err(|e| e.to_string())?;
-    Ok("install complete".to_string())
+#[cfg(target_os = "macos")]
+fn shell_quote_for_osascript(s: &str) -> String {
+    // osascript "do shell script" double-quotes its argument; we need
+    // to escape any embedded `"` and `\`.
+    s.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 #[tauri::command]
@@ -338,7 +347,7 @@ fn copy_isos_to_data(mount_path: String, sources: Vec<String>) -> Result<Vec<Str
         }
         if let Some(name) = src_path.file_name() {
             let dest = dest_dir.join(name);
-            std::fs::copy(&src_path, &dest).map_err(|e| e.to_string())?;
+            std::fs::copy(src_path, &dest).map_err(|e| e.to_string())?;
             copied.push(dest.display().to_string());
         }
     }
@@ -346,12 +355,10 @@ fn copy_isos_to_data(mount_path: String, sources: Vec<String>) -> Result<Vec<Str
 }
 
 fn main() {
-    if maybe_run_internal_worker() {
-        return;
-    }
-
     tauri::Builder::default()
-        .manage(AppState::default())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             list_disks,
             install,

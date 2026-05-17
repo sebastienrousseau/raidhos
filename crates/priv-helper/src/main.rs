@@ -1,9 +1,9 @@
 //! Privileged helper for RaidhOS.
 //!
-//! Invoked by the UI or CLI through an elevation path (`pkexec`, `sudo`,
-//! UAC). Accepts a small set of subcommands and emits a single JSON
-//! object on stdout so callers can parse results regardless of
-//! language.
+//! Invoked by the UI or CLI through an elevation path (`pkexec`,
+//! `sudo`, UAC). Accepts a small set of subcommands and emits a
+//! single JSON object on stdout so callers can parse results
+//! regardless of language.
 //!
 //! This binary runs as root. Every input it parses must be
 //! hostile-input-safe — see `docs/THREAT_MODEL.md`. Argument parsing
@@ -13,6 +13,11 @@
 use clap::{Parser, Subcommand};
 use raidhos_core as core;
 use serde::Serialize;
+
+#[cfg(target_os = "linux")]
+mod seccomp;
+#[cfg(target_os = "linux")]
+mod toctou;
 
 /// Hard upper bound on combined argv byte length. Defence against
 /// resource-exhaustion attacks; a real install request fits in a few
@@ -61,6 +66,9 @@ struct InstallArgs {
     /// refuse).
     #[arg(long, default_value_t = false)]
     no_wipe: bool,
+    /// Persistence overlay size in MiB. 0 disables persistence.
+    #[arg(long, default_value_t = 0)]
+    persistence_mb: u64,
 }
 
 #[derive(Serialize)]
@@ -114,12 +122,25 @@ fn main() {
     let cli = match Cli::try_parse() {
         Ok(c) => c,
         Err(e) => {
-            // clap formats its own errors; surface them as JSON so the
-            // calling UI/CLI doesn't have to parse stderr.
+            if matches!(
+                e.kind(),
+                clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion
+            ) {
+                // Treat help/version as success, not as a JSON error.
+                print!("{e}");
+                std::process::exit(0);
+            }
             print_response(&HelperResponse::<()>::err(e.to_string()));
             std::process::exit(2);
         },
     };
+
+    // Apply the seccomp denylist on Linux. Non-fatal if the kernel
+    // rejects it — the rest of the safeguards still apply.
+    #[cfg(target_os = "linux")]
+    if let Err(e) = seccomp::install_denylist() {
+        eprintln!("seccomp filter not installed: {e}");
+    }
 
     match cli.command {
         Command::ListDisks => {
@@ -137,6 +158,23 @@ fn main() {
             print_response(&resp);
         },
         Command::Install(args) => {
+            // TOCTOU defence on Linux: pin the device fd before we
+            // hand off to the install pipeline.
+            #[cfg(target_os = "linux")]
+            let _pin = if args.allow_write && !args.dry_run {
+                match toctou::pin_device(&args.device) {
+                    Ok(h) => Some(h),
+                    Err(e) => {
+                        print_response(&HelperResponse::<()>::err(format!(
+                            "device pin failed: {e}"
+                        )));
+                        std::process::exit(1);
+                    },
+                }
+            } else {
+                None
+            };
+
             let req = core::InstallRequest {
                 device: args.device,
                 payload_version: args.payload_version,
@@ -145,13 +183,92 @@ fn main() {
                 allow_write: args.allow_write,
             };
             let sink = StderrSink;
-            let resp = match core::install(req, &sink) {
-                Ok(_) => HelperResponse::ok(()),
-                Err(err) => HelperResponse::<()>::err(err.to_string()),
+            let install_result = core::install(req, &sink).map_err(|e| e.to_string());
+
+            // Persistence overlay (Linux only, post-install).
+            #[cfg(target_os = "linux")]
+            let persistence_result = if install_result.is_ok()
+                && args.persistence_mb > 0
+                && args.allow_write
+                && !args.dry_run
+            {
+                create_persistence(args.persistence_mb).err()
+            } else {
+                None
+            };
+            #[cfg(not(target_os = "linux"))]
+            let persistence_result: Option<String> = None;
+
+            let resp = match (install_result, persistence_result) {
+                (Ok(_), None) => HelperResponse::ok(()),
+                (Ok(_), Some(p_err)) => HelperResponse::<()>::err(format!(
+                    "install succeeded but persistence creation failed: {p_err}"
+                )),
+                (Err(e), _) => HelperResponse::<()>::err(e),
             };
             print_response(&resp);
         },
     }
+}
+
+#[cfg(target_os = "linux")]
+fn create_persistence(size_mb: u64) -> Result<(), String> {
+    use std::process::Command;
+
+    // After install, the DATA partition is unmounted (per
+    // payload_copy). Find it again by label and remount.
+    let mount = std::path::Path::new("/mnt/raidhos-data-persist");
+    std::fs::create_dir_all(mount)
+        .map_err(|e| format!("create_dir_all {}: {e}", mount.display()))?;
+
+    let dev = Command::new("blkid")
+        .args(["-L", "DATA"])
+        .output()
+        .map_err(|e| format!("blkid: {e}"))?;
+    if !dev.status.success() {
+        return Err("blkid: DATA label not found".to_string());
+    }
+    let dev = String::from_utf8_lossy(&dev.stdout).trim().to_string();
+
+    let status = Command::new("mount")
+        .args([&dev, mount.to_str().unwrap()])
+        .status()
+        .map_err(|e| format!("mount {dev}: {e}"))?;
+    if !status.success() {
+        return Err(format!("mount {dev} failed"));
+    }
+
+    let overlay = mount.join("persistence");
+    let status = Command::new("dd")
+        .args([
+            "if=/dev/zero",
+            &format!("of={}", overlay.to_string_lossy()),
+            "bs=1M",
+            &format!("count={size_mb}"),
+            "status=none",
+        ])
+        .status()
+        .map_err(|e| format!("dd: {e}"))?;
+    if !status.success() {
+        let _ = Command::new("umount").arg(mount).status();
+        return Err("dd failed".to_string());
+    }
+
+    let status = Command::new("mkfs.ext4")
+        .args(["-F", "-L", "persistence", overlay.to_str().unwrap()])
+        .status()
+        .map_err(|e| format!("mkfs.ext4: {e}"))?;
+    if !status.success() {
+        let _ = Command::new("umount").arg(mount).status();
+        return Err("mkfs.ext4 failed".to_string());
+    }
+
+    // Write the persistence.conf that live-build expects.
+    std::fs::write(mount.join("persistence.conf"), "/ union\n")
+        .map_err(|e| format!("write persistence.conf: {e}"))?;
+
+    let _ = Command::new("umount").arg(mount).status();
+    Ok(())
 }
 
 struct StderrSink;

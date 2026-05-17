@@ -1,0 +1,24 @@
+Source: raidhos
+Section: admin
+Priority: optional
+Maintainer: Sebastien Rousseau <sebastian.rousseau@gmail.com>
+Build-Depends: debhelper-compat (= 13), cargo (>= 1.78), rustc (>= 1.78), pkg-config, libwebkit2gtk-4.1-dev, libgtk-3-dev, libsoup-3.0-dev
+Standards-Version: 4.7.0
+Homepage: https://github.com/sebastienrousseau/raidhos
+Vcs-Browser: https://github.com/sebastienrousseau/raidhos
+Vcs-Git: https://github.com/sebastienrousseau/raidhos.git
+Rules-Requires-Root: no
+
+Package: raidhos
+Architecture: amd64 arm64
+Depends: ${misc:Depends}, ${shlibs:Depends}, parted, dosfstools, exfatprogs, policykit-1
+Recommends: gpg
+Description: Memory-safe multi-ISO USB imager
+ RaidhOS turns a USB stick into a multi-ISO boot drive in a few clicks.
+ .
+ The Rust core enforces `forbid(unsafe)`, the privileged helper is
+ hardened with `clap` parsing plus a 64 KiB argv cap and a seccomp
+ denylist, and every release is signed with cosign.
+ .
+ Includes the CLI, the privileged helper (the only binary that needs
+ root), and a polkit policy.

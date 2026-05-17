@@ -14,10 +14,29 @@
 
 use serde::{Deserialize, Serialize};
 
+mod catalog;
+mod parsers;
 mod payload;
 mod platform;
 
+pub use catalog::{
+    find_entry, load_catalog, sha256sums_lookup_pub as sha256sums_lookup, verify_iso, CatalogEntry,
+    CatalogError, VerifiedIso,
+};
 pub use payload::{verify_payload, ManifestError, PayloadManifest};
+
+/// Hand-rolled subprocess-output parsers, exposed for fuzzing.
+///
+/// Stability of this module is **not** guaranteed; it exists purely to
+/// give the `fuzz/` harness a callable surface. Real code should call
+/// the public functions like [`list_disks`] which wrap discovery
+/// subprocess invocation around these parsers.
+#[doc(hidden)]
+pub mod __fuzz_api {
+    pub use crate::parsers::{
+        parse_disks_plist, parse_get_disk_json, parse_lsblk_disks, parse_lsblk_partitions,
+    };
+}
 
 /// Convenience alias for results that fail with a [`CoreError`].
 pub type Result<T> = std::result::Result<T, CoreError>;

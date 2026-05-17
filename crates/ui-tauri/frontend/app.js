@@ -1,3 +1,11 @@
+      // Tauri 1 -> 2 compatibility shim. Tauri 2 moved the invoke API
+      // from `__TAURI__.tauri.invoke` to `__TAURI__.core.invoke` and
+      // renamed file-drop events. Bridge both so the rest of the
+      // frontend doesn't have to care which Tauri version it runs on.
+      if (window.__TAURI__ && !window.__TAURI__.tauri && window.__TAURI__.core) {
+        window.__TAURI__.tauri = { invoke: window.__TAURI__.core.invoke };
+      }
+
       const entriesEl = document.getElementById('entries');
       const entriesConfigEl = document.getElementById('entriesConfig');
       const targetsEl = document.getElementById('targets');
@@ -734,3 +742,159 @@
       }
 
       restoreLastSaved();
+
+      // ---------------------------------------------------------------
+      // Drag-and-drop ISO support.
+      //
+      // Tauri 1 emits a `tauri://file-drop` event on the window when
+      // a file is dropped into the webview from the host file
+      // manager. HTML5 drag-and-drop alone doesn't give us paths in
+      // a sandboxed webview, so we rely on Tauri's event.
+      // ---------------------------------------------------------------
+      (function setupDragAndDrop() {
+        const dropZone = document.getElementById('app');
+        if (!dropZone) return;
+        const banner = document.createElement('div');
+        banner.className = 'drop-banner';
+        banner.setAttribute('role', 'status');
+        banner.setAttribute('aria-live', 'polite');
+        banner.style.display = 'none';
+        banner.textContent = 'Drop ISOs to copy to the selected USB.';
+        dropZone.appendChild(banner);
+
+        // Visual hover state (browser-level events) — only the path
+        // delivery uses Tauri's event.
+        dropZone.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          dropZone.classList.add('dragging');
+          banner.style.display = 'block';
+        });
+        dropZone.addEventListener('dragleave', () => {
+          dropZone.classList.remove('dragging');
+          banner.style.display = 'none';
+        });
+
+        if (window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen) {
+          const dropHandler = async (event) => {
+            dropZone.classList.remove('dragging');
+            banner.style.display = 'none';
+            // Tauri 2 payload shape: { paths: ["...", "..."] }
+            // Tauri 1 payload shape: ["...", "..."]
+            const rawPaths = (event.payload && event.payload.paths)
+              ? event.payload.paths
+              : (event.payload || []);
+            const paths = (Array.isArray(rawPaths) ? rawPaths : []).filter((p) =>
+              typeof p === 'string' && p.toLowerCase().endsWith('.iso')
+            );
+            if (!paths.length) return;
+            if (!selectedDataMount) {
+              banner.style.display = 'block';
+              banner.textContent =
+                'Select and mount a target USB first, then drop ISOs.';
+              return;
+            }
+            try {
+              banner.style.display = 'block';
+              banner.textContent = `Copying ${paths.length} ISO(s)…`;
+              const copied = await window.__TAURI__.tauri.invoke(
+                'copy_isos_to_data',
+                { mountPath: selectedDataMount, sources: paths }
+              );
+              banner.textContent = `Copied ${copied.length} ISO(s).`;
+              setTimeout(() => {
+                banner.style.display = 'none';
+              }, 2500);
+              if (typeof refreshIsos === 'function') refreshIsos();
+            } catch (err) {
+              banner.textContent = `Copy failed: ${err}`;
+            }
+          };
+          // Register both the Tauri 1 and Tauri 2 event names so the
+          // frontend works on either backend.
+          window.__TAURI__.event.listen('tauri://file-drop', dropHandler);
+          window.__TAURI__.event.listen('tauri://drag-drop', dropHandler);
+        }
+      })();
+
+      // ---------------------------------------------------------------
+      // Push progress events. Backend emits `raidhos://progress`;
+      // replaces the previous Mutex<Vec> polling pattern.
+      // ---------------------------------------------------------------
+      (function setupProgressEvents() {
+        if (!(window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen)) {
+          return;
+        }
+        window.__TAURI__.event.listen('raidhos://progress', (event) => {
+          const ev = event.payload || {};
+          if (typeof progressEl === 'undefined' || !progressEl) return;
+          const line = document.createElement('div');
+          line.className = 'progress-line';
+          line.setAttribute('role', 'status');
+          const pct = ev.percent != null ? ` ${ev.percent}%` : '';
+          line.textContent = `${ev.phase}: ${ev.message}${pct}`;
+          progressEl.appendChild(line);
+          // Auto-scroll the latest progress into view.
+          progressEl.scrollTop = progressEl.scrollHeight;
+        });
+      })();
+
+      // ---------------------------------------------------------------
+      // Guided ("wizard") mode. Two-step flow:
+      //   1. Pick ISO entries (the existing entries section).
+      //   2. Pick USB and confirm (the install panel).
+      //
+      // Triggered by the toggle in the wizard-nav. Defaults to off so
+      // power-users see the full dashboard. State persists in
+      // localStorage.
+      // ---------------------------------------------------------------
+      (function setupWizard() {
+        const toggle = document.getElementById('wizardToggle');
+        const steps = Array.from(document.querySelectorAll('.wizard-step'));
+        const panels = Array.from(document.querySelectorAll('[data-wizard-step]'));
+        if (!toggle || steps.length === 0) return;
+
+        const STATE_KEY = 'raidhos_wizard_mode';
+        const STEP_KEY = 'raidhos_wizard_step';
+
+        function applyWizardMode(on) {
+          document.body.classList.toggle('wizard-mode', on);
+          toggle.checked = on;
+          if (on) {
+            setStep(parseInt(localStorage.getItem(STEP_KEY) || '1', 10));
+          } else {
+            // Reveal all panels.
+            panels.forEach((p) => p.classList.add('active'));
+            steps.forEach((s) => s.classList.remove('active', 'done'));
+          }
+        }
+
+        function setStep(n) {
+          n = Math.max(1, Math.min(2, n | 0));
+          localStorage.setItem(STEP_KEY, String(n));
+          panels.forEach((p) => {
+            const s = parseInt(p.getAttribute('data-wizard-step') || '0', 10);
+            p.classList.toggle('active', s === n);
+          });
+          steps.forEach((btn) => {
+            const s = parseInt(btn.getAttribute('data-step') || '0', 10);
+            btn.classList.toggle('active', s === n);
+            btn.classList.toggle('done', s < n);
+            btn.setAttribute('aria-selected', s === n ? 'true' : 'false');
+          });
+        }
+
+        steps.forEach((btn) => {
+          btn.addEventListener('click', () => {
+            if (!document.body.classList.contains('wizard-mode')) return;
+            const n = parseInt(btn.getAttribute('data-step') || '1', 10);
+            setStep(n);
+          });
+        });
+
+        toggle.addEventListener('change', () => {
+          localStorage.setItem(STATE_KEY, toggle.checked ? '1' : '0');
+          applyWizardMode(toggle.checked);
+        });
+
+        applyWizardMode(localStorage.getItem(STATE_KEY) === '1');
+      })();

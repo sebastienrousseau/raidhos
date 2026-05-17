@@ -1,108 +1,28 @@
 //! Linux platform backend.
 //!
-//! Discovery uses `lsblk -J`. The install pipeline shells out to
-//! `parted`, `mkfs.vfat`, `mkfs.exfat`, `mount`, `cp`, `umount`. Every
+//! Discovery shells out to `lsblk -J`; parsing is in
+//! [`crate::parsers`]. The install pipeline shells out to `parted`,
+//! `mkfs.vfat`, `mkfs.exfat`, `mount`, `cp`, `umount`. Every
 //! subprocess is invoked through [`std::process::Command`] with
 //! separated argv — no shell strings are ever built from user input.
 
+use crate::parsers::{parse_lsblk_disks, parse_lsblk_partitions};
 use crate::{
     validate_device_path, CoreError, DiskInfo, InstallRequest, PartitionInfo, ProgressEvent,
     ProgressSink, Result,
 };
-use serde::Deserialize;
 use std::process::Command;
 use std::{fs, path::PathBuf};
-
-#[derive(Deserialize)]
-struct LsblkOutput {
-    blockdevices: Vec<LsblkDevice>,
-}
-
-#[derive(Deserialize)]
-struct LsblkDevice {
-    name: String,
-    #[serde(default)]
-    size: Option<String>,
-    #[serde(default)]
-    model: Option<String>,
-    #[serde(default)]
-    rm: Option<bool>,
-    #[serde(default, rename = "type")]
-    type_field: Option<String>,
-    #[serde(default)]
-    mountpoints: Option<Vec<Option<String>>>,
-    #[serde(default)]
-    children: Option<Vec<LsblkDevice>>,
-    #[serde(default)]
-    label: Option<String>,
-    #[serde(default)]
-    fstype: Option<String>,
-    #[serde(default)]
-    pkname: Option<String>,
-}
 
 pub fn list_disks() -> Result<Vec<DiskInfo>> {
     let output = Command::new("lsblk")
         .args(["-b", "-J", "-o", "NAME,MODEL,SIZE,RM,TYPE,MOUNTPOINTS"])
         .output()
         .map_err(|e| CoreError::Io(e.to_string()))?;
-
     if !output.status.success() {
         return Err(CoreError::Io("lsblk failed".to_string()));
     }
-
     parse_lsblk_disks(&output.stdout)
-}
-
-pub(crate) fn parse_lsblk_disks(bytes: &[u8]) -> Result<Vec<DiskInfo>> {
-    let parsed: LsblkOutput =
-        serde_json::from_slice(bytes).map_err(|e| CoreError::Parse(e.to_string()))?;
-
-    let mut disks = Vec::new();
-    for dev in parsed.blockdevices {
-        let is_disk = dev.type_field.as_deref() == Some("disk");
-        if !is_disk {
-            continue;
-        }
-        let size_bytes = dev
-            .size
-            .as_deref()
-            .unwrap_or("0")
-            .parse::<u64>()
-            .unwrap_or(0);
-
-        let mut mounts = Vec::new();
-        collect_mounts(&dev, &mut mounts);
-        let is_system = mounts
-            .iter()
-            .any(|m| m == "/" || m == "/boot" || m == "/boot/efi");
-
-        disks.push(DiskInfo {
-            id: format!("/dev/{}", dev.name),
-            model: dev.model.unwrap_or_else(|| "Unknown".to_string()),
-            size_bytes,
-            removable: dev.rm.unwrap_or(false),
-            mountpoints: mounts,
-            is_system,
-        });
-    }
-
-    Ok(disks)
-}
-
-fn collect_mounts(dev: &LsblkDevice, mounts: &mut Vec<String>) {
-    if let Some(mps) = &dev.mountpoints {
-        for mp in mps.iter().flatten() {
-            if !mp.is_empty() {
-                mounts.push(mp.clone());
-            }
-        }
-    }
-    if let Some(children) = &dev.children {
-        for child in children {
-            collect_mounts(child, mounts);
-        }
-    }
 }
 
 pub fn list_partitions(device: String) -> Result<Vec<PartitionInfo>> {
@@ -118,38 +38,7 @@ pub fn list_partitions(device: String) -> Result<Vec<PartitionInfo>> {
     if !output.status.success() {
         return Err(CoreError::Io("lsblk failed".to_string()));
     }
-    let parsed: LsblkOutput =
-        serde_json::from_slice(&output.stdout).map_err(|e| CoreError::Parse(e.to_string()))?;
-    let dev_name = device.trim_start_matches("/dev/").to_string();
-    let mut parts = Vec::new();
-    for dev in parsed.blockdevices {
-        collect_parts(&dev, &dev_name, &mut parts);
-    }
-    Ok(parts)
-}
-
-fn collect_parts(dev: &LsblkDevice, parent: &str, parts: &mut Vec<PartitionInfo>) {
-    if dev.type_field.as_deref() == Some("part") && dev.pkname.as_deref() == Some(parent) {
-        let mut mounts = Vec::new();
-        if let Some(mps) = &dev.mountpoints {
-            for mp in mps.iter().flatten() {
-                if !mp.is_empty() {
-                    mounts.push(mp.clone());
-                }
-            }
-        }
-        parts.push(PartitionInfo {
-            id: format!("/dev/{}", dev.name),
-            label: dev.label.clone().unwrap_or_default(),
-            fstype: dev.fstype.clone().unwrap_or_default(),
-            mountpoints: mounts,
-        });
-    }
-    if let Some(children) = &dev.children {
-        for child in children {
-            collect_parts(child, parent, parts);
-        }
-    }
+    parse_lsblk_partitions(&output.stdout, &device)
 }
 
 pub fn install(req: InstallRequest, sink: &dyn ProgressSink) -> Result<()> {
@@ -269,7 +158,6 @@ fn validate_install(
             "refusing to operate on system disk".to_string(),
         ));
     }
-
     if !target.mountpoints.is_empty() {
         return Err(CoreError::Validation(
             "device has mounted partitions; unmount first".to_string(),
@@ -281,19 +169,16 @@ fn validate_install(
         message: "Preparing partition layout".to_string(),
         percent: Some(20),
     });
-
     sink.emit(ProgressEvent {
         phase: "payload".to_string(),
         message: format!("Staging payload {}", req.payload_version),
         percent: Some(45),
     });
-
     sink.emit(ProgressEvent {
         phase: "write".to_string(),
         message: "Writing boot structures".to_string(),
         percent: Some(70),
     });
-
     sink.emit(ProgressEvent {
         phase: "finalize".to_string(),
         message: "Final checks".to_string(),
@@ -320,10 +205,6 @@ fn payload_copy(sink: &dyn ProgressSink, part1: &str, part2: &str) -> Result<()>
         ));
     }
 
-    // Defence in depth: if a manifest with a non-empty checksum is
-    // present, verify the payload tree against it before touching any
-    // device. An empty checksum means the manifest hasn't been pinned
-    // yet (see payload/manifest.json) — log but do not fail in v0.0.1.
     if let Err(e) = crate::payload::verify_payload(&payload) {
         sink.emit(ProgressEvent {
             phase: "payload".to_string(),
@@ -412,7 +293,7 @@ fn has_cmd(_cmd: &str) -> bool {
     true
 }
 
-fn part_path(device: &str, idx: u8) -> String {
+pub(crate) fn part_path(device: &str, idx: u8) -> String {
     if device
         .chars()
         .last()
@@ -568,25 +449,5 @@ mod tests {
         r.allow_write = false;
         let err = install_with_disks(r, &sink, &disks).unwrap_err();
         assert!(format!("{err}").contains("write blocked"));
-    }
-
-    #[test]
-    fn parse_lsblk_disks_handles_minimal_output() {
-        let raw = r#"{"blockdevices":[
-            {"name":"sda","size":"500000000000","model":"OS","rm":false,"type":"disk",
-             "children":[{"name":"sda1","type":"part","mountpoints":["/"]}]},
-            {"name":"sdb","size":"16000000000","model":"USB","rm":true,"type":"disk",
-             "children":[{"name":"sdb1","type":"part","mountpoints":[null]}]}
-        ]}"#;
-        let disks = parse_lsblk_disks(raw.as_bytes()).unwrap();
-        assert_eq!(disks.len(), 2);
-        assert!(disks.iter().any(|d| d.id == "/dev/sdb" && d.removable));
-        let sda = disks.iter().find(|d| d.id == "/dev/sda").unwrap();
-        assert!(sda.is_system);
-    }
-
-    #[test]
-    fn parse_lsblk_disks_rejects_garbage() {
-        assert!(parse_lsblk_disks(b"not json").is_err());
     }
 }

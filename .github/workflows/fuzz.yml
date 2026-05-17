@@ -16,7 +16,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [validate_device_path]
+        target:
+          - validate_device_path
+          - parse_lsblk_disks
+          - parse_disks_plist
+          - parse_get_disk_json
     steps:
       - uses: actions/checkout@v4
 

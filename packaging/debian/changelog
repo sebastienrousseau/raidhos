@@ -1,0 +1,6 @@
+raidhos (0.0.1-1) unstable; urgency=medium
+
+  * Initial release. Linux install pipeline end-to-end; macOS and
+    Windows destructive paths stubbed. See docs/V0_0_1_STATUS.md.
+
+ -- Sebastien Rousseau <sebastian.rousseau@gmail.com>  Sun, 17 May 2026 00:00:00 +0000

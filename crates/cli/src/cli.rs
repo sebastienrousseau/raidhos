@@ -56,4 +56,35 @@ pub enum Commands {
         #[arg(long)]
         config_path: String,
     },
+    /// Curated ISO catalog operations: list known distros and verify
+    /// a local ISO against the bundled GPG-signed checksums.
+    Catalog {
+        #[command(subcommand)]
+        action: CatalogAction,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum CatalogAction {
+    /// List bundled catalog entries.
+    List,
+    /// Verify a locally downloaded ISO against the catalog.
+    Verify {
+        /// Catalog slug (use `raidhos-cli catalog list` to discover).
+        #[arg(long)]
+        slug: String,
+        /// Path to the local ISO file.
+        #[arg(long)]
+        iso: String,
+        /// Path to the local SHA256SUMS-equivalent file.
+        #[arg(long)]
+        sums: String,
+        /// Path to the detached signature.
+        #[arg(long)]
+        sig: String,
+        /// Directory containing `<fingerprint>.asc` keys (defaults to
+        /// `catalog/keys/`).
+        #[arg(long, default_value = "catalog/keys")]
+        key_dir: String,
+    },
 }

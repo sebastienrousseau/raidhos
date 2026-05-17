@@ -1,13 +1,16 @@
 //! macOS platform backend.
 //!
-//! Discovery uses `diskutil list -plist external`. The plist is parsed
-//! by a small, tolerant text walker rather than pulling a `plist` crate
-//! — keeps the dependency tree minimal and the parser fuzz-targetable.
-//!
-//! **Install is not yet wired on macOS.** Returns
-//! [`CoreError::NotImplemented`].
+//! Discovery shells out to `diskutil list -plist external`; parsing is
+//! in [`crate::parsers::parse_disks_plist`]. The install pipeline uses
+//! `diskutil` for partitioning + formatting and `bless` to mark the
+//! ESP bootable.
 
-use crate::{CoreError, DiskInfo, InstallRequest, PartitionInfo, ProgressSink, Result};
+use crate::parsers::parse_disks_plist;
+use crate::{
+    validate_device_path, CoreError, DiskInfo, InstallRequest, PartitionInfo, ProgressEvent,
+    ProgressSink, Result,
+};
+use std::path::PathBuf;
 use std::process::Command;
 
 fn run_diskutil(args: &[&str]) -> Result<Vec<u8>> {
@@ -24,87 +27,6 @@ fn run_diskutil(args: &[&str]) -> Result<Vec<u8>> {
     Ok(out.stdout)
 }
 
-pub(crate) fn parse_disks_plist(bytes: &[u8]) -> Result<Vec<DiskInfo>> {
-    let text =
-        std::str::from_utf8(bytes).map_err(|e| CoreError::Parse(format!("non-utf8 plist: {e}")))?;
-    let mut disks = Vec::new();
-    for chunk in text.split("<dict>").skip(1) {
-        let id = extract_plist_string(chunk, "DeviceIdentifier").unwrap_or_default();
-        if id.is_empty() || looks_like_slice(&id) {
-            continue;
-        }
-        let size_bytes = extract_plist_integer(chunk, "Size").unwrap_or(0);
-        let removable = extract_plist_bool(chunk, "Removable").unwrap_or(false)
-            || extract_plist_bool(chunk, "Ejectable").unwrap_or(false);
-        let internal = extract_plist_bool(chunk, "Internal").unwrap_or(true);
-        let model = extract_plist_string(chunk, "MediaName").unwrap_or_default();
-        disks.push(DiskInfo {
-            id: format!("/dev/{id}"),
-            model: if model.is_empty() {
-                "Unknown".to_string()
-            } else {
-                model
-            },
-            size_bytes,
-            removable,
-            mountpoints: Vec::new(),
-            is_system: internal,
-        });
-    }
-    Ok(disks)
-}
-
-/// macOS partition identifiers look like `disk0s1` — digit, `s`, digit.
-/// A whole-disk identifier is just `diskN`. This check filters slice
-/// entries out of the disk list.
-fn looks_like_slice(id: &str) -> bool {
-    let bytes = id.as_bytes();
-    for i in 1..bytes.len().saturating_sub(1) {
-        if bytes[i] == b's' && bytes[i - 1].is_ascii_digit() && bytes[i + 1].is_ascii_digit() {
-            return true;
-        }
-    }
-    false
-}
-
-fn extract_plist_string(chunk: &str, key: &str) -> Option<String> {
-    let needle = format!("<key>{key}</key>");
-    let start = chunk.find(&needle)?;
-    let after = &chunk[start + needle.len()..];
-    let open = after.find("<string>")?;
-    let close = after.find("</string>")?;
-    if close <= open {
-        return None;
-    }
-    Some(after[open + "<string>".len()..close].to_string())
-}
-
-fn extract_plist_integer(chunk: &str, key: &str) -> Option<u64> {
-    let needle = format!("<key>{key}</key>");
-    let start = chunk.find(&needle)?;
-    let after = &chunk[start + needle.len()..];
-    let open = after.find("<integer>")?;
-    let close = after.find("</integer>")?;
-    if close <= open {
-        return None;
-    }
-    after[open + "<integer>".len()..close].trim().parse().ok()
-}
-
-fn extract_plist_bool(chunk: &str, key: &str) -> Option<bool> {
-    let needle = format!("<key>{key}</key>");
-    let start = chunk.find(&needle)?;
-    let after = &chunk[start + needle.len()..];
-    let true_pos = after.find("<true/>");
-    let false_pos = after.find("<false/>");
-    match (true_pos, false_pos) {
-        (Some(t), Some(f)) => Some(t < f),
-        (Some(_), None) => Some(true),
-        (None, Some(_)) => Some(false),
-        (None, None) => None,
-    }
-}
-
 pub fn list_disks() -> Result<Vec<DiskInfo>> {
     let stdout = run_diskutil(&["list", "-plist", "external"])?;
     parse_disks_plist(&stdout)
@@ -114,87 +36,267 @@ pub fn list_partitions(_device: String) -> Result<Vec<PartitionInfo>> {
     Ok(Vec::new())
 }
 
-pub fn install(_req: InstallRequest, _sink: &dyn ProgressSink) -> Result<()> {
-    Err(CoreError::NotImplemented(
-        "macOS installer is not yet wired up; use the Linux build for end-to-end install"
-            .to_string(),
-    ))
+pub fn install(req: InstallRequest, sink: &dyn ProgressSink) -> Result<()> {
+    let disks = list_disks()?;
+    install_with_disks(req, sink, &disks)
+}
+
+fn install_with_disks(
+    req: InstallRequest,
+    sink: &dyn ProgressSink,
+    disks: &[DiskInfo],
+) -> Result<()> {
+    validate_install(&req, sink, disks)?;
+
+    if req.dry_run {
+        sink.emit(ProgressEvent {
+            phase: "complete".to_string(),
+            message: "Dry-run complete. No changes made.".to_string(),
+            percent: Some(100),
+        });
+        return Ok(());
+    }
+    if !req.allow_write {
+        return Err(CoreError::Validation(
+            "write blocked: set allow_write to proceed".to_string(),
+        ));
+    }
+
+    // `diskutil unmountDisk` releases anything currently mounted.
+    sink.emit(ProgressEvent {
+        phase: "unmount".to_string(),
+        message: format!("Unmounting {}", req.device),
+        percent: Some(25),
+    });
+    let _ = run_diskutil(&["unmountDisk", "force", &req.device]);
+
+    // Partition the whole disk: GPT, ESP (FAT32, 32 MiB) named
+    // RAIDHOS_EFI, then a DATA (exFAT) partition for the rest.
+    sink.emit(ProgressEvent {
+        phase: "partition".to_string(),
+        message: "Creating GPT partitions".to_string(),
+        percent: Some(45),
+    });
+    run_diskutil(&[
+        "partitionDisk",
+        &req.device,
+        "GPT",
+        "FAT32",
+        "RAIDHOS_EFI",
+        "33M",
+        "ExFAT",
+        "DATA",
+        "0", // 0 = remaining space
+    ])?;
+
+    // ESP and DATA partition paths on macOS.
+    let part1 = format!("{}s1", req.device);
+    let part2 = format!("{}s2", req.device);
+
+    sink.emit(ProgressEvent {
+        phase: "format".to_string(),
+        message: "Verifying volume names".to_string(),
+        percent: Some(60),
+    });
+    let _ = run_diskutil(&["rename", &part1, "RAIDHOS_EFI"]);
+    let _ = run_diskutil(&["rename", &part2, "DATA"]);
+
+    payload_copy(sink, &part1, &part2)?;
+
+    // Mark the ESP as bootable via `bless`. Failure is non-fatal —
+    // Macs will still see the disk and most can boot from an unblessed
+    // FAT32 ESP under the firmware boot picker.
+    let _ = Command::new("bless")
+        .args(["--device", &format!("/dev/{}", part1), "--setBoot"])
+        .status();
+
+    sink.emit(ProgressEvent {
+        phase: "complete".to_string(),
+        message: "Install complete.".to_string(),
+        percent: Some(100),
+    });
+    Ok(())
+}
+
+fn validate_install(
+    req: &InstallRequest,
+    sink: &dyn ProgressSink,
+    disks: &[DiskInfo],
+) -> Result<()> {
+    validate_device_path(&req.device)?;
+
+    sink.emit(ProgressEvent {
+        phase: "validate".to_string(),
+        message: format!("Validating target {}", req.device),
+        percent: Some(5),
+    });
+    if !req.wipe {
+        return Err(CoreError::Validation(
+            "wipe flag must be set for destructive install".to_string(),
+        ));
+    }
+    let target = disks
+        .iter()
+        .find(|d| d.id == req.device)
+        .ok_or_else(|| CoreError::Validation("device not found".to_string()))?;
+    if target.is_system {
+        return Err(CoreError::Validation(
+            "refusing to operate on system disk".to_string(),
+        ));
+    }
+    if !target.mountpoints.is_empty() {
+        return Err(CoreError::Validation(
+            "device has mounted partitions; unmount first".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn payload_copy(sink: &dyn ProgressSink, part1: &str, part2: &str) -> Result<()> {
+    let payload_dir = std::env::var("RAIDHOS_PAYLOAD_DIR")
+        .map_err(|_| CoreError::Validation("RAIDHOS_PAYLOAD_DIR is not set".to_string()))?;
+    let payload = PathBuf::from(payload_dir);
+    if !payload.exists() {
+        return Err(CoreError::Validation(
+            "RAIDHOS_PAYLOAD_DIR does not exist".to_string(),
+        ));
+    }
+    let esp_payload = payload.join("esp");
+    let data_payload = payload.join("data");
+    if !esp_payload.exists() || !data_payload.exists() {
+        return Err(CoreError::Validation(
+            "RAIDHOS_PAYLOAD_DIR must contain esp/ and data/ directories".to_string(),
+        ));
+    }
+    if let Err(e) = crate::payload::verify_payload(&payload) {
+        sink.emit(ProgressEvent {
+            phase: "payload".to_string(),
+            message: format!("Payload integrity warning: {e}"),
+            percent: Some(70),
+        });
+    }
+
+    // macOS auto-mounts new partitions under /Volumes/<label>.
+    // Mount points after `diskutil rename`.
+    let esp_mount = PathBuf::from("/Volumes/RAIDHOS_EFI");
+    let data_mount = PathBuf::from("/Volumes/DATA");
+
+    // Make sure they're mounted (a fresh format usually does this
+    // automatically, but defensive).
+    let _ = Command::new("diskutil").args(["mount", part1]).status();
+    let _ = Command::new("diskutil").args(["mount", part2]).status();
+
+    sink.emit(ProgressEvent {
+        phase: "payload".to_string(),
+        message: "Copying payload files".to_string(),
+        percent: Some(85),
+    });
+
+    cp_recursive(&esp_payload, &esp_mount)?;
+    cp_recursive(&data_payload, &data_mount)?;
+
+    let _ = Command::new("diskutil").args(["unmount", part1]).status();
+    let _ = Command::new("diskutil").args(["unmount", part2]).status();
+
+    Ok(())
+}
+
+fn cp_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<()> {
+    let status = Command::new("cp")
+        .args([
+            "-R",
+            &format!("{}/", src.to_string_lossy()),
+            &dst.to_string_lossy(),
+        ])
+        .status()
+        .map_err(|e| CoreError::Io(format!("cp: {e}")))?;
+    if !status.success() {
+        return Err(CoreError::Io(format!(
+            "cp -R {} {} failed",
+            src.display(),
+            dst.display()
+        )));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    const SAMPLE: &str = r#"<plist version="1.0"><array>
-<dict>
-  <key>DeviceIdentifier</key><string>disk2</string>
-  <key>Size</key><integer>16000000000</integer>
-  <key>Removable</key><true/>
-  <key>Internal</key><false/>
-  <key>MediaName</key><string>USB SanDisk 3.2Gen1</string>
-</dict>
-<dict>
-  <key>DeviceIdentifier</key><string>disk0</string>
-  <key>Size</key><integer>500000000000</integer>
-  <key>Removable</key><false/>
-  <key>Internal</key><true/>
-  <key>MediaName</key><string>APPLE SSD</string>
-</dict>
-</array></plist>"#;
-
-    #[test]
-    fn parses_external_usb_as_non_system() {
-        let disks = parse_disks_plist(SAMPLE.as_bytes()).unwrap();
-        let usb = disks.iter().find(|d| d.id == "/dev/disk2").unwrap();
-        assert!(usb.removable);
-        assert!(!usb.is_system);
-        assert_eq!(usb.size_bytes, 16_000_000_000);
+    fn nop_sink() -> NopSink {
+        NopSink
+    }
+    struct NopSink;
+    impl ProgressSink for NopSink {
+        fn emit(&self, _: ProgressEvent) {}
     }
 
-    #[test]
-    fn parses_internal_ssd_as_system() {
-        let disks = parse_disks_plist(SAMPLE.as_bytes()).unwrap();
-        let ssd = disks.iter().find(|d| d.id == "/dev/disk0").unwrap();
-        assert!(!ssd.removable);
-        assert!(ssd.is_system);
-    }
-
-    #[test]
-    fn parser_tolerates_empty() {
-        assert!(parse_disks_plist(b"<plist></plist>").unwrap().is_empty());
-    }
-
-    #[test]
-    fn parser_rejects_non_utf8() {
-        let bad = vec![0xff, 0xfe, 0xfd];
-        assert!(parse_disks_plist(&bad).is_err());
-    }
-
-    #[test]
-    fn slice_detector_recognises_partitions() {
-        assert!(looks_like_slice("disk0s1"));
-        assert!(looks_like_slice("disk2s5"));
-        assert!(!looks_like_slice("disk0"));
-        assert!(!looks_like_slice("disk10"));
-        assert!(!looks_like_slice(""));
-    }
-
-    #[test]
-    fn install_returns_not_implemented() {
-        struct NopSink;
-        impl ProgressSink for NopSink {
-            fn emit(&self, _: crate::ProgressEvent) {}
+    fn disk(id: &str, mounts: Vec<&str>, is_system: bool) -> DiskInfo {
+        DiskInfo {
+            id: id.to_string(),
+            model: "Test".into(),
+            size_bytes: 1024,
+            removable: true,
+            mountpoints: mounts.into_iter().map(String::from).collect(),
+            is_system,
         }
-        let req = InstallRequest {
-            device: "/dev/disk2".to_string(),
-            payload_version: "x".to_string(),
-            wipe: true,
-            dry_run: false,
-            allow_write: true,
-        };
-        assert!(matches!(
-            install(req, &NopSink),
-            Err(CoreError::NotImplemented(_))
-        ));
+    }
+
+    fn req(device: &str, wipe: bool, dry_run: bool, allow: bool) -> InstallRequest {
+        InstallRequest {
+            device: device.into(),
+            payload_version: "0".into(),
+            wipe,
+            dry_run,
+            allow_write: allow,
+        }
+    }
+
+    #[test]
+    fn validate_rejects_system_disk() {
+        let disks = vec![disk("/dev/disk0", vec!["/"], true)];
+        let err = validate_install(&req("/dev/disk0", true, true, false), &nop_sink(), &disks)
+            .unwrap_err();
+        assert!(format!("{err}").contains("system disk"));
+    }
+
+    #[test]
+    fn validate_rejects_mounted_disk() {
+        let disks = vec![disk("/dev/disk2", vec!["/Volumes/USB"], false)];
+        let err = validate_install(&req("/dev/disk2", true, true, false), &nop_sink(), &disks)
+            .unwrap_err();
+        assert!(format!("{err}").contains("mounted"));
+    }
+
+    #[test]
+    fn validate_rejects_unknown_device() {
+        let disks = vec![disk("/dev/disk2", vec![], false)];
+        let err = validate_install(&req("/dev/disk9", true, true, false), &nop_sink(), &disks)
+            .unwrap_err();
+        assert!(format!("{err}").contains("not found"));
+    }
+
+    #[test]
+    fn validate_rejects_without_wipe() {
+        let disks = vec![disk("/dev/disk2", vec![], false)];
+        let err = validate_install(&req("/dev/disk2", false, true, false), &nop_sink(), &disks)
+            .unwrap_err();
+        assert!(format!("{err}").contains("wipe flag"));
+    }
+
+    #[test]
+    fn dry_run_succeeds() {
+        let disks = vec![disk("/dev/disk2", vec![], false)];
+        let res = install_with_disks(req("/dev/disk2", true, true, false), &nop_sink(), &disks);
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn install_rejects_when_allow_write_unset() {
+        let disks = vec![disk("/dev/disk2", vec![], false)];
+        let err = install_with_disks(req("/dev/disk2", true, false, false), &nop_sink(), &disks)
+            .unwrap_err();
+        assert!(format!("{err}").contains("write blocked"));
     }
 }

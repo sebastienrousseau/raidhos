@@ -462,3 +462,182 @@
 .actions--mt-2 {
   margin-top: var(--space-2);
 }
+
+/* ---------------------------------------------------------------
+   v0.0.2 a11y, theming, drag-and-drop.
+   --------------------------------------------------------------- */
+
+/* Light theme via prefers-color-scheme. The variables below override
+   the dark defaults at :root. Users can also force dark via
+   `data-theme="dark"` on <html>. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #fafafa;
+    --bg-2: #ffffff;
+    --ink: #1a1a1a;
+    --muted: #4a4a4a;
+    --accent: #ececec;
+    --accent-2: #e2e2e2;
+    --accent-3: #d4d4d4;
+    --card: #ffffff;
+    --surface: #f4f4f4;
+    --surface-strong: #ebebeb;
+    --stroke: #b8b8b8;
+    --stroke-strong: #707070;
+    --shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+  }
+}
+
+/* High-contrast mode for users who request it. */
+@media (prefers-contrast: more) {
+  :root {
+    --ink: #ffffff;
+    --muted: #ffffff;
+    --bg: #000000;
+    --card: #000000;
+    --stroke: #ffffff;
+    --stroke-strong: #ffffff;
+  }
+  button,
+  .disk {
+    border: 2px solid var(--stroke-strong) !important;
+  }
+}
+
+/* Honour prefers-reduced-motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .splash {
+    transition: none !important;
+  }
+}
+
+/* Visible focus rings for keyboard navigation. */
+:focus-visible {
+  outline: 2px solid var(--stroke-strong);
+  outline-offset: 2px;
+}
+
+/* Drag-and-drop banner. */
+.drop-banner {
+  position: fixed;
+  bottom: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface-strong);
+  color: var(--ink);
+  padding: var(--space-3) var(--space-5);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  z-index: 100;
+}
+.shell.dragging::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.12);
+  pointer-events: none;
+  z-index: 50;
+}
+
+/* Push-progress lines. */
+.progress-line {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  padding: 2px 0;
+  border-bottom: 1px solid var(--accent);
+}
+.progress-line:last-child {
+  border-bottom: none;
+}
+
+/* Make sure progressEl scrolls instead of overflowing the card. */
+#progress {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+/* Screen-reader-only utility class. */
+.sr-only {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------------------------------------------------------------
+   Wizard mode: a three-step guided flow over the existing sections.
+   --------------------------------------------------------------- */
+.wizard-nav {
+  display: flex;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border-bottom: 1px solid var(--stroke);
+  align-items: center;
+}
+.wizard-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--muted);
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  font-size: var(--font-sm);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+}
+.wizard-step .wizard-num {
+  width: 1.8em;
+  height: 1.8em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--stroke);
+  font-weight: bold;
+}
+.wizard-step.active {
+  color: var(--ink);
+  background: var(--accent);
+}
+.wizard-step.active .wizard-num {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+}
+.wizard-step.done .wizard-num::before {
+  content: "✓";
+}
+.wizard-step.done .wizard-num {
+  font-size: 0;
+}
+.wizard-step.done .wizard-num::before {
+  font-size: var(--font-sm);
+}
+.wizard-toggle {
+  margin-left: auto;
+}
+body.wizard-mode .card.boot-config,
+body.wizard-mode .card.footer {
+  display: none;
+}
+body.wizard-mode .card[data-wizard-step] {
+  display: none;
+}
+body.wizard-mode .card[data-wizard-step].active {
+  display: block;
+}
