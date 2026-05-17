@@ -390,7 +390,11 @@ Windows: Disk Management → right-click → *Format*, or
 
 - Edit `~/.config/raidhos/boot.json` (or the platform
   equivalent in `directories::ProjectDirs`) to customise the
-  GRUB menu — kernel parameters, default entry, etc.
+  GRUB menu — kernel parameters, default entry, etc. See
+  [`BOOT_CONFIG.md`](BOOT_CONFIG.md) for a tour of every
+  field, with examples covering the Ventoy-parity options
+  (TreeView, GRUB password, per-ISO persistence, hidden
+  entries, F2 disk browser, `.img`/`.efi` chainload, …).
 - Open an issue if a distro's ISO doesn't boot — the GRUB
   config heuristics in
   [`grub.rs`](../crates/ui-tauri/src-tauri/src/grub.rs) only

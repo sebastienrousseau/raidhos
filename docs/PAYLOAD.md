@@ -218,6 +218,8 @@ add them — and the manifest format will gain a version bump.
   addresses.
 - [`crates/core/src/payload.rs`](../crates/core/src/payload.rs)
   — the implementation.
+- [`docs/BOOT_CONFIG.md`](BOOT_CONFIG.md) — human walkthrough
+  of every `boot.json` field, with an annotated end-to-end
+  example covering each v0.0.1 Ventoy-gap closure.
 - [`docs/BOOT_CONFIG_SCHEMA.json`](BOOT_CONFIG_SCHEMA.json) —
-  schema for the `boot.json` that ends up on the DATA
-  partition.
+  machine-readable JSON Schema for the same.

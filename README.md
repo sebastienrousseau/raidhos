@@ -580,6 +580,7 @@ ships with the crate.
 **Reference**
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — diagrams, data flow, design choices
+- [`docs/BOOT_CONFIG.md`](docs/BOOT_CONFIG.md) — `boot.json` reference, every field with an annotated example
 - [`docs/BOOT_CONFIG_SCHEMA.json`](docs/BOOT_CONFIG_SCHEMA.json) — JSON Schema for `boot.json`
 - [`docs/PAYLOAD.md`](docs/PAYLOAD.md) — payload layout, manifest, partition diagrams
 - [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) — measured baselines

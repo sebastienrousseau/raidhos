@@ -601,6 +601,115 @@ mod tests {
         );
     }
 
+    /// Pin the end-to-end example in `docs/BOOT_CONFIG.md` against
+    /// the renderer so a documentation drift fails CI. The example
+    /// exercises every v0.0.1 Ventoy-gap closure (G6 / G7 / G11 /
+    /// G13 / G17 / G18 / G20 / G22).
+    #[test]
+    fn docs_boot_config_example_renders_every_feature() {
+        let example = serde_json::json!({
+            "default_entry": "/boot/isos/ubuntu-24.04.iso",
+            "entries": [
+                {
+                    "title": "Ubuntu 24.04 LTS Desktop",
+                    "path": "/boot/isos/ubuntu-24.04.iso",
+                    "params": "quiet splash",
+                    "initrd": "", "kargs": "",
+                    "class": "linux", "tip": "LTS",
+                    "hidden": false,
+                    "persistence_backend": "/persistence/ubuntu.dat"
+                },
+                {
+                    "title": "Fedora", "path": "/boot/isos/fedora-41.iso",
+                    "params": "", "initrd": "", "kargs": "",
+                    "class": "linux", "tip": "", "hidden": false,
+                    "persistence_backend": ""
+                },
+                {
+                    "title": "Windows 10", "path": "/boot/isos/windows10.iso",
+                    "params": "", "initrd": "", "kargs": "",
+                    "class": "windows", "tip": "", "hidden": false,
+                    "persistence_backend": ""
+                },
+                {
+                    "title": "Memtest", "path": "/boot/efi/memtest86plus.efi",
+                    "params": "", "initrd": "", "kargs": "",
+                    "class": "", "tip": "", "hidden": false,
+                    "persistence_backend": ""
+                },
+                {
+                    "title": "OpenWrt", "path": "/boot/imgs/openwrt-x86_64.img",
+                    "params": "", "initrd": "", "kargs": "",
+                    "class": "", "tip": "", "hidden": false,
+                    "persistence_backend": ""
+                },
+                {
+                    "title": "ARCHIVED CentOS 7", "path": "/boot/isos/centos-7.iso",
+                    "params": "", "initrd": "", "kargs": "",
+                    "class": "linux", "tip": "", "hidden": true,
+                    "persistence_backend": ""
+                }
+            ],
+            "tree_view": true,
+            "enable_disk_browser": true,
+            "grub_superuser": "admin",
+            "grub_password_pbkdf2": "grub.pbkdf2.sha512.10000.deadbeef.cafef00d"
+        });
+        let cfg: BootConfig = serde_json::from_value(example).expect("deserialise example");
+        let out = grub::render_grub_cfg(&cfg, "RAIDHOS_DATA");
+
+        // G13 password gate — both lines emitted because hash is valid.
+        assert!(
+            out.contains("set superusers=\"admin\""),
+            "G13 superuser missing"
+        );
+        assert!(
+            out.contains("password_pbkdf2 admin grub.pbkdf2.sha512."),
+            "G13 hash missing"
+        );
+
+        // G20 TreeView — submenu blocks for `linux` and `windows`.
+        assert!(
+            out.contains("submenu \"linux\" {"),
+            "G20 linux submenu missing"
+        );
+        assert!(
+            out.contains("submenu \"windows\" {"),
+            "G20 windows submenu missing"
+        );
+
+        // G7 .efi chainload + G6 .img loopback chainload — both top-level
+        // (no class), so they appear outside any submenu.
+        assert!(
+            out.contains("chainloader \"($root)/boot/efi/memtest86plus.efi\""),
+            "G7 missing"
+        );
+        assert!(
+            out.contains("loopback loop $imgfile"),
+            "G6 loopback missing"
+        );
+        assert!(out.contains("chainloader (loop)"), "G6 chainload missing");
+
+        // G18 per-ISO persistence kargs on Ubuntu's linux line.
+        assert!(
+            out.contains("persistent persistent-path=/persistence/ubuntu.dat"),
+            "G18 persistence missing",
+        );
+
+        // G17 hidden entry — CentOS must not appear anywhere.
+        assert!(!out.contains("CentOS"), "G17 hidden entry leaked");
+
+        // G22 disk browser — F2-hotkeyed menuentry at the end.
+        assert!(out.contains("--hotkey=f2"), "G22 disk browser missing");
+
+        // Brace balance preserved across every branch.
+        assert_eq!(
+            out.matches('{').count(),
+            out.matches('}').count(),
+            "brace mismatch"
+        );
+    }
+
     /// A boot.json written by an older client (pre-v0.0.1 gap
     /// closures) must still deserialise without error. The new
     /// fields all use `#[serde(default)]`.
