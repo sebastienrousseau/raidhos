@@ -779,6 +779,198 @@ mod tests {
         assert_eq!(hex_lower(&bytes), "000102030405060708090a0b0c0d0e0f");
     }
 
+    // -----------------------------------------------------------------
+    // verify_iso_sha256 / verify_iso_companion_sha256 (Ventoy gap G24)
+    // -----------------------------------------------------------------
+
+    fn write_temp_iso(body: &[u8], suffix: &str) -> PathBuf {
+        let p = std::env::temp_dir().join(format!(
+            "raidhos-iso-{}-{}-{}",
+            std::process::id(),
+            rand_suffix(),
+            suffix
+        ));
+        std::fs::write(&p, body).unwrap();
+        p
+    }
+
+    #[test]
+    fn verify_iso_sha256_accepts_matching_hex() {
+        // sha256("hello") = 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+        let iso = write_temp_iso(b"hello", "ok.iso");
+        let res = verify_iso_sha256(
+            &iso,
+            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+        );
+        let _ = std::fs::remove_file(&iso);
+        let computed = res.expect("hash matched");
+        assert_eq!(
+            computed,
+            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+        );
+    }
+
+    #[test]
+    fn verify_iso_sha256_accepts_uppercase_hex() {
+        let iso = write_temp_iso(b"hello", "upper.iso");
+        let res = verify_iso_sha256(
+            &iso,
+            "2CF24DBA5FB0A30E26E83B2AC5B9E29E1B161E5C1FA7425E73043362938B9824",
+        );
+        let _ = std::fs::remove_file(&iso);
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn verify_iso_sha256_accepts_whitespace_in_hex() {
+        let iso = write_temp_iso(b"hello", "ws.iso");
+        // Trailing whitespace stripped by the implementation.
+        let res = verify_iso_sha256(
+            &iso,
+            "  2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824  ",
+        );
+        let _ = std::fs::remove_file(&iso);
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn verify_iso_sha256_rejects_mismatch() {
+        let iso = write_temp_iso(b"hello", "mismatch.iso");
+        let res = verify_iso_sha256(&iso, &"0".repeat(64));
+        let _ = std::fs::remove_file(&iso);
+        assert!(matches!(res, Err(CatalogError::Sha256Mismatch { .. })));
+    }
+
+    #[test]
+    fn verify_iso_sha256_rejects_short_hex() {
+        let iso = write_temp_iso(b"hello", "short.iso");
+        let res = verify_iso_sha256(&iso, "deadbeef");
+        let _ = std::fs::remove_file(&iso);
+        let err = res.unwrap_err();
+        let s = err.to_string();
+        assert!(s.contains("64 hex chars"), "got: {s}");
+    }
+
+    #[test]
+    fn verify_iso_sha256_rejects_non_hex_chars() {
+        let iso = write_temp_iso(b"hello", "nonhex.iso");
+        let res = verify_iso_sha256(&iso, &"x".repeat(64));
+        let _ = std::fs::remove_file(&iso);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn verify_iso_sha256_propagates_missing_file_error() {
+        let res = verify_iso_sha256(
+            Path::new("/no/such/raidhos-iso-test"),
+            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+        );
+        assert!(matches!(res, Err(CatalogError::Io(_))));
+    }
+
+    #[test]
+    fn verify_iso_companion_reads_bare_hex_companion() {
+        let iso = write_temp_iso(b"hello", "companion-bare.iso");
+        let companion = {
+            let mut p = iso.as_os_str().to_owned();
+            p.push(".sha256");
+            PathBuf::from(p)
+        };
+        std::fs::write(
+            &companion,
+            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824\n",
+        )
+        .unwrap();
+        let res = verify_iso_companion_sha256(&iso);
+        let _ = std::fs::remove_file(&iso);
+        let _ = std::fs::remove_file(&companion);
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn verify_iso_companion_reads_sha256sums_style() {
+        let iso = write_temp_iso(b"hello", "companion-sums.iso");
+        let basename = iso.file_name().unwrap().to_str().unwrap().to_string();
+        let companion = {
+            let mut p = iso.as_os_str().to_owned();
+            p.push(".sha256");
+            PathBuf::from(p)
+        };
+        // SHA256SUMS-style line with two-space separator.
+        std::fs::write(
+            &companion,
+            format!(
+                "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824  {basename}\n",
+            ),
+        )
+        .unwrap();
+        let res = verify_iso_companion_sha256(&iso);
+        let _ = std::fs::remove_file(&iso);
+        let _ = std::fs::remove_file(&companion);
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn verify_iso_companion_skips_comments_and_blank_lines() {
+        let iso = write_temp_iso(b"hello", "companion-skip.iso");
+        let companion = {
+            let mut p = iso.as_os_str().to_owned();
+            p.push(".sha256");
+            PathBuf::from(p)
+        };
+        std::fs::write(
+            &companion,
+            "# generated by sha256sum\n\
+             \n\
+             2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824\n",
+        )
+        .unwrap();
+        let res = verify_iso_companion_sha256(&iso);
+        let _ = std::fs::remove_file(&iso);
+        let _ = std::fs::remove_file(&companion);
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn verify_iso_companion_errors_when_companion_missing() {
+        let iso = write_temp_iso(b"hello", "companion-missing.iso");
+        let res = verify_iso_companion_sha256(&iso);
+        let _ = std::fs::remove_file(&iso);
+        let err = res.unwrap_err();
+        assert!(err.to_string().contains("read companion"));
+    }
+
+    #[test]
+    fn verify_iso_companion_errors_when_no_hash_line() {
+        let iso = write_temp_iso(b"hello", "companion-empty.iso");
+        let companion = {
+            let mut p = iso.as_os_str().to_owned();
+            p.push(".sha256");
+            PathBuf::from(p)
+        };
+        std::fs::write(&companion, "# only comments\n# no hash\n").unwrap();
+        let res = verify_iso_companion_sha256(&iso);
+        let _ = std::fs::remove_file(&iso);
+        let _ = std::fs::remove_file(&companion);
+        let err = res.unwrap_err();
+        assert!(err.to_string().contains("no usable hash line"));
+    }
+
+    #[test]
+    fn verify_iso_companion_rejects_mismatched_hash() {
+        let iso = write_temp_iso(b"hello", "companion-mismatch.iso");
+        let companion = {
+            let mut p = iso.as_os_str().to_owned();
+            p.push(".sha256");
+            PathBuf::from(p)
+        };
+        std::fs::write(&companion, &format!("{}\n", "0".repeat(64))).unwrap();
+        let res = verify_iso_companion_sha256(&iso);
+        let _ = std::fs::remove_file(&iso);
+        let _ = std::fs::remove_file(&companion);
+        assert!(matches!(res, Err(CatalogError::Sha256Mismatch { .. })));
+    }
+
     #[test]
     fn sha256_of_file_returns_known_value() {
         let tmp = std::env::temp_dir().join(format!(
