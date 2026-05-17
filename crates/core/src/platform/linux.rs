@@ -320,7 +320,11 @@ pub(crate) fn part_path(device: &str, idx: u8) -> String {
 // `validate_device_path` cross-platform check rejects on macOS /
 // Windows hosts. Coverage on the Linux CI runner is what matters
 // for tarpaulin; gate accordingly.
-#[cfg(all(test, target_os = "linux"))]
+// Tests run cross-platform: validate_device_path_for_target("linux",
+// …) is host-OS-independent, so tarpaulin on Linux CI sees these
+// tests execute against the Linux install pipeline through
+// MockRuntime regardless of the runner architecture.
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::runtime::{MockOutcome, MockRuntime};
@@ -360,6 +364,51 @@ mod tests {
             simulator: false,
             bios_compat: false,
         }
+    }
+
+    fn req_bios(device: &str, dry_run: bool, allow: bool) -> InstallRequest {
+        let mut r = req(device, true, dry_run, allow);
+        r.bios_compat = true;
+        r
+    }
+
+    #[test]
+    fn install_bios_compat_dry_run_succeeds() {
+        let rt = MockRuntime::new();
+        let disks = vec![DiskInfo {
+            id: "/dev/sdb".into(),
+            model: "Test".into(),
+            size_bytes: 0,
+            removable: true,
+            mountpoints: vec![],
+            is_system: false,
+        }];
+        let res = install_with(req_bios("/dev/sdb", true, false), &sink(), &rt, &disks);
+        assert!(
+            res.is_ok(),
+            "dry-run with bios_compat should succeed: {res:?}"
+        );
+    }
+
+    #[test]
+    fn install_bios_compat_real_write_returns_not_implemented() {
+        let rt = MockRuntime::new();
+        let disks = vec![DiskInfo {
+            id: "/dev/sdb".into(),
+            model: "Test".into(),
+            size_bytes: 0,
+            removable: true,
+            mountpoints: vec![],
+            is_system: false,
+        }];
+        // wipe=true, dry_run=false, allow_write=true triggers the
+        // BIOS-compat NotImplemented branch.
+        let err =
+            install_with(req_bios("/dev/sdb", false, true), &sink(), &rt, &disks).unwrap_err();
+        assert!(
+            matches!(&err, CoreError::NotImplemented(s) if s.contains("Legacy-BIOS")),
+            "got: {err:?}",
+        );
     }
 
     fn payload_dir_with(esp: bool, data: bool) -> (std::path::PathBuf, MockRuntime) {
