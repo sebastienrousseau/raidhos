@@ -964,7 +964,7 @@ mod tests {
             p.push(".sha256");
             PathBuf::from(p)
         };
-        std::fs::write(&companion, &format!("{}\n", "0".repeat(64))).unwrap();
+        std::fs::write(&companion, format!("{}\n", "0".repeat(64))).unwrap();
         let res = verify_iso_companion_sha256(&iso);
         let _ = std::fs::remove_file(&iso);
         let _ = std::fs::remove_file(&companion);
