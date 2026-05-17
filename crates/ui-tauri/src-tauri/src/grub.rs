@@ -194,7 +194,19 @@ fn menuentry(entry: &BootEntryConfig, data_label: &str) -> String {
             path_prefix(&path)
         ));
         out.push_str("  loopback loop $isofile\n");
-        out.push_str("  if [ -f (loop)/boot/grub/grub.cfg ]; then\n");
+        // Ventoy gap G16 (partial): per-entry conf-replace override.
+        // User-supplied grub.cfg on the DATA partition takes
+        // precedence over anything inside the ISO. Falls through to
+        // the auto-detect logic when the override file is missing.
+        let conf_replace = sanitize(&entry.conf_replace_path);
+        if !conf_replace.is_empty() {
+            let conf_replace = path_prefix(&conf_replace);
+            out.push_str(&format!("  if [ -f ($root){conf_replace} ]; then\n"));
+            out.push_str(&format!("    configfile ($root){conf_replace}\n"));
+            out.push_str("  elif [ -f (loop)/boot/grub/grub.cfg ]; then\n");
+        } else {
+            out.push_str("  if [ -f (loop)/boot/grub/grub.cfg ]; then\n");
+        }
         out.push_str("    configfile (loop)/boot/grub/grub.cfg\n");
         out.push_str("  elif [ -f (loop)/casper/vmlinuz ]; then\n");
         out.push_str(&format!(
@@ -466,6 +478,7 @@ mod tests {
                 hidden: false,
                 persistence_backend: String::new(),
                 autoinstall: Default::default(),
+                conf_replace_path: String::new(),
             }],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -492,6 +505,7 @@ mod tests {
                 hidden: false,
                 persistence_backend: String::new(),
                 autoinstall: Default::default(),
+                conf_replace_path: String::new(),
             }],
         };
         let out = render_grub_cfg(&config, "DATA");
@@ -521,6 +535,7 @@ mod tests {
             hidden: false,
             persistence_backend: String::new(),
             autoinstall: Default::default(),
+            conf_replace_path: String::new(),
         }
     }
 
@@ -1118,6 +1133,119 @@ mod tests {
         );
         // The sanitised class name still flows through.
         assert!(out.contains("submenu \"linux echo bad\" {"));
+    }
+
+    // ---------------------------------------------------------------
+    // Ventoy gap G16: per-entry conf_replace_path override
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn render_conf_replace_off_by_default() {
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![entry("Ubuntu", "/u.iso")],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+            tree_view: false,
+            enable_disk_browser: false,
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        // Default path: existing auto-detect logic stays first.
+        assert!(out.contains("if [ -f (loop)/boot/grub/grub.cfg ]"));
+        // No ($root)<custom> branch is emitted when conf_replace
+        // is empty.
+        assert!(!out.contains("if [ -f ($root)/"));
+    }
+
+    #[test]
+    fn render_conf_replace_overrides_first_branch() {
+        let mut e = entry("Ubuntu", "/u.iso");
+        e.conf_replace_path = "/raidhos/ubuntu.cfg".to_string();
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![e],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+            tree_view: false,
+            enable_disk_browser: false,
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        // The override path is the FIRST branch.
+        assert!(
+            out.contains("if [ -f ($root)/raidhos/ubuntu.cfg ]; then"),
+            "missing override branch: {out}",
+        );
+        assert!(out.contains("configfile ($root)/raidhos/ubuntu.cfg"));
+        // The existing auto-detect logic stays as the elif fallback,
+        // so a missing override file is non-fatal.
+        assert!(out.contains("elif [ -f (loop)/boot/grub/grub.cfg ]"));
+        // Brace balance preserved.
+        assert_eq!(out.matches('{').count(), out.matches('}').count());
+    }
+
+    #[test]
+    fn render_conf_replace_normalises_relative_path() {
+        let mut e = entry("Ubuntu", "/u.iso");
+        // No leading slash — path_prefix() should add one.
+        e.conf_replace_path = "raidhos/ubuntu.cfg".to_string();
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![e],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+            tree_view: false,
+            enable_disk_browser: false,
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        assert!(out.contains("configfile ($root)/raidhos/ubuntu.cfg"));
+    }
+
+    #[test]
+    fn render_conf_replace_sanitises_path() {
+        // Attacker-controlled path with GRUB metachars.
+        let mut e = entry("Ubuntu", "/u.iso");
+        e.conf_replace_path = "/safe;evil`cmd`.cfg".to_string();
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![e],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+            tree_view: false,
+            enable_disk_browser: false,
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        // Look at the configfile line specifically.
+        let configfile_line = out
+            .lines()
+            .find(|l| l.contains("configfile ($root)/safe"))
+            .expect("configfile line");
+        for bad in [';', '`', '$', '"', '\\', '\n'] {
+            // `$` appears in `$root` but not in our user-supplied
+            // path slice, so check the path portion only.
+            let path_idx = configfile_line.find("/safe").unwrap();
+            let path = &configfile_line[path_idx..];
+            assert!(!path.contains(bad), "{bad:?} survived in {path}");
+        }
+    }
+
+    #[test]
+    fn render_conf_replace_skipped_on_efi_and_img_branches() {
+        // The .efi and .img branches don't run the loopback ISO
+        // dispatcher; conf_replace_path must not leak in.
+        let mut e_efi = entry("M", "/m.efi");
+        e_efi.conf_replace_path = "/should/not/appear.cfg".to_string();
+        let mut e_img = entry("O", "/o.img");
+        e_img.conf_replace_path = "/should/not/appear.cfg".to_string();
+        let config = BootConfig {
+            default_entry: None,
+            entries: vec![e_efi, e_img],
+            grub_superuser: String::new(),
+            grub_password_pbkdf2: String::new(),
+            tree_view: false,
+            enable_disk_browser: false,
+        };
+        let out = render_grub_cfg(&config, "DATA");
+        assert!(!out.contains("/should/not/appear.cfg"), "leaked: {out}");
     }
 
     // ---------------------------------------------------------------

@@ -134,10 +134,17 @@ link to the section that documents what's needed.
   files into the booted live system before init. Ventoy
   supports it; useful for autoexec.
 
-- **G16. Conf replace plugin** — Replace boot configs at boot
-  time without re-mastering the ISO. Important when a distro
-  ships broken grub.cfg or to add custom kernel parameters
-  per-host.
+- **G16. Conf replace plugin** — ✅ **Partial close in v0.0.1.**
+  `BootEntryConfig.conf_replace_path` makes the renderer emit
+  `configfile ($root)<path>` as the *first* branch on the ISO
+  entry. GRUB chains into the user-supplied grub.cfg on the
+  DATA partition instead of searching inside the ISO. Falls
+  back to the existing auto-detect logic when the file is
+  missing at boot, so the field is safe to leave set even
+  before the override is written. Ventoy's sed-style
+  substitution *inside* the ISO's own grub.cfg still requires
+  the init shim that v0.0.1 doesn't ship — that variant is
+  deferred to v0.1.0.
 
 - **G17. Image list / blacklist** — Bulk hide ISOs from the
   menu without deleting them. Useful when a USB has 200+ ISOs.
@@ -323,7 +330,8 @@ priorities aligned to user impact and security risk:
 | **G11 menu_class + menu_tip** | **P1 — feature parity** | **✅ closed in v0.0.1** |
 | **G12 Auto-install** | **P1 — fleet rollouts** | **✅ partial in v0.0.1** (`BootEntryConfig.autoinstall` — Linux distros; Windows autounattend.xml → v0.1.0) |
 | **G13 Password protection** | **P2 — security** | **✅ closed in v0.0.1** (PBKDF2 only; plaintext rejected) |
-| G14–G16 Plugin system (DUD, injection, conf-replace) | P1 — feature parity | v0.1.0 |
+| G14, G15 Plugin system (DUD, injection) | P1 — feature parity | v0.1.0 |
+| **G16 Conf replace** | **P1 — feature parity** | **✅ partial in v0.0.1** (`BootEntryConfig.conf_replace_path`; ISO-internal sed → v0.1.0) |
 | **G17 image_blacklist** | **P2 — UX** | **✅ closed in v0.0.1** (`hidden: true` on entries) |
 | **G18 Per-ISO persistence backend** | **P2 — power users** | **✅ closed in v0.0.1** (`persistence_backend` on entries) |
 | **G19 Per-distro persistence labels** | **P2 — power users** | **✅ closed in v0.0.1** (`expected_persistence_label`) |
@@ -334,7 +342,7 @@ priorities aligned to user impact and security risk:
 | **G24 User-supplied checksum** | **P3 — flexibility** | **✅ closed in v0.0.1** (`verify_iso_sha256` / companion file) |
 | G25 Tested ISO catalog growth | continuous | — |
 
-**v0.0.1 closed:** G6, G7, G8, G9 (partial), G10, G11, G12 (partial — Linux), G13, G17, G18, G19, G20, G22 (partial), G23, G24 — fifteen gaps.
+**v0.0.1 closed:** G6, G7, G8, G9 (partial), G10, G11, G12 (partial — Linux), G13, G16 (partial — external override), G17, G18, G19, G20, G22 (partial), G23, G24 — sixteen gaps.
 **v0.0.1 scaffolded:** G1, G3 — two gaps with the API surface, validation, and tooling in place; the destructive write path or the third-party shim signing remain for v0.0.2.
 
 ---

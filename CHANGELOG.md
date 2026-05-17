@@ -9,13 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Ventoy gap closures
 
-Fifteen of the 25 gaps tracked in
+Sixteen of the 25 gaps tracked in
 [`docs/VENTOY_COMPARISON.md`](docs/VENTOY_COMPARISON.md) are
-closed in v0.0.1 (G12 is partial — Linux autoinstall mechanisms
-work, Windows `autounattend.xml` deferred; G22 is partial — chain
-into discovered grub.cfg works, full file browser deferred to
-v0.1.0); two are scaffolded with API surface + tooling, with the
-destructive paths deferred to v0.0.2.
+closed in v0.0.1. Three closures are partials: G12 (Linux
+autoinstall, Windows `autounattend.xml` deferred), G16 (external
+grub.cfg override, in-ISO sed deferred), and G22 (chain into
+discovered grub.cfg, full file browser deferred). Two further
+gaps (G1, G3) are scaffolded with API surface + tooling, with
+the destructive paths deferred to v0.0.2.
 
 | Gap | Status | Surface |
 |---|---|---|
@@ -27,6 +28,7 @@ destructive paths deferred to v0.0.2.
 | G11 menu_class + menu_tip per ISO | closed | `BootEntryConfig.class` + `tip` |
 | G12 Auto-install | partial | `BootEntryConfig.autoinstall { kind, path }`; renderer emits per-distro kargs (kickstart/preseed/autoinstall/autoyast/cloud-init) |
 | G13 GRUB password protection | closed | `BootConfig.grub_superuser` + `grub_password_pbkdf2` (PBKDF2 only) |
+| G16 Conf replace | partial | `BootEntryConfig.conf_replace_path`; external grub.cfg override with auto-detect fallback |
 | G17 image_blacklist | closed | `BootEntryConfig.hidden=true` |
 | G18 per-ISO persistence backend | closed | `BootEntryConfig.persistence_backend` |
 | G19 per-distro persistence labels | closed | `raidhos_core::expected_persistence_label` (30-distro table) |
@@ -47,8 +49,8 @@ destructive paths deferred to v0.0.2.
   host's compile-time `target_os`. CI coverage gate raised from
   65% to 90%.
 - Test count: `raidhos-core` 201 unit + 26 doctest, `raidhos-ui`
-  76, `raidhos-cli` 14, `raidhos-priv-helper` 9 seccomp + 6 toctou
-  + 7 integration. Total: 339+ tests across the workspace.
+  81, `raidhos-cli` 14, `raidhos-priv-helper` 9 seccomp + 6 toctou
+  + 7 integration. Total: 344+ tests across the workspace.
 
 ### Added
 
@@ -92,6 +94,18 @@ destructive paths deferred to v0.0.2.
   `hidden = true` still suppresses entries inside submenus, and
   class names go through the same metachar filter as everything
   else. Closes Ventoy gap G20.
+- `BootEntryConfig.conf_replace_path` — external grub.cfg
+  override path on the DATA partition. When set, the renderer
+  emits `configfile ($root)<path>` as the *first* branch on
+  the ISO entry; GRUB chains into the user-supplied grub.cfg
+  instead of searching inside the ISO. Falls back to the
+  existing auto-detect logic when the override file is missing
+  at boot (safe to leave set before the file exists). Sanitised
+  against GRUB metachars; relative paths gain a leading `/`.
+  Does **not** do Ventoy's sed-style substitution inside the
+  ISO's own grub.cfg — that variant remains v0.1.0 work. The
+  `.efi` (G7) and `.img`/`.raw` (G6) dispatch branches skip
+  this override (test pins). Partially closes Ventoy gap G16.
 - Typed auto-install descriptor: `BootEntryConfig.autoinstall`
   carries a `{ kind, path }` pair with `kind` ∈ `{none,
   kickstart, preseed, autoinstall, autoyast, cloud-init}`.

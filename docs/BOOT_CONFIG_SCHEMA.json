@@ -96,6 +96,11 @@
             }
           },
           "additionalProperties": true
+        },
+        "conf_replace_path": {
+          "type": "string",
+          "default": "",
+          "description": "Ventoy gap G16 (partial). When set, the renderer emits `configfile ($root)<path>` as the first branch on the ISO entry — GRUB chains into the user-supplied grub.cfg on the DATA partition instead of searching inside the ISO. Falls back to the existing auto-detect logic when the file is missing at boot. Sanitised; relative paths get a leading `/` via `path_prefix()`. Does **not** do Ventoy's sed-style substitution inside the ISO's own grub.cfg."
         }
       },
       "required": ["title", "path", "params", "initrd", "kargs"],

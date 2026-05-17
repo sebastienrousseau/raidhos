@@ -112,6 +112,21 @@ pub struct BootEntryConfig {
     /// `AutoinstallKind` for the per-kind karg shape.
     #[serde(default)]
     pub autoinstall: AutoinstallConfig,
+    /// Optional override path for the boot configuration
+    /// (Ventoy gap G16, partial). When set, the renderer
+    /// emits `configfile ($root)<path>` *first* on the ISO
+    /// branch; if the file exists at boot, GRUB chains into
+    /// it instead of searching inside the ISO for a
+    /// `casper/vmlinuz` / `live/vmlinuz` / embedded grub.cfg.
+    /// Falls back to the auto-detect logic when the file is
+    /// missing, so the field is safe to leave set even when
+    /// the override hasn't been written yet.
+    ///
+    /// This does **not** replicate Ventoy's sed-style
+    /// substitution inside the ISO's own grub.cfg — that
+    /// requires an init shim that v0.0.1 doesn't ship.
+    #[serde(default)]
+    pub conf_replace_path: String,
 }
 
 /// Per-entry auto-install descriptor (Ventoy gap G12). Kept
@@ -592,6 +607,7 @@ mod tests {
                 hidden: false,
                 persistence_backend: String::new(),
                 autoinstall: Default::default(),
+                conf_replace_path: String::new(),
             }],
             default_entry: Some("ubuntu".into()),
             grub_superuser: String::new(),

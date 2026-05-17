@@ -89,6 +89,7 @@ between installs.
 | `hidden` | bool | `false` | **G17.** Skip this entry entirely — applies in both ListView and TreeView. |
 | `persistence_backend` | string | `""` | **G18.** Path of a `.dat` persistence file. Appends `persistent persistent-path=<value>` to the linux line. Only applies to ISO entries; ignored for `.efi` / `.img`. |
 | `autoinstall` | object | `{kind: "none", path: ""}` | **G12.** Typed auto-install descriptor — see below. |
+| `conf_replace_path` | string | `""` | **G16 (partial).** External grub.cfg override on the DATA partition. Renderer emits `configfile ($root)<path>` as the first branch on the ISO entry; falls back to the auto-detect logic when the file is missing. Does *not* do Ventoy's in-ISO sed substitution. |
 
 ### `autoinstall` sub-object
 
