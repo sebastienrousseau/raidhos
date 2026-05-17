@@ -117,6 +117,30 @@ fn print_response<T: Serialize>(resp: &HelperResponse<T>) {
     println!("{body}");
 }
 
+/// Build the `list-disks` response from a `core::list_disks()` result.
+/// Returned tuple is `(response, ok_for_exit_code)`. Factored out so
+/// the Ok/Err branches can be exercised by unit tests without
+/// depending on the host's real disk inventory.
+fn list_disks_response(
+    res: core::Result<Vec<core::DiskInfo>>,
+) -> (HelperResponse<Vec<core::DiskInfo>>, bool) {
+    match res {
+        Ok(disks) => (HelperResponse::ok(disks), true),
+        Err(err) => (HelperResponse::err(err.to_string()), false),
+    }
+}
+
+/// Build the `list-partitions` response from a `core::list_partitions()`
+/// result. Same pattern as `list_disks_response` — see above.
+fn list_partitions_response(
+    res: core::Result<Vec<core::PartitionInfo>>,
+) -> (HelperResponse<Vec<core::PartitionInfo>>, bool) {
+    match res {
+        Ok(parts) => (HelperResponse::ok(parts), true),
+        Err(err) => (HelperResponse::err(err.to_string()), false),
+    }
+}
+
 fn enforce_argv_budget() -> Result<(), String> {
     let total: usize = std::env::args().map(|a| a.len() + 1).sum();
     if total > MAX_ARGV_BYTES {
@@ -165,23 +189,13 @@ fn main() {
 
     match cli.command {
         Command::ListDisks => {
-            let resp = match core::list_disks() {
-                Ok(disks) => HelperResponse::ok(disks),
-                Err(err) => {
-                    ok = false;
-                    HelperResponse::<Vec<core::DiskInfo>>::err(err.to_string())
-                }
-            };
+            let (resp, dispatch_ok) = list_disks_response(core::list_disks());
+            ok = dispatch_ok;
             print_response(&resp);
         }
         Command::ListPartitions { device } => {
-            let resp = match core::list_partitions(device) {
-                Ok(parts) => HelperResponse::ok(parts),
-                Err(err) => {
-                    ok = false;
-                    HelperResponse::<Vec<core::PartitionInfo>>::err(err.to_string())
-                }
-            };
+            let (resp, dispatch_ok) = list_partitions_response(core::list_partitions(device));
+            ok = dispatch_ok;
             print_response(&resp);
         }
         Command::Install(args) => {
@@ -321,5 +335,75 @@ struct StderrSink;
 impl core::ProgressSink for StderrSink {
     fn emit(&self, event: core::ProgressEvent) {
         eprintln!("{}: {}", event.phase, event.message);
+    }
+}
+
+#[cfg(test)]
+mod response_tests {
+    use super::*;
+
+    #[test]
+    fn list_disks_response_wraps_ok_payload() {
+        let disks = vec![core::DiskInfo {
+            id: "/dev/sdb".into(),
+            model: "TestStick".into(),
+            size_bytes: 1024,
+            removable: true,
+            mountpoints: vec![],
+            is_system: false,
+        }];
+        let (resp, ok) = list_disks_response(Ok(disks));
+        assert!(ok);
+        assert!(resp.ok);
+        assert!(resp.error.is_none());
+        assert_eq!(resp.data.as_ref().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn list_disks_response_propagates_err_to_helper_response() {
+        let (resp, ok) = list_disks_response(Err(core::CoreError::Io("simulated".into())));
+        assert!(!ok);
+        assert!(!resp.ok);
+        assert!(resp.error.as_deref().unwrap().contains("simulated"));
+    }
+
+    #[test]
+    fn list_partitions_response_wraps_ok_payload() {
+        let parts = vec![core::PartitionInfo {
+            id: "/dev/sdb1".into(),
+            label: "RAIDHOS_EFI".into(),
+            fstype: "vfat".into(),
+            mountpoints: vec![],
+        }];
+        let (resp, ok) = list_partitions_response(Ok(parts));
+        assert!(ok);
+        assert!(resp.ok);
+        assert_eq!(resp.data.as_ref().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn list_partitions_response_propagates_err_to_helper_response() {
+        let (resp, ok) =
+            list_partitions_response(Err(core::CoreError::Io("lsblk fell over".into())));
+        assert!(!ok);
+        assert!(!resp.ok);
+        assert!(resp.error.as_deref().unwrap().contains("lsblk fell over"));
+    }
+
+    /// `print_response` cannot fail on any HelperResponse<T> that this
+    /// binary constructs — covered structurally via the `.expect()` call
+    /// after the previous refactor. This test just confirms the
+    /// serialisation produces the expected JSON shape.
+    #[test]
+    fn helper_response_json_shape() {
+        let resp = HelperResponse::<()>::ok(());
+        let s = serde_json::to_string(&resp).unwrap();
+        assert!(s.contains("\"ok\":true"));
+        assert!(s.contains("\"data\":null"));
+
+        let resp = HelperResponse::<Vec<core::DiskInfo>>::err("boom".to_string());
+        let s = serde_json::to_string(&resp).unwrap();
+        assert!(s.contains("\"ok\":false"));
+        assert!(s.contains("\"error\":\"boom\""));
     }
 }
