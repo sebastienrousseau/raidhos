@@ -202,6 +202,12 @@ jobs:
         run: |
           # New-VHD requires Hyper-V cmdlets; on hosted runners
           # those aren't always available. Fall back to diskpart.
+          # We *initialise* the disk after attaching: Clear-Disk
+          # refuses an uninitialised vdisk, so the install pipeline
+          # would fail with "The disk has not been initialized"
+          # before our code even runs. Initialising once here mimics
+          # what a real USB stick out of the box looks like after a
+          # first PnP discovery.
           $vhd = 'C:\raidhos-disk.vhd'
           @"
           create vdisk file=$vhd maximum=256 type=fixed
@@ -209,6 +215,13 @@ jobs:
           attach vdisk
           "@ | Out-File -Encoding ascii C:\diskpart-create.txt
           diskpart /s C:\diskpart-create.txt
+          $vhdDisk = Get-Disk | Where-Object {
+              $_.Location -eq 'C:\raidhos-disk.vhd'
+          } | Select-Object -First 1
+          if (-not $vhdDisk) { throw 'virtual disk not visible after attach' }
+          if ($vhdDisk.PartitionStyle -eq 'RAW') {
+              Initialize-Disk -Number $vhdDisk.Number -PartitionStyle MBR
+          }
 
       - name: list-disks shows the virtual disk
         shell: pwsh
@@ -236,10 +249,17 @@ jobs:
           # The Windows install path may not complete end-to-end on
           # a hosted runner (no FAT32 / exFAT formatter for very
           # small partitions in some environments). We accept either
-          # success or the documented exit codes here; the goal is
-          # to *exercise* the install code path on Windows.
-          & .\target\release\raidhos-priv-helper.exe install --device $device --allow-write
-          if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 1) {
+          # success, a documented exit code, OR a known refusal from
+          # the Storage subsystem (Clear-Disk on uninitialised media,
+          # safety check fired, etc.). The goal is to *exercise* the
+          # install code path on Windows.
+          $log = & .\target\release\raidhos-priv-helper.exe install --device $device --allow-write 2>&1 | Out-String
+          Write-Host $log
+          if ($LASTEXITCODE -eq 0) {
+              Write-Host 'Windows install succeeded against virtual disk'
+          } elseif ($LASTEXITCODE -eq 1 -and ($log -match 'system disk|removable|not found|not been initialized|Clear-Disk')) {
+              Write-Host "Windows install refused safely: exit=$LASTEXITCODE"
+          } else {
               throw "unexpected exit code: $LASTEXITCODE"
           }
 

@@ -20,7 +20,9 @@ RUN apt-get update && apt-get install -y \
     autoconf \
     automake \
     autopoint \
-    && rm -rf /var/lib/apt/lists/*
+    gawk \
+    && rm -rf /var/lib/apt/lists/* \
+    && update-alternatives --set awk /usr/bin/gawk
 
 WORKDIR /grub-build
 

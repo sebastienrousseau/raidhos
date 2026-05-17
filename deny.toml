@@ -11,12 +11,27 @@ feature-depth = 1
 db-path = "$CARGO_HOME/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
 yanked = "warn"
+# All entries below are *unmaintained* advisories on transitives we don't
+# directly depend on. Tracked upstream by the Tauri / WRY / gtk-rs ecosystems;
+# none represent exploitable vulnerabilities. Re-evaluate at each tauri bump.
 ignore = [
-    # proc-macro-error is unmaintained, but it's pulled transitively by
-    # `windows-implement` / tauri-build → tauri-macros. We don't control
-    # the transitive. Upstream tracking issue:
-    #   https://github.com/dtolnay/proc-macro2/issues/485
-    "RUSTSEC-2024-0370",
+    "RUSTSEC-2024-0370", # proc-macro-error (tauri-macros / windows-implement)
+    "RUSTSEC-2024-0411", # gtk3 (wry on Linux)
+    "RUSTSEC-2024-0412", # atk
+    "RUSTSEC-2024-0413", # gdk
+    "RUSTSEC-2024-0414", # gdkwayland-sys
+    "RUSTSEC-2024-0415", # gdkx11
+    "RUSTSEC-2024-0416", # gdkx11-sys
+    "RUSTSEC-2024-0417", # gtk
+    "RUSTSEC-2024-0418", # gtk-sys
+    "RUSTSEC-2024-0419", # gtk3-macros
+    "RUSTSEC-2024-0420", # atk-sys
+    "RUSTSEC-2024-0429", # gdk-sys / cairo
+    "RUSTSEC-2025-0075", # unic-char-property (urlpattern via tauri-utils)
+    "RUSTSEC-2025-0080", # unic-char-range
+    "RUSTSEC-2025-0081", # unic-common
+    "RUSTSEC-2025-0098", # unic-ucd-version
+    "RUSTSEC-2025-0100", # unic-ucd-ident
 ]
 
 [licenses]
@@ -36,8 +51,9 @@ allow = [
   "CC0-1.0",
   "0BSD",
   # The project itself is GPL-3.0-only. License is asserted via
-  # workspace.package.license.
-  "GPL-3.0",
+  # workspace.package.license. Use the SPDX-canonical "-only" form so it
+  # matches the synthesized manifest cargo-deny reads from each crate.
+  "GPL-3.0-only",
 ]
 
 [bans]

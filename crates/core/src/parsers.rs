@@ -6,7 +6,28 @@
 //! `diskutil`, or `Get-Disk`) and returns a `Vec<DiskInfo>`.
 
 use crate::{CoreError, DiskInfo, PartitionInfo, Result};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
+
+/// `lsblk -b` returns SIZE as a JSON integer on util-linux ≥ 2.40 and as
+/// a string on older versions. Accept either shape and normalise to
+/// `u64`. Negative numbers are clamped to 0 so we never panic.
+fn deserialize_size<'de, D>(deserializer: D) -> std::result::Result<Option<u64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Size {
+        Number(i64),
+        String(String),
+        Null,
+    }
+    match Option::<Size>::deserialize(deserializer)?.unwrap_or(Size::Null) {
+        Size::Number(n) => Ok(Some(n.max(0) as u64)),
+        Size::String(s) => Ok(s.parse::<u64>().ok()),
+        Size::Null => Ok(None),
+    }
+}
 
 // ---------------------------------------------------------------------
 // `lsblk -J` JSON output (Linux)
@@ -20,8 +41,8 @@ pub(crate) struct LsblkOutput {
 #[derive(Deserialize)]
 pub(crate) struct LsblkDevice {
     pub name: String,
-    #[serde(default)]
-    pub size: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_size")]
+    pub size: Option<u64>,
     #[serde(default)]
     pub model: Option<String>,
     #[serde(default)]
@@ -53,12 +74,7 @@ pub fn parse_lsblk_disks(bytes: &[u8]) -> Result<Vec<DiskInfo>> {
         if !is_disk {
             continue;
         }
-        let size_bytes = dev
-            .size
-            .as_deref()
-            .unwrap_or("0")
-            .parse::<u64>()
-            .unwrap_or(0);
+        let size_bytes = dev.size.unwrap_or(0);
 
         let mut mounts = Vec::new();
         collect_mounts(&dev, &mut mounts);
@@ -357,5 +373,218 @@ mod tests {
     #[test]
     fn getdisk_rejects_invalid_json() {
         assert!(parse_get_disk_json(b"not json").is_err());
+    }
+
+    #[test]
+    fn lsblk_collects_recursive_mounts_through_children() {
+        // Disk with two-level children: disk → part → mounts.
+        let raw = r#"{"blockdevices":[
+            {"name":"sda","size":"500000000000","type":"disk","rm":false,
+             "children":[
+                {"name":"sda1","type":"part","mountpoints":["/boot"]},
+                {"name":"sda2","type":"part","mountpoints":["/"]}
+             ]}
+        ]}"#;
+        let disks = parse_lsblk_disks(raw.as_bytes()).unwrap();
+        assert_eq!(disks.len(), 1);
+        let d = &disks[0];
+        assert!(d.is_system); // /boot and / both flag system
+        assert_eq!(d.mountpoints.len(), 2);
+    }
+
+    #[test]
+    fn lsblk_handles_empty_mountpoint_strings() {
+        // A null + empty-string mountpoint should be filtered out.
+        let raw = r#"{"blockdevices":[
+            {"name":"sdb","size":"16000000000","type":"disk","rm":true,
+             "children":[
+                {"name":"sdb1","type":"part","mountpoints":[null,""]}
+             ]}
+        ]}"#;
+        let disks = parse_lsblk_disks(raw.as_bytes()).unwrap();
+        assert_eq!(disks.len(), 1);
+        assert!(disks[0].mountpoints.is_empty());
+        assert!(!disks[0].is_system);
+    }
+
+    #[test]
+    fn lsblk_skips_non_disk_entries() {
+        // A loop device + a disk; non-disk should be skipped.
+        let raw = r#"{"blockdevices":[
+            {"name":"loop0","size":"10000","type":"loop","rm":false},
+            {"name":"sdb","size":"16000000000","type":"disk","rm":true}
+        ]}"#;
+        let disks = parse_lsblk_disks(raw.as_bytes()).unwrap();
+        assert_eq!(disks.len(), 1);
+        assert_eq!(disks[0].id, "/dev/sdb");
+    }
+
+    #[test]
+    fn lsblk_handles_missing_size_field() {
+        let raw = r#"{"blockdevices":[
+            {"name":"sdc","type":"disk","rm":true}
+        ]}"#;
+        let disks = parse_lsblk_disks(raw.as_bytes()).unwrap();
+        assert_eq!(disks.len(), 1);
+        assert_eq!(disks[0].size_bytes, 0);
+        assert_eq!(disks[0].model, "Unknown");
+    }
+
+    #[test]
+    fn lsblk_accepts_size_as_integer() {
+        // util-linux ≥ 2.40 emits SIZE as a JSON integer when -b is set.
+        let raw = r#"{"blockdevices":[
+            {"name":"loop0","size":268435456,"type":"disk","rm":false}
+        ]}"#;
+        let disks = parse_lsblk_disks(raw.as_bytes()).unwrap();
+        assert_eq!(disks.len(), 1);
+        assert_eq!(disks[0].size_bytes, 268_435_456);
+    }
+
+    #[test]
+    fn lsblk_accepts_size_as_string() {
+        // util-linux < 2.40 emits SIZE as a JSON string.
+        let raw = r#"{"blockdevices":[
+            {"name":"sdb","size":"16000000000","type":"disk","rm":true}
+        ]}"#;
+        let disks = parse_lsblk_disks(raw.as_bytes()).unwrap();
+        assert_eq!(disks.len(), 1);
+        assert_eq!(disks[0].size_bytes, 16_000_000_000);
+    }
+
+    #[test]
+    fn lsblk_accepts_size_as_null() {
+        // Some kernels report a null SIZE for empty card readers.
+        let raw = r#"{"blockdevices":[
+            {"name":"sdz","size":null,"type":"disk","rm":true}
+        ]}"#;
+        let disks = parse_lsblk_disks(raw.as_bytes()).unwrap();
+        assert_eq!(disks.len(), 1);
+        assert_eq!(disks[0].size_bytes, 0);
+    }
+
+    #[test]
+    fn lsblk_clamps_negative_size_to_zero() {
+        // Negative integer should clamp, not panic / underflow.
+        let raw = r#"{"blockdevices":[
+            {"name":"sdneg","size":-1,"type":"disk","rm":true}
+        ]}"#;
+        let disks = parse_lsblk_disks(raw.as_bytes()).unwrap();
+        assert_eq!(disks.len(), 1);
+        assert_eq!(disks[0].size_bytes, 0);
+    }
+
+    #[test]
+    fn lsblk_partitions_filters_by_parent() {
+        let raw = r#"{"blockdevices":[
+            {"name":"sda","type":"disk","children":[
+                {"name":"sda1","type":"part","pkname":"sda","label":"A","fstype":"ext4"}
+            ]},
+            {"name":"sdb","type":"disk","children":[
+                {"name":"sdb1","type":"part","pkname":"sdb","label":"B","fstype":"vfat",
+                 "mountpoints":["/mnt/usb"]}
+            ]}
+        ]}"#;
+        let parts = parse_lsblk_partitions(raw.as_bytes(), "/dev/sdb").unwrap();
+        assert_eq!(parts.len(), 1);
+        assert_eq!(parts[0].id, "/dev/sdb1");
+        assert_eq!(parts[0].label, "B");
+        assert_eq!(parts[0].fstype, "vfat");
+        assert_eq!(parts[0].mountpoints, vec!["/mnt/usb"]);
+    }
+
+    #[test]
+    fn lsblk_partitions_returns_empty_for_unknown_parent() {
+        let raw = r#"{"blockdevices":[
+            {"name":"sda","type":"disk","children":[
+                {"name":"sda1","type":"part","pkname":"sda"}
+            ]}
+        ]}"#;
+        let parts = parse_lsblk_partitions(raw.as_bytes(), "/dev/nonexistent").unwrap();
+        assert!(parts.is_empty());
+    }
+
+    #[test]
+    fn diskutil_skips_partition_slices() {
+        let raw = r#"<plist><array>
+            <dict><key>DeviceIdentifier</key><string>disk2</string>
+                  <key>Size</key><integer>16000000000</integer>
+                  <key>Removable</key><true/><key>Internal</key><false/></dict>
+            <dict><key>DeviceIdentifier</key><string>disk2s1</string>
+                  <key>Size</key><integer>33554432</integer></dict>
+            <dict><key>DeviceIdentifier</key><string>disk2s2</string>
+                  <key>Size</key><integer>15966445568</integer></dict>
+        </array></plist>"#;
+        let disks = parse_disks_plist(raw.as_bytes()).unwrap();
+        // disk2 alone — slices skipped via looks_like_slice.
+        assert_eq!(disks.len(), 1);
+        assert_eq!(disks[0].id, "/dev/disk2");
+    }
+
+    #[test]
+    fn diskutil_uses_ejectable_as_removable_fallback() {
+        let raw = r#"<plist><array>
+            <dict><key>DeviceIdentifier</key><string>disk3</string>
+                  <key>Size</key><integer>1000</integer>
+                  <key>Ejectable</key><true/><key>Internal</key><false/></dict>
+        </array></plist>"#;
+        let disks = parse_disks_plist(raw.as_bytes()).unwrap();
+        assert!(disks[0].removable);
+    }
+
+    #[test]
+    fn diskutil_defaults_to_internal_when_unspecified() {
+        // No Internal/Removable key → defaults treat the disk as
+        // internal/system, which is the safe default.
+        let raw = r#"<plist><array>
+            <dict><key>DeviceIdentifier</key><string>disk4</string>
+                  <key>Size</key><integer>500</integer></dict>
+        </array></plist>"#;
+        let disks = parse_disks_plist(raw.as_bytes()).unwrap();
+        assert!(disks[0].is_system);
+    }
+
+    #[test]
+    fn diskutil_uses_unknown_model_when_media_name_missing() {
+        let raw = r#"<plist><array>
+            <dict><key>DeviceIdentifier</key><string>disk5</string>
+                  <key>Size</key><integer>1</integer></dict>
+        </array></plist>"#;
+        let disks = parse_disks_plist(raw.as_bytes()).unwrap();
+        assert_eq!(disks[0].model, "Unknown");
+    }
+
+    #[test]
+    fn getdisk_treats_removable_via_busname() {
+        let raw =
+            br#"[{"Number":7,"FriendlyName":"X","Size":1,"BusType":"REMOVABLE","IsBoot":false,"IsSystem":false}]"#;
+        let disks = parse_get_disk_json(raw).unwrap();
+        assert!(disks[0].removable);
+    }
+
+    #[test]
+    fn getdisk_handles_missing_fields() {
+        // No Number → default 0; no FriendlyName → "Unknown"; etc.
+        let raw = br#"[{}]"#;
+        let disks = parse_get_disk_json(raw).unwrap();
+        assert_eq!(disks.len(), 1);
+        assert_eq!(disks[0].id, "\\\\.\\PhysicalDrive0");
+        assert_eq!(disks[0].model, "Unknown");
+        assert_eq!(disks[0].size_bytes, 0);
+    }
+
+    #[test]
+    fn getdisk_treats_isboot_as_system() {
+        let raw = br#"[{"Number":1,"BusType":"SATA","IsBoot":true,"IsSystem":false}]"#;
+        let disks = parse_get_disk_json(raw).unwrap();
+        assert!(disks[0].is_system);
+    }
+
+    #[test]
+    fn looks_like_slice_handles_double_digit() {
+        assert!(looks_like_slice("disk10s2"));
+        assert!(looks_like_slice("disk99s99"));
+        assert!(!looks_like_slice("s"));
+        assert!(!looks_like_slice("a"));
     }
 }
