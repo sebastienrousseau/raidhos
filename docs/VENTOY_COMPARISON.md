@@ -279,19 +279,28 @@ priorities aligned to user impact and security risk:
 
 | Gap | Priority | Target |
 |---|---|---|
-| G1 Legacy BIOS | P0 — broad-hardware claim | v0.0.2 |
-| G3 Secure Boot signed shim | P0 — security claim | v0.0.2 |
+| G1 Legacy BIOS | P0 — broad-hardware claim | v0.0.2 (scaffolded in v0.0.1: `--bios-compat` flag accepted, NotImplemented at write time) |
+| G3 Secure Boot signed shim | P0 — security claim | v0.0.2 (scaffolded in v0.0.1: MOK keypair/sign/enrol scripts ship) |
 | G2 ARM64 UEFI | P1 — Raspberry Pi support | v0.1.0 |
 | G4 WIM boot | P1 — Windows installer ISOs | v0.0.2 |
-| G8 NTFS data partition | P1 — Windows-only hosts | v0.0.2 |
-| G11–G16 Plugin system | P1 — feature parity | v0.1.0 |
+| **G7 .EFI binary boot** | **P2 — firmware tools** | **✅ closed in v0.0.1** |
+| **G8 NTFS data partition** | **P1 — Windows-only hosts** | **✅ closed in v0.0.1** (`--data-fs ntfs`) |
+| **G9 ext4 / Btrfs / XFS data partition** | **P1 — Linux power users** | **✅ closed in v0.0.1** (`--data-fs ext4|btrfs|xfs`) |
+| **G11 menu_class + menu_tip** | **P1 — feature parity** | **✅ closed in v0.0.1** |
 | G12 Auto-install | P1 — fleet rollouts | v0.1.0 |
-| G18 Per-ISO persistence | P2 — power users | v0.1.0 |
+| **G13 Password protection** | **P2 — security** | **✅ closed in v0.0.1** (PBKDF2 only; plaintext rejected) |
+| G14–G16 Plugin system (DUD, injection, conf-replace) | P1 — feature parity | v0.1.0 |
+| **G17 image_blacklist** | **P2 — UX** | **✅ closed in v0.0.1** (`hidden: true` on entries) |
+| **G18 Per-ISO persistence backend** | **P2 — power users** | **✅ closed in v0.0.1** (`persistence_backend` on entries) |
+| **G19 Per-distro persistence labels** | **P2 — power users** | **✅ closed in v0.0.1** (`expected_persistence_label`) |
 | G20 ListView/TreeView | P2 — UX | v0.1.0 |
 | G21 Multi-language menu | P2 — i18n | v0.1.0 |
 | G22 Browse local disk | P3 — convenience | v0.2.0 |
-| G24 User-supplied checksum | P3 — flexibility | v0.0.2 |
+| **G24 User-supplied checksum** | **P3 — flexibility** | **✅ closed in v0.0.1** (`verify_iso_sha256` / companion file) |
 | G25 Tested ISO catalog growth | continuous | — |
+
+**v0.0.1 closed:** G7, G8, G9 (partial), G11, G13, G17, G18, G19, G24 — nine gaps.
+**v0.0.1 scaffolded:** G1, G3 — two gaps with the API surface, validation, and tooling in place; the destructive write path or the third-party shim signing remain for v0.0.2.
 
 ---
 
