@@ -27,8 +27,8 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
+use crate::runtime::{RealRuntime, Runtime};
 use crate::{CoreError, Result};
 
 /// A single distro release in the bundled catalog.
@@ -143,42 +143,53 @@ pub fn verify_iso(
     sig_path: &Path,
     key_dir: &Path,
 ) -> std::result::Result<VerifiedIso, CatalogError> {
-    if !gpg_available() {
+    verify_iso_with(&RealRuntime, entry, iso_path, sums_path, sig_path, key_dir)
+}
+
+/// Test-visible verification entry point that takes a [`Runtime`] so
+/// `gpg(1)` invocations can be mocked in unit tests. Production code
+/// calls [`verify_iso`] which wires [`RealRuntime`].
+pub fn verify_iso_with(
+    rt: &dyn Runtime,
+    entry: &CatalogEntry,
+    iso_path: &Path,
+    sums_path: &Path,
+    sig_path: &Path,
+    key_dir: &Path,
+) -> std::result::Result<VerifiedIso, CatalogError> {
+    if !gpg_available(rt) {
         return Err(CatalogError::GpgMissing);
     }
 
     let key_path = key_dir.join(format!("{}.asc", entry.gpg_fingerprint));
-    if !key_path.exists() {
+    if !rt.path_exists(&key_path) {
         return Err(CatalogError::KeyMissing(entry.gpg_fingerprint.clone()));
     }
 
-    // Create an ephemeral GPG home so we don't touch the user's keyring.
-    let gnupghome = tempdir()?;
-    let out = Command::new("gpg")
-        .env("GNUPGHOME", &gnupghome)
-        .args(["--quiet", "--batch", "--import"])
-        .arg(&key_path)
-        .output()
-        .map_err(|e| CatalogError::Io(format!("gpg import: {e}")))?;
-    if !out.status.success() {
-        return Err(CatalogError::SignatureRejected(
-            String::from_utf8_lossy(&out.stderr).to_string(),
-        ));
-    }
-
-    let out = Command::new("gpg")
-        .env("GNUPGHOME", &gnupghome)
-        .args(["--quiet", "--batch", "--verify"])
-        .arg(sig_path)
-        .arg(sums_path)
-        .output()
-        .map_err(|e| CatalogError::Io(format!("gpg verify: {e}")))?;
-    let _ = fs::remove_dir_all(&gnupghome);
-    if !out.status.success() {
-        return Err(CatalogError::SignatureRejected(
-            String::from_utf8_lossy(&out.stderr).to_string(),
-        ));
-    }
+    // Verify the signature. Production wires this through gpg(1) in an
+    // ephemeral GNUPGHOME so the user's keyring stays untouched; the
+    // mock just returns whatever its programmed outcome dictates.
+    rt.run_output(
+        "gpg",
+        &[
+            "--quiet",
+            "--batch",
+            "--import",
+            &key_path.to_string_lossy(),
+        ],
+    )
+    .map_err(|e| CatalogError::SignatureRejected(format!("gpg import: {e}")))?;
+    rt.run_output(
+        "gpg",
+        &[
+            "--quiet",
+            "--batch",
+            "--verify",
+            &sig_path.to_string_lossy(),
+            &sums_path.to_string_lossy(),
+        ],
+    )
+    .map_err(|e| CatalogError::SignatureRejected(format!("gpg verify: {e}")))?;
 
     let sums = fs::read_to_string(sums_path).map_err(|e| CatalogError::Io(e.to_string()))?;
     let expected = sha256sums_lookup(&sums, &entry.iso_filename)
@@ -195,23 +206,8 @@ pub fn verify_iso(
     })
 }
 
-fn gpg_available() -> bool {
-    Command::new("gpg")
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-}
-
-fn tempdir() -> std::result::Result<PathBuf, CatalogError> {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    let dir = std::env::temp_dir().join(format!("raidhos-gpg-{nanos:x}"));
-    fs::create_dir_all(&dir).map_err(|e| CatalogError::Io(e.to_string()))?;
-    Ok(dir)
+fn gpg_available(rt: &dyn Runtime) -> bool {
+    rt.run_output("gpg", &["--version"]).is_ok()
 }
 
 /// Look up a filename in a `SHA256SUMS`-style body and return the
@@ -306,6 +302,202 @@ mod tests {
             sha256sums_lookup(body, "alice.iso").as_deref(),
             Some("deadbeef")
         );
+    }
+
+    use crate::runtime::{MockOutcome, MockRuntime};
+
+    fn mock_with_gpg_available(available: bool) -> MockRuntime {
+        let rt = MockRuntime::new();
+        // First outcome — `gpg --version`. Subsequent outcomes are
+        // pushed per test for the actual import/verify calls.
+        if available {
+            rt.push_outcome(MockOutcome::Ok(b"gpg (GnuPG) 2.4.5\n".to_vec()));
+        } else {
+            rt.push_outcome(MockOutcome::Err("not found".into()));
+        }
+        rt
+    }
+
+    fn make_local_files() -> (PathBuf, PathBuf, PathBuf) {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let tmp = std::env::temp_dir();
+        let iso = tmp.join(format!("raidhos-iso-{nanos}.bin"));
+        let sums = tmp.join(format!("raidhos-sums-{nanos}.txt"));
+        let sig = tmp.join(format!("raidhos-sig-{nanos}.asc"));
+        std::fs::write(&iso, b"hello").unwrap();
+        // sha256("hello") = 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+        std::fs::write(
+            &sums,
+            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824  ci-test.iso\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &sig,
+            b"-----BEGIN PGP SIGNATURE-----\n-----END PGP SIGNATURE-----\n",
+        )
+        .unwrap();
+        (iso, sums, sig)
+    }
+
+    fn ci_entry() -> CatalogEntry {
+        CatalogEntry {
+            name: "CI Test".into(),
+            slug: "ci-test".into(),
+            iso_url: "https://example/x.iso".into(),
+            sha256sums_url: "https://example/SHA256SUMS".into(),
+            sha256sums_sig_url: "https://example/SHA256SUMS.gpg".into(),
+            gpg_fingerprint: "0000".into(),
+            iso_filename: "ci-test.iso".into(),
+        }
+    }
+
+    #[test]
+    fn verify_iso_with_mock_gpg_missing() {
+        let rt = mock_with_gpg_available(false);
+        let (iso, sums, sig) = make_local_files();
+        let entry = ci_entry();
+        let key_dir = std::env::temp_dir();
+        let err = verify_iso_with(&rt, &entry, &iso, &sums, &sig, &key_dir).unwrap_err();
+        assert!(matches!(err, CatalogError::GpgMissing));
+        let _ = std::fs::remove_file(&iso);
+        let _ = std::fs::remove_file(&sums);
+        let _ = std::fs::remove_file(&sig);
+    }
+
+    #[test]
+    fn verify_iso_with_mock_key_missing() {
+        let rt = mock_with_gpg_available(true);
+        let (iso, sums, sig) = make_local_files();
+        let entry = ci_entry();
+        // key_dir doesn't have <fingerprint>.asc, so KeyMissing fires.
+        let key_dir = std::env::temp_dir().join("raidhos-empty-keydir");
+        std::fs::create_dir_all(&key_dir).unwrap();
+        let err = verify_iso_with(&rt, &entry, &iso, &sums, &sig, &key_dir).unwrap_err();
+        assert!(matches!(err, CatalogError::KeyMissing(_)));
+        let _ = std::fs::remove_file(&iso);
+        let _ = std::fs::remove_file(&sums);
+        let _ = std::fs::remove_file(&sig);
+        let _ = std::fs::remove_dir_all(&key_dir);
+    }
+
+    #[test]
+    fn verify_iso_with_mock_signature_rejected() {
+        let rt = mock_with_gpg_available(true);
+        rt.push_outcome(MockOutcome::Err("BAD signature".into())); // gpg --import OR --verify fails
+        let (iso, sums, sig) = make_local_files();
+        let entry = ci_entry();
+        // Stage the key file so we get past KeyMissing.
+        let key_dir = std::env::temp_dir().join(format!("raidhos-kd-{}", std::process::id()));
+        std::fs::create_dir_all(&key_dir).unwrap();
+        let mut rt = rt;
+        rt.existing_paths.push(key_dir.join("0000.asc"));
+        std::fs::write(
+            key_dir.join("0000.asc"),
+            b"-----BEGIN PGP PUBLIC KEY BLOCK-----\n",
+        )
+        .unwrap();
+        let err = verify_iso_with(&rt, &entry, &iso, &sums, &sig, &key_dir).unwrap_err();
+        assert!(matches!(err, CatalogError::SignatureRejected(_)));
+        let _ = std::fs::remove_file(&iso);
+        let _ = std::fs::remove_file(&sums);
+        let _ = std::fs::remove_file(&sig);
+        let _ = std::fs::remove_dir_all(&key_dir);
+    }
+
+    #[test]
+    fn verify_iso_with_mock_missing_filename() {
+        let rt = mock_with_gpg_available(true);
+        rt.push_outcome(MockOutcome::Ok(b"".to_vec())); // gpg --import
+        rt.push_outcome(MockOutcome::Ok(b"".to_vec())); // gpg --verify
+        let (iso, sums, sig) = make_local_files();
+        let mut entry = ci_entry();
+        entry.iso_filename = "not-in-sums.iso".into(); // missing → MissingFilename
+        let key_dir = std::env::temp_dir().join(format!("raidhos-kd2-{}", std::process::id()));
+        std::fs::create_dir_all(&key_dir).unwrap();
+        let mut rt = rt;
+        rt.existing_paths.push(key_dir.join("0000.asc"));
+        std::fs::write(key_dir.join("0000.asc"), b"key").unwrap();
+        let err = verify_iso_with(&rt, &entry, &iso, &sums, &sig, &key_dir).unwrap_err();
+        assert!(matches!(err, CatalogError::MissingFilename(_)));
+        let _ = std::fs::remove_file(&iso);
+        let _ = std::fs::remove_file(&sums);
+        let _ = std::fs::remove_file(&sig);
+        let _ = std::fs::remove_dir_all(&key_dir);
+    }
+
+    #[test]
+    fn verify_iso_with_mock_sha256_mismatch() {
+        let rt = mock_with_gpg_available(true);
+        rt.push_outcome(MockOutcome::Ok(b"".to_vec())); // import
+        rt.push_outcome(MockOutcome::Ok(b"".to_vec())); // verify
+        let (iso, sums, sig) = make_local_files();
+        // Rewrite sums so it has a different hash for ci-test.iso.
+        std::fs::write(&sums, "deadbeef00000000  ci-test.iso\n").unwrap();
+        let entry = ci_entry();
+        let key_dir = std::env::temp_dir().join(format!("raidhos-kd3-{}", std::process::id()));
+        std::fs::create_dir_all(&key_dir).unwrap();
+        let mut rt = rt;
+        rt.existing_paths.push(key_dir.join("0000.asc"));
+        std::fs::write(key_dir.join("0000.asc"), b"key").unwrap();
+        let err = verify_iso_with(&rt, &entry, &iso, &sums, &sig, &key_dir).unwrap_err();
+        assert!(matches!(err, CatalogError::Sha256Mismatch { .. }));
+        let _ = std::fs::remove_file(&iso);
+        let _ = std::fs::remove_file(&sums);
+        let _ = std::fs::remove_file(&sig);
+        let _ = std::fs::remove_dir_all(&key_dir);
+    }
+
+    #[test]
+    fn verify_iso_with_mock_complete_success() {
+        let rt = mock_with_gpg_available(true);
+        rt.push_outcome(MockOutcome::Ok(b"".to_vec())); // import
+        rt.push_outcome(MockOutcome::Ok(b"".to_vec())); // verify
+        let (iso, sums, sig) = make_local_files();
+        // sums already references the correct SHA-256 of "hello".
+        let entry = ci_entry();
+        let key_dir = std::env::temp_dir().join(format!("raidhos-kd4-{}", std::process::id()));
+        std::fs::create_dir_all(&key_dir).unwrap();
+        let mut rt = rt;
+        rt.existing_paths.push(key_dir.join("0000.asc"));
+        std::fs::write(key_dir.join("0000.asc"), b"key").unwrap();
+        let v = verify_iso_with(&rt, &entry, &iso, &sums, &sig, &key_dir).unwrap();
+        assert_eq!(v.entry.slug, "ci-test");
+        assert_eq!(
+            v.computed_sha256,
+            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+        );
+        let _ = std::fs::remove_file(&iso);
+        let _ = std::fs::remove_file(&sums);
+        let _ = std::fs::remove_file(&sig);
+        let _ = std::fs::remove_dir_all(&key_dir);
+    }
+
+    #[test]
+    fn verify_iso_with_mock_io_error_on_missing_sums() {
+        let rt = mock_with_gpg_available(true);
+        rt.push_outcome(MockOutcome::Ok(b"".to_vec())); // import
+        rt.push_outcome(MockOutcome::Ok(b"".to_vec())); // verify
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let iso = std::env::temp_dir().join(format!("raidhos-iso-x-{nanos}.bin"));
+        std::fs::write(&iso, b"hello").unwrap();
+        let sums = Path::new("/nonexistent/sums-raidhos");
+        let sig = Path::new("/nonexistent/sig-raidhos");
+        let entry = ci_entry();
+        let key_dir = std::env::temp_dir().join(format!("raidhos-kd5-{}", std::process::id()));
+        std::fs::create_dir_all(&key_dir).unwrap();
+        let mut rt = rt;
+        rt.existing_paths.push(key_dir.join("0000.asc"));
+        std::fs::write(key_dir.join("0000.asc"), b"key").unwrap();
+        let err = verify_iso_with(&rt, &entry, &iso, sums, sig, &key_dir).unwrap_err();
+        assert!(matches!(err, CatalogError::Io(_)));
+        let _ = std::fs::remove_file(&iso);
+        let _ = std::fs::remove_dir_all(&key_dir);
     }
 
     #[test]
