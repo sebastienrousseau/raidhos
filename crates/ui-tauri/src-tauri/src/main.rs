@@ -272,6 +272,69 @@ fn scan_isos(dirs: Vec<String>) -> Result<Vec<IsoEntry>, String> {
         .collect())
 }
 
+/// Host metadata + sensible default ISO scan locations. The
+/// frontend uses these to render OS-appropriate help text (e.g.
+/// "drop ISOs in ~/Downloads" on macOS rather than the Linux
+/// `/media`, `/mnt`, `/home` defaults).
+#[derive(Serialize)]
+struct HostInfo {
+    /// Lowercased OS family: `linux`, `macos`, `windows`, or
+    /// `unknown`. Used by the frontend to pick copy strings.
+    os: String,
+    /// Suggested directories to scan for ISOs. macOS gets the
+    /// home `Downloads` / `Desktop` / `Documents`; Windows gets
+    /// the user-profile equivalents; Linux keeps the original
+    /// `/media`, `/mnt`, `/home` set.
+    suggested_scan_dirs: Vec<String>,
+}
+
+#[tauri::command]
+fn get_host_info() -> HostInfo {
+    let os = if cfg!(target_os = "macos") {
+        "macos"
+    } else if cfg!(target_os = "windows") {
+        "windows"
+    } else if cfg!(target_os = "linux") {
+        "linux"
+    } else {
+        "unknown"
+    }
+    .to_string();
+
+    let home = std::env::var("HOME")
+        .ok()
+        .or_else(|| std::env::var("USERPROFILE").ok());
+
+    let dirs = match os.as_str() {
+        "macos" => home
+            .as_ref()
+            .map(|h| {
+                vec![
+                    format!("{h}/Downloads"),
+                    format!("{h}/Desktop"),
+                    format!("{h}/Documents"),
+                ]
+            })
+            .unwrap_or_else(|| vec!["~/Downloads".into()]),
+        "windows" => home
+            .as_ref()
+            .map(|h| {
+                vec![
+                    format!("{h}\\Downloads"),
+                    format!("{h}\\Desktop"),
+                    format!("{h}\\Documents"),
+                ]
+            })
+            .unwrap_or_else(|| vec!["%USERPROFILE%\\Downloads".into()]),
+        _ => vec!["/media".into(), "/mnt".into(), "/home".into()],
+    };
+
+    HostInfo {
+        os,
+        suggested_scan_dirs: dirs,
+    }
+}
+
 /// Pre-flight check: look for a `<iso>.sha256` companion file
 /// alongside the ISO and verify the recomputed SHA-256 matches.
 /// Never errors out — returns a structured `IsoVerification` so the
@@ -549,6 +612,7 @@ fn main() {
             get_payload_version,
             list_partitions,
             verify_iso,
+            get_host_info,
             write_grub_cfg_to_esp,
             copy_isos_to_data,
             install_elevated
@@ -608,6 +672,34 @@ mod tests {
             s.contains("raidhos") || !pb.as_os_str().is_empty(),
             "unexpected config dir: {s}",
         );
+    }
+
+    #[test]
+    fn get_host_info_returns_os_and_at_least_one_scan_dir() {
+        let info = get_host_info();
+        // The cfg switch covers Linux / macOS / Windows; the test
+        // host has to be one of these three to run the workspace.
+        assert!(
+            ["linux", "macos", "windows"].contains(&info.os.as_str()),
+            "unexpected os: {}",
+            info.os
+        );
+        assert!(!info.suggested_scan_dirs.is_empty());
+        // The macOS / Windows variants must not leak the Linux
+        // defaults — that's the whole reason this command exists.
+        if info.os == "macos" {
+            assert!(
+                info.suggested_scan_dirs
+                    .iter()
+                    .any(|d| d.contains("Downloads")),
+                "macos dirs should include Downloads, got {:?}",
+                info.suggested_scan_dirs
+            );
+            assert!(
+                !info.suggested_scan_dirs.iter().any(|d| d == "/media"),
+                "macos dirs should not include /media"
+            );
+        }
     }
 
     #[test]
@@ -676,11 +768,7 @@ mod tests {
         let iso = scratch.join("ubuntu.iso");
         std::fs::write(&iso, b"fake-iso-bytes").unwrap();
         // 64 hex chars but deliberately not the real hash.
-        std::fs::write(
-            scratch.join("ubuntu.iso.sha256"),
-            "0".repeat(64),
-        )
-        .unwrap();
+        std::fs::write(scratch.join("ubuntu.iso.sha256"), "0".repeat(64)).unwrap();
 
         let v = verify_iso(iso.display().to_string());
         assert_eq!(v.kind, "mismatch");

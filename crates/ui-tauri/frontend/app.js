@@ -11,8 +11,11 @@
       const targetsEl = document.getElementById('targets');
       const saveConfigBtn = document.getElementById('saveConfig');
       const lastSavedEl = document.getElementById('lastSaved');
-      const loadBtn = document.getElementById('load');
-      const refreshBtn = document.getElementById('refresh');
+      const loadBtn = document.getElementById('load');           // legacy id (removed in current HTML)
+      const refreshBtn = document.getElementById('refresh');     // now in Step 2
+      const browseIsosBtn = document.getElementById('browseIsosBtn');
+      const dropzoneSubEl = document.getElementById('dropzoneSub');
+      const topSubtitleEl = document.getElementById('topSubtitle');
       const splash = document.getElementById('splash');
       const app = document.getElementById('app');
       const selectedEl = document.getElementById('selected');
@@ -69,13 +72,16 @@
         if (entriesConfigEl) entriesConfigEl.innerHTML = '';
         stopBootTimer();
         if (!entries.length) {
-          // Leave entriesEl empty so the dropzone empty-state CSS
-          // takes over with "Drop .iso files here…". The note below
-          // gives a concrete next action.
+          // Leave entriesEl empty so the dropzone above (hero) plus
+          // the dropzone container CSS take over. The note below
+          // names actual host-correct folders.
           if (entryNote) {
-            entryNote.innerHTML =
-              'No ISOs found in <code>/media</code>, <code>/mnt</code>, <code>/home</code>. ' +
-              'Drop ISO files onto the card above, or set custom scan paths under step 2.';
+            const dirs = (hostInfo.suggested_scan_dirs || []).slice(0, 3);
+            entryNote.innerHTML = dirs.length
+              ? `No ISOs found in ${dirs.map((d) => `<code>${d}</code>`).join(', ')}. ` +
+                `Drop ISO files onto the card above, or click <strong>Browse for ISOs…</strong>.`
+              : 'No ISOs found. Drop ISO files onto the card above, ' +
+                'or click <strong>Browse for ISOs…</strong>.';
           }
           return;
         }
@@ -504,8 +510,29 @@
       if (acceptWrite) acceptWrite.addEventListener('change', updateInstallState);
       if (enableWrite) enableWrite.addEventListener('change', updateInstallState);
       if (confirmErase) confirmErase.addEventListener('input', updateInstallState);
-      loadBtn.addEventListener('click', listDisks);
-      refreshBtn.addEventListener('click', listDisks);
+      if (loadBtn) loadBtn.addEventListener('click', listDisks);
+      if (refreshBtn) refreshBtn.addEventListener('click', listDisks);
+      if (browseIsosBtn) {
+        browseIsosBtn.addEventListener('click', async () => {
+          try {
+            // Tauri 2 dialog plugin. Falls back to a hint if the
+            // plugin isn't loaded (e.g. during static-page preview).
+            if (!(window.__TAURI__ && window.__TAURI__.dialog)) {
+              showBanner('File picker unavailable — drop ISOs onto the card instead.', true, false);
+              return;
+            }
+            const picked = await window.__TAURI__.dialog.open({
+              multiple: true,
+              filters: [{ name: 'ISO images', extensions: ['iso'] }],
+            });
+            if (!picked) return;
+            const paths = Array.isArray(picked) ? picked : [picked];
+            ingestDroppedIsos(paths);
+          } catch (err) {
+            showBanner(`Browse failed: ${err}`, true, false);
+          }
+        });
+      }
       installBtn.addEventListener('click', runInstall);
       if (scanBtn) scanBtn.addEventListener('click', loadEntries);
       if (saveConfigBtn) saveConfigBtn.addEventListener('click', async () => {
@@ -672,10 +699,40 @@
         }
       }
 
+      // Host metadata, fetched once at startup. The fields go into
+      // the scan-paths default, the dropzone subtitle, and the
+      // entry-list empty-state copy so the UI never tells a macOS
+      // user to "drop ISOs in /media".
+      let hostInfo = { os: 'unknown', suggested_scan_dirs: ['/media', '/mnt', '/home'] };
+
+      async function loadHostInfo() {
+        try {
+          const { invoke } = window.__TAURI__.tauri;
+          hostInfo = await invoke('get_host_info');
+        } catch (_err) {
+          // Fall through to defaults — non-Tauri preview.
+        }
+        if (scanPathsInput && !scanPathsInput.value) {
+          scanPathsInput.placeholder = hostInfo.suggested_scan_dirs.join(', ');
+        }
+        if (dropzoneSubEl) {
+          const first = hostInfo.suggested_scan_dirs[0] || '~/Downloads';
+          dropzoneSubEl.textContent = `or browse — RaidhOS also scans ${first}`;
+        }
+        if (topSubtitleEl) {
+          const osLabel = {
+            macos: 'macOS',
+            linux: 'Linux',
+            windows: 'Windows',
+          }[hostInfo.os] || 'this host';
+          topSubtitleEl.textContent =
+            `Build a multi-ISO bootable USB on ${osLabel}.`;
+        }
+      }
+
       function parseScanDirs() {
         const raw = (scanPathsInput && scanPathsInput.value) ? scanPathsInput.value : '';
-        const defaults = ['/media', '/mnt', '/home'];
-        if (!raw.trim()) return defaults;
+        if (!raw.trim()) return hostInfo.suggested_scan_dirs;
         return raw
           .split(',')
           .map((s) => s.trim())
@@ -943,9 +1000,38 @@
         });
       }
 
+      // Sidebar nav: only the Flash view exists today; Settings /
+      // Logs / About are visual app-shell anchors that scroll to or
+      // open the relevant card on the same page. This keeps the
+      // "real app" feel without spinning up actual routing in v0.0.1.
+      (function setupSidebar() {
+        const items = Array.from(document.querySelectorAll('.sidebar-item'));
+        const settingsCard = document.getElementById('bootConfig');
+        const progressEl2 = document.getElementById('progress');
+        items.forEach((btn) => {
+          btn.addEventListener('click', () => {
+            items.forEach((b) => b.classList.remove('active'));
+            btn.classList.add('active');
+            const view = btn.getAttribute('data-view');
+            if (view === 'settings' && settingsCard) {
+              const det = settingsCard.querySelector('details');
+              if (det) det.open = true;
+              settingsCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else if (view === 'logs' && progressEl2) {
+              progressEl2.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else if (view === 'flash') {
+              document.querySelector('[data-wizard-step="1"]').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          });
+        });
+      })();
+
       restoreState();
       updateInstallPlan();
       loadPayloadVersion();
+      // Fetch host metadata before loadCachedEntries so the empty-
+      // state copy renders with the right OS paths on first paint.
+      loadHostInfo();
       loadCachedEntries();
       updateInstallState();
       loadEntries();
@@ -972,71 +1058,86 @@
       // ---------------------------------------------------------------
       // Drag-and-drop ISO support.
       //
-      // Tauri 1 emits a `tauri://file-drop` event on the window when
-      // a file is dropped into the webview from the host file
-      // manager. HTML5 drag-and-drop alone doesn't give us paths in
-      // a sandboxed webview, so we rely on Tauri's event.
+      // Tauri 1 emits `tauri://file-drop` on the window; Tauri 2 emits
+      // `tauri://drag-drop` with the same payload shape. We listen for
+      // both so the frontend works on either backend.
+      //
+      // Step 1 UX: dropping an ISO adds it to the entry list directly
+      // (no USB selection required). Step 2 UX (after a USB is
+      // selected) also copies the file onto the mounted data
+      // partition. The dispatch lives in ingestDroppedIsos so the
+      // dialog "Browse for ISOs…" path reuses it.
       // ---------------------------------------------------------------
+      async function ingestDroppedIsos(rawPaths) {
+        const dropZone = document.getElementById('app');
+        const paths = (Array.isArray(rawPaths) ? rawPaths : [])
+          .filter((p) => typeof p === 'string' && p.toLowerCase().endsWith('.iso'));
+        if (!paths.length) {
+          showBanner('No .iso files in the drop — only .iso is accepted.', true, false);
+          return;
+        }
+        // Merge into the in-memory entry list with verification
+        // badges. The deduped existing entries keep their order.
+        const existing = new Set(renderedEntries.map((e) => e.subtitle));
+        const additions = paths
+          .filter((p) => !existing.has(p))
+          .map((p) => ({
+            title: p.split(/[\\/]/).pop().replace(/\.iso$/i, ''),
+            subtitle: p,
+            tag: 'ISO',
+            params: 'quiet splash',
+            initrd: '',
+            kargs: '',
+          }));
+        if (additions.length) {
+          const merged = renderedEntries.concat(additions);
+          hydrateEntryParams(merged);
+          renderEntries(merged);
+          showBanner(`Added ${additions.length} ISO(s) to entries.`, false, false);
+        } else {
+          showBanner('Those ISOs are already in the entry list.', false, false);
+        }
+        // If a USB target is already mounted, also copy onto it.
+        if (selectedDataMount) {
+          try {
+            const copied = await window.__TAURI__.tauri.invoke(
+              'copy_isos_to_data',
+              { mountPath: selectedDataMount, sources: paths }
+            );
+            showBanner(`Copied ${copied.length} ISO(s) to USB.`, false, false);
+          } catch (err) {
+            showBanner(`Copy to USB failed: ${err}`, true, false);
+          }
+        }
+        if (dropZone) dropZone.classList.remove('dragging');
+      }
+
       (function setupDragAndDrop() {
         const dropZone = document.getElementById('app');
         if (!dropZone) return;
-        const banner = document.createElement('div');
-        banner.className = 'drop-banner';
-        banner.setAttribute('role', 'status');
-        banner.setAttribute('aria-live', 'polite');
-        banner.style.display = 'none';
-        banner.textContent = 'Drop ISOs to copy to the selected USB.';
-        dropZone.appendChild(banner);
 
-        // Visual hover state (browser-level events) — only the path
-        // delivery uses Tauri's event.
+        // Browser-level dragover / dragleave gives us the visual
+        // hover state. Path delivery uses Tauri's event.
         dropZone.addEventListener('dragover', (e) => {
           e.preventDefault();
           dropZone.classList.add('dragging');
-          banner.style.display = 'block';
         });
         dropZone.addEventListener('dragleave', () => {
           dropZone.classList.remove('dragging');
-          banner.style.display = 'none';
+        });
+        dropZone.addEventListener('drop', (e) => {
+          // Stop the browser from opening the file directly when the
+          // Tauri event doesn't fire for whatever reason.
+          e.preventDefault();
         });
 
         if (window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen) {
           const dropHandler = async (event) => {
-            dropZone.classList.remove('dragging');
-            banner.style.display = 'none';
-            // Tauri 2 payload shape: { paths: ["...", "..."] }
-            // Tauri 1 payload shape: ["...", "..."]
             const rawPaths = (event.payload && event.payload.paths)
               ? event.payload.paths
               : (event.payload || []);
-            const paths = (Array.isArray(rawPaths) ? rawPaths : []).filter((p) =>
-              typeof p === 'string' && p.toLowerCase().endsWith('.iso')
-            );
-            if (!paths.length) return;
-            if (!selectedDataMount) {
-              banner.style.display = 'block';
-              banner.textContent =
-                'Select and mount a target USB first, then drop ISOs.';
-              return;
-            }
-            try {
-              banner.style.display = 'block';
-              banner.textContent = `Copying ${paths.length} ISO(s)…`;
-              const copied = await window.__TAURI__.tauri.invoke(
-                'copy_isos_to_data',
-                { mountPath: selectedDataMount, sources: paths }
-              );
-              banner.textContent = `Copied ${copied.length} ISO(s).`;
-              setTimeout(() => {
-                banner.style.display = 'none';
-              }, 2500);
-              if (typeof refreshIsos === 'function') refreshIsos();
-            } catch (err) {
-              banner.textContent = `Copy failed: ${err}`;
-            }
+            await ingestDroppedIsos(Array.isArray(rawPaths) ? rawPaths : []);
           };
-          // Register both the Tauri 1 and Tauri 2 event names so the
-          // frontend works on either backend.
           window.__TAURI__.event.listen('tauri://file-drop', dropHandler);
           window.__TAURI__.event.listen('tauri://drag-drop', dropHandler);
         }

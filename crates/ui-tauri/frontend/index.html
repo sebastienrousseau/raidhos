@@ -15,127 +15,174 @@
       </div>
     </div>
 
-    <main class="shell app" id="app" aria-label="RaidhOS">
-      <div class="modal" id="resetModal" role="dialog" aria-modal="true" aria-labelledby="resetModalTitle">
-        <div class="modal-card">
-          <strong id="resetModalTitle">Reset all parameters?</strong>
-          <p class="subtitle">This will revert params, initrd, and kernel args for all entries.</p>
-          <div class="modal-actions">
-            <button class="ghost" id="cancelReset">Cancel</button>
-            <button class="primary" id="confirmReset">Reset</button>
-          </div>
+    <div class="app-shell" id="app">
+      <!-- Slim sidebar: global app navigation. The Flash view is the
+           current task; Settings / Logs / About are placeholders for
+           future panes but already serve as visual app-shell anchors
+           so the UI feels like a real desktop app, not a web page. -->
+      <aside class="sidebar" aria-label="App navigation">
+        <div class="sidebar-brand" aria-hidden="true">ᚱ</div>
+        <nav class="sidebar-nav" role="navigation">
+          <button class="sidebar-item active" data-view="flash" aria-current="page" aria-label="Flash">
+            <span class="sidebar-icon" aria-hidden="true">▣</span>
+            <span class="sidebar-label">Flash</span>
+          </button>
+          <button class="sidebar-item" data-view="settings" aria-label="Settings">
+            <span class="sidebar-icon" aria-hidden="true">⚙</span>
+            <span class="sidebar-label">Settings</span>
+          </button>
+          <button class="sidebar-item" data-view="logs" aria-label="Logs">
+            <span class="sidebar-icon" aria-hidden="true">≡</span>
+            <span class="sidebar-label">Logs</span>
+          </button>
+        </nav>
+        <div class="sidebar-footer">
+          <button class="sidebar-item" data-view="about" aria-label="About">
+            <span class="sidebar-icon" aria-hidden="true">ⓘ</span>
+            <span class="sidebar-label">About</span>
+          </button>
         </div>
-      </div>
+      </aside>
 
-      <header>
-        <div class="brand" aria-label="RaidhOS">
-          <div class="logo" aria-hidden="true">ᚱ</div>
-        </div>
-        <div class="actions" role="toolbar" aria-label="Top actions">
-          <button class="ghost" id="saveConfig" aria-label="Save boot configuration">Save Config</button>
-          <span class="subtitle" id="lastSaved" aria-live="polite"></span>
-          <button class="ghost" id="refresh" aria-label="Refresh disks">Refresh</button>
-          <button class="primary" id="load" aria-label="Re-list disks">List Disks</button>
-        </div>
-      </header>
-
-      <nav class="wizard-nav" role="tablist" aria-label="Install steps">
-        <button class="wizard-step" data-step="1" role="tab" aria-selected="true"><span class="wizard-num">1</span>Pick ISOs</button>
-        <button class="wizard-step" data-step="2" role="tab" aria-selected="false"><span class="wizard-num">2</span>Pick USB &amp; flash</button>
-        <label class="wizard-toggle">
-          <input type="checkbox" id="wizardToggle" />
-          Guided mode
-        </label>
-      </nav>
-
-      <section class="card card--primary" data-wizard-step="1">
-        <h2>1 &middot; Pick ISOs</h2>
-        <p class="subtitle">
-          <span class="badge badge--info" id="payloadBadge">Payload: checking…</span>
-          Drag ISOs onto this card, or run a rescan. Use ↑/↓ to move, Enter to select. <span id="defaultLabel"></span>
-        </p>
-        <div class="boot-progress" id="bootProgress">
-          <div class="boot-progress-fill" id="bootProgressFill"></div>
-        </div>
-        <div class="disks dropzone" id="entries" aria-label="Drop ISO images here"></div>
-        <p class="subtitle" id="entryNote"></p>
-      </section>
-
-      <section class="card card--primary panel" id="main" data-wizard-step="2" aria-labelledby="installHeading">
-        <h2 id="installHeading">2 &middot; Pick USB &amp; flash</h2>
-        <p class="subtitle">
-          <span class="badge badge--info" id="modeBadge">Dry-run · no changes made</span>
-        </p>
-        <div class="confirm">
-          <div><strong>ISO scan paths</strong></div>
-          <div><small>Comma-separated directories (default: /media, /mnt, /home)</small></div>
-          <input id="scanPaths" placeholder="/media,/mnt,/home" />
-          <button class="ghost" id="scanBtn">Rescan ISOs</button>
-        </div>
-        <div class="confirm" id="planContainer">
-          <div><strong>Install plan</strong></div>
-          <div class="plan" id="installPlan"></div>
-        </div>
-        <div class="disks" id="targets"></div>
-        <div class="confirm">
-          <div><strong>Selected:</strong> <span id="selected">None</span></div>
-          <div><small>Type the device path to confirm (e.g. /dev/sdb).</small></div>
-          <input id="confirmInput" placeholder="/dev/sdX" aria-label="Confirm target device path" />
-          <div class="confirm">
-            <label>
-              <input type="checkbox" id="acceptWrite" />
-              I understand this will erase the selected device.
-            </label>
-            <label>
-              <input type="checkbox" id="enableWrite" />
-              Enable actual write (not a dry-run).
-            </label>
-            <div><small>Type ERASE to proceed with actual write.</small></div>
-            <input id="confirmErase" placeholder="ERASE" aria-label="Type ERASE to confirm destructive write" />
-          </div>
-          <button class="primary cta-large" id="installBtn" disabled aria-label="Run install (dry-run by default)">Run Dry-Run Install</button>
-        </div>
-        <div class="banner" id="configBanner" role="status" aria-live="polite"></div>
-        <div class="progress" id="progress" role="log" aria-live="polite" aria-label="Install progress"></div>
-      </section>
-
-      <section class="card boot-config" id="bootConfig">
-        <details>
-          <summary>Advanced — Boot Config &amp; GRUB security</summary>
-          <p class="subtitle">Per-entry parameters and optional GRUB password gate. Most users can ignore this.</p>
-          <div class="actions actions--mb-3">
-            <button class="ghost" id="resetParams">Reset Params</button>
-            <label class="entry-default">
-              <input type="checkbox" id="saveOnInstallOnly" />
-              Save config only after install
-            </label>
-          </div>
-          <details class="boot-global">
-            <summary>Global menu settings</summary>
-            <div class="boot-global-row">
-              <label class="entry-default">
-                <input type="checkbox" id="globalTreeView" />
-                Group entries by class (TreeView)
-              </label>
-              <label class="entry-default">
-                <input type="checkbox" id="globalEnableDiskBrowser" />
-                Add "Browse local disks" entry (F2 hotkey)
-              </label>
-              <div><small>GRUB superuser (optional, sanitised)</small></div>
-              <input id="globalGrubSuperuser" placeholder="admin" aria-label="GRUB superuser name" />
-              <div><small>GRUB PBKDF2 password hash (output of <code>grub-mkpasswd-pbkdf2</code>)</small></div>
-              <input id="globalGrubPasswordPbkdf2" placeholder="grub.pbkdf2.sha512.…" aria-label="GRUB PBKDF2 password hash" />
-              <div class="subtitle"><small>Plaintext is rejected; both fields must be set together for the password gate to activate.</small></div>
+      <main class="shell" aria-label="RaidhOS">
+        <div class="modal" id="resetModal" role="dialog" aria-modal="true" aria-labelledby="resetModalTitle">
+          <div class="modal-card">
+            <strong id="resetModalTitle">Reset all parameters?</strong>
+            <p class="subtitle">This will revert params, initrd, and kernel args for all entries.</p>
+            <div class="modal-actions">
+              <button class="ghost" id="cancelReset">Cancel</button>
+              <button class="primary" id="confirmReset">Reset</button>
             </div>
-          </details>
-          <div class="disks" id="entriesConfig"></div>
-        </details>
-      </section>
+          </div>
+        </div>
 
-      <section class="card footer">
-        Cross-platform core in Rust. UI powered by Tauri.
-      </section>
-    </main>
+        <header class="top-bar">
+          <div class="top-bar-title">
+            <h1>Flash a USB</h1>
+            <p class="subtitle" id="topSubtitle">Build a multi-ISO bootable USB on macOS / Linux / Windows.</p>
+          </div>
+          <div class="top-bar-actions">
+            <span class="subtitle" id="lastSaved" aria-live="polite"></span>
+            <button class="ghost" id="saveConfig" aria-label="Save boot configuration">Save Config</button>
+          </div>
+        </header>
+
+        <nav class="wizard-nav" role="tablist" aria-label="Install steps">
+          <button class="wizard-step active" data-step="1" role="tab" aria-selected="true">
+            <span class="wizard-num">1</span><span class="wizard-text">Pick ISOs</span>
+          </button>
+          <span class="wizard-rail" aria-hidden="true"></span>
+          <button class="wizard-step" data-step="2" role="tab" aria-selected="false">
+            <span class="wizard-num">2</span><span class="wizard-text">Pick USB &amp; flash</span>
+          </button>
+          <label class="wizard-toggle">
+            <input type="checkbox" id="wizardToggle" />
+            <span>Guided mode</span>
+          </label>
+        </nav>
+
+        <section class="card card--primary" data-wizard-step="1" aria-label="Pick ISOs">
+          <div class="card-head">
+            <span class="badge badge--info" id="payloadBadge">Payload: checking…</span>
+            <span class="subtitle" id="defaultLabel"></span>
+          </div>
+          <div class="boot-progress" id="bootProgress">
+            <div class="boot-progress-fill" id="bootProgressFill"></div>
+          </div>
+          <div class="dropzone-hero" id="dropzoneHero">
+            <div class="dropzone-icon" aria-hidden="true">⤓</div>
+            <div class="dropzone-title">Drag &amp; drop ISOs here</div>
+            <div class="dropzone-sub" id="dropzoneSub">or browse your filesystem</div>
+            <div class="dropzone-actions">
+              <button class="primary" id="browseIsosBtn">Browse for ISOs…</button>
+              <button class="ghost" id="scanBtn">Rescan default folders</button>
+            </div>
+          </div>
+          <div class="disks dropzone" id="entries" aria-label="Drop ISO images here"></div>
+          <p class="subtitle" id="entryNote"></p>
+        </section>
+
+        <section class="card card--primary panel" id="main" data-wizard-step="2" aria-labelledby="installHeading">
+          <div class="card-head">
+            <h2 id="installHeading" class="sr-only">Pick USB &amp; flash</h2>
+            <span class="badge badge--info" id="modeBadge">Dry-run · no changes made</span>
+          </div>
+          <div class="confirm">
+            <div class="row-with-action">
+              <div>
+                <strong>Target devices</strong>
+                <div><small id="targetsHint">Pick a removable drive. System disks are blocked.</small></div>
+              </div>
+              <button class="ghost" id="refresh" aria-label="Refresh disks">↻ Refresh disks</button>
+            </div>
+          </div>
+          <div class="disks" id="targets"></div>
+          <div class="confirm" id="planContainer">
+            <div><strong>Install plan</strong></div>
+            <div class="plan" id="installPlan"></div>
+          </div>
+          <div class="confirm">
+            <div><strong>Selected:</strong> <span id="selected">None</span></div>
+            <div><small>Type the device path to confirm (e.g. /dev/sdb).</small></div>
+            <input id="confirmInput" placeholder="/dev/sdX" aria-label="Confirm target device path" />
+            <div class="confirm">
+              <label>
+                <input type="checkbox" id="acceptWrite" />
+                I understand this will erase the selected device.
+              </label>
+              <label>
+                <input type="checkbox" id="enableWrite" />
+                Enable actual write (not a dry-run).
+              </label>
+              <div><small>Type ERASE to proceed with actual write.</small></div>
+              <input id="confirmErase" placeholder="ERASE" aria-label="Type ERASE to confirm destructive write" />
+            </div>
+            <button class="primary cta-large" id="installBtn" disabled aria-label="Run install (dry-run by default)">Run Dry-Run Install</button>
+          </div>
+          <div class="banner" id="configBanner" role="status" aria-live="polite"></div>
+          <div class="progress" id="progress" role="log" aria-live="polite" aria-label="Install progress"></div>
+        </section>
+
+        <section class="card boot-config" id="bootConfig">
+          <details>
+            <summary>Advanced — Boot Config &amp; GRUB security</summary>
+            <p class="subtitle">Per-entry parameters and optional GRUB password gate. Most users can ignore this.</p>
+            <div class="actions actions--mb-3">
+              <button class="ghost" id="resetParams">Reset Params</button>
+              <label class="entry-default">
+                <input type="checkbox" id="saveOnInstallOnly" />
+                Save config only after install
+              </label>
+            </div>
+            <details class="boot-global">
+              <summary>Global menu settings</summary>
+              <div class="boot-global-row">
+                <label class="entry-default">
+                  <input type="checkbox" id="globalTreeView" />
+                  Group entries by class (TreeView)
+                </label>
+                <label class="entry-default">
+                  <input type="checkbox" id="globalEnableDiskBrowser" />
+                  Add "Browse local disks" entry (F2 hotkey)
+                </label>
+                <div><small>ISO scan paths</small></div>
+                <input id="scanPaths" placeholder="auto-detected per OS" />
+                <div><small>GRUB superuser (optional, sanitised)</small></div>
+                <input id="globalGrubSuperuser" placeholder="admin" aria-label="GRUB superuser name" />
+                <div><small>GRUB PBKDF2 password hash (output of <code>grub-mkpasswd-pbkdf2</code>)</small></div>
+                <input id="globalGrubPasswordPbkdf2" placeholder="grub.pbkdf2.sha512.…" aria-label="GRUB PBKDF2 password hash" />
+                <div class="subtitle"><small>Plaintext is rejected; both fields must be set together for the password gate to activate.</small></div>
+              </div>
+            </details>
+            <div class="disks" id="entriesConfig"></div>
+          </details>
+        </section>
+
+        <section class="card footer">
+          Cross-platform core in Rust. UI powered by Tauri.
+        </section>
+      </main>
+    </div>
 
     <script src="app.js"></script>
   </body>
