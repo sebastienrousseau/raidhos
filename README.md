@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 
 <p align="center">
-  <img src="docs/screenshots/raidhos.svg" alt="RaidhOS logo" width="128" onerror="this.style.display='none'" />
+  <img src="https://cloudcdn.pro/clients/raidhos/v1/logos/raidhos.svg" alt="RaidhOS logo" width="128" onerror="this.style.display='none'" />
 </p>
 
 <h1 align="center">RaidhOS</h1>
