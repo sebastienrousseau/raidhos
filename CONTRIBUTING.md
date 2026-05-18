@@ -42,7 +42,28 @@ cargo clippy --workspace --exclude raidhos-ui --all-targets -- -D warnings
 cargo test --workspace --exclude raidhos-ui
 ```
 
-Coverage runs in CI via `cargo-tarpaulin` against `raidhos-core`.
+## CI gates — match these before pushing
+
+CI on `feat/v0.0.1` enforces the gates below. Running them
+locally before pushing saves a round-trip.
+
+| Gate | Command | Floor |
+|---|---|---|
+| Format | `cargo fmt --all -- --check` | clean |
+| Lint | `cargo clippy --workspace --exclude raidhos-ui --all-targets -- -D warnings` | zero warnings |
+| Tests | `cargo test --workspace --exclude raidhos-ui` | all green |
+| MSRV | `cargo +1.78 check --workspace --exclude raidhos-ui --all-targets` | clean |
+| Coverage (core) | `cargo tarpaulin -p raidhos-core --exclude-files 'crates/{cli,priv-helper,ui-tauri}/**' --exclude-files 'fuzz/**'` | `--fail-under 100` |
+| Coverage (cli) | same shape, `-p raidhos-cli --engine llvm --exclude-files 'crates/cli/tests/**'` (plus the other crate excludes) | `--fail-under 100` |
+| Coverage (priv-helper) | same shape, `-p raidhos-priv-helper --engine llvm` | `--fail-under 90` (Linux); 100% on macOS dev hosts |
+| Supply chain | `cargo deny check` and `cargo audit` | exit 0 with the ignores documented in `deny.toml` |
+
+The 100% coverage gates on `raidhos-core` and `raidhos-cli` are
+strict on purpose — any new pub item or branch needs a test, and
+binary `main()` should delegate to testable helpers rather than
+hand-roll subprocess dispatch. The 90% priv-helper floor reflects
+the privileged paths (TOCTOU pin, persistence overlay) that need
+real root + block devices; closing that gap is v0.0.2 work.
 
 ## Running the CLI
 
