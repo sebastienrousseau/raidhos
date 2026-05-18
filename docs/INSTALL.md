@@ -167,10 +167,13 @@ The bootstrap scripts under
 
 ## macOS
 
-> **v0.0.1 on macOS**: discovery (`list-disks`), validation, and
-> dry-run work today. The destructive install path is wired but
-> needs hardware validation before being declared stable. Track
-> progress in [`V0_0_1_STATUS.md`](V0_0_1_STATUS.md).
+> **v0.0.1 on macOS**: discovery (`list-disks`), validation,
+> dry-run, and the destructive install path all work — the
+> install pipeline is exercised in CI against virtual disks on
+> macOS x86_64 + aarch64 every push. The only remaining v0.0.1
+> caveat is one physical-USB validation pass on real hardware
+> before the macOS path is declared stable. Track progress in
+> [`V0_0_1_STATUS.md`](V0_0_1_STATUS.md).
 
 ### Homebrew (recommended)
 
@@ -198,9 +201,11 @@ runtime deps.
 ## Windows
 
 > **v0.0.1 on Windows**: discovery (`list-disks`), validation,
-> and dry-run work today. The destructive install path is
-> wired but needs hardware validation before being declared
-> stable.
+> dry-run, and the destructive install path all work — the
+> install pipeline is exercised in CI against virtual disks on
+> Windows x86_64 + aarch64 every push. The only remaining
+> v0.0.1 caveat is one physical-USB validation pass on real
+> hardware before the Windows path is declared stable.
 
 ### winget (recommended)
 
