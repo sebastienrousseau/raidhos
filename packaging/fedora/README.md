@@ -2,14 +2,22 @@
 
 # Fedora / RHEL / Rocky / Alma / openSUSE packaging
 
-This directory contains the RPM `.spec` published via Fedora COPR.
-One spec covers every RPM-family distro:
+This directory contains two RPM `.spec` files:
 
-| Distro | Tested | How to install |
+| Spec | Builds from | Use case |
 |---|---|---|
-| Fedora ≥ 39 | yes | `sudo dnf copr enable sebastienrousseau/raidhos && sudo dnf install raidhos` |
-| RHEL 9 / Rocky 9 / Alma 9 | yes | same `dnf copr enable …`; requires `crb` enabled for `cargo` |
-| CentOS Stream 9 | yes | same |
+| [`raidhos.spec`](raidhos.spec) | Source tarball at `v$VERSION` | Fedora COPR — source-built under the COPR runners' Rust. Works on Fedora N / N-1. |
+| [`raidhos-bin.spec`](raidhos-bin.spec) | Pre-built signed release tarball | Released as `.rpm` asset on every tag. No Rust toolchain, no COPR enable, works on RHEL / Rocky / Alma / CentOS Stream 9+ as well as Fedora. |
+
+Both produce the same on-disk layout (see [File layout produced](#file-layout-produced) below).
+
+## Install paths
+
+| Distro | Recommended | How to install |
+|---|---|---|
+| Fedora ≥ 41 | COPR (current release) or release `.rpm` | `sudo dnf copr enable sebastienrousseau/raidhos && sudo dnf install raidhos`  *or*  `sudo dnf install ./raidhos-bin-${VERSION}-1.x86_64.rpm` |
+| RHEL 9 / Rocky 9 / Alma 9 | release `.rpm` | `curl -LO …/raidhos-bin-${VERSION}-1.x86_64.rpm && sudo dnf install ./raidhos-bin-…rpm` |
+| CentOS Stream 9 | release `.rpm` | same as RHEL |
 | openSUSE Tumbleweed | manual | `sudo zypper ar https://copr.fedorainfracloud.org/coprs/sebastienrousseau/raidhos/repo/openSUSE-Tumbleweed/raidhos.repo` |
 
 The Tauri 2 GUI is **not** in this RPM (webkit2gtk + libsoup3

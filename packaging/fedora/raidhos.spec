@@ -25,8 +25,8 @@ URL:            https://github.com/sebastienrousseau/raidhos
 Source0:        %{url}/archive/refs/tags/v%{version}.tar.gz#/%{name}-%{version}.tar.gz
 
 # Build tooling
-BuildRequires:  cargo                  >= 1.78
-BuildRequires:  rust                   >= 1.78
+BuildRequires:  cargo                  >= 1.85
+BuildRequires:  rust                   >= 1.85
 BuildRequires:  pkgconf-pkg-config
 BuildRequires:  gcc
 

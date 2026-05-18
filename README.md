@@ -78,7 +78,8 @@
 | Debian/Ubuntu (.deb) | `sudo dpkg -i raidhos_0.0.1_amd64.deb` | Debian, Ubuntu, Mint, Pop!_OS |
 | pacman (release .pkg.tar.zst) | `curl -LO https://github.com/sebastienrousseau/raidhos/releases/download/v0.0.1/raidhos-bin-0.0.1-1-x86_64.pkg.tar.zst && sudo pacman -U raidhos-bin-0.0.1-1-x86_64.pkg.tar.zst` | CachyOS, Arch, Manjaro, EndeavourOS, Garuda — no AUR helper needed |
 | AUR (`raidhos` / `raidhos-bin`) | `yay -S raidhos` *(source)* or `yay -S raidhos-bin` *(prebuilt)* | Arch, CachyOS, Manjaro, EndeavourOS, Garuda |
-| Fedora COPR | `sudo dnf copr enable sebastienrousseau/raidhos && sudo dnf install raidhos` | Fedora, RHEL 9+, Rocky, Alma, CentOS Stream |
+| dnf (release `.rpm`) | `curl -LO https://github.com/sebastienrousseau/raidhos/releases/download/v0.0.1/raidhos-bin-0.0.1-1.x86_64.rpm && sudo dnf install ./raidhos-bin-0.0.1-1.x86_64.rpm` | Fedora 41+, RHEL 9+, Rocky, Alma, CentOS Stream — no COPR enable needed |
+| Fedora COPR | `sudo dnf copr enable sebastienrousseau/raidhos && sudo dnf install raidhos` | Fedora N / N-1 (source-built) |
 | Flatpak (Flathub) | `flatpak install flathub io.github.sebastienrousseau.raidhos` | Silverblue, Kinoite, Bazzite, SteamOS, NixOS, openSUSE Aeon |
 | AppImage (portable) | Download from [Releases](https://github.com/sebastienrousseau/raidhos/releases), `chmod +x`, run | Any glibc Linux |
 | Cargo (from source) | `cargo install --git https://github.com/sebastienrousseau/raidhos raidhos-cli` | Anywhere with Rust ≥ 1.85 |

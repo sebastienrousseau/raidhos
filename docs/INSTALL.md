@@ -110,11 +110,37 @@ supported CPU. If you want a v3 / v4-optimised local build,
 use the AUR `raidhos` source package; rustup will pick up your
 `RUSTFLAGS`.
 
-### Fedora / RHEL (`.rpm` — coming with v0.0.1 release)
+### Fedora / RHEL / Rocky / Alma / CentOS Stream
+
+Two paths, depending on whether you can enable a COPR repo:
 
 ```bash
-sudo dnf install ./raidhos-${VERSION}-1.x86_64.rpm
+# 1. Straight dnf against the release .rpm.
+#    No COPR enable, no Rust toolchain, no rpmbuild.
+curl -LO https://github.com/sebastienrousseau/raidhos/releases/download/v${VERSION}/raidhos-bin-${VERSION}-1.x86_64.rpm
+# (Recommended) cosign-verify the source tarball before install:
+cosign verify-blob \
+    --certificate-identity-regexp 'https://github.com/sebastienrousseau/raidhos/.*' \
+    --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+    --signature raidhos-${VERSION}-x86_64-unknown-linux-gnu.tar.gz.sig \
+    --certificate raidhos-${VERSION}-x86_64-unknown-linux-gnu.tar.gz.pem \
+    raidhos-${VERSION}-x86_64-unknown-linux-gnu.tar.gz
+sudo dnf install ./raidhos-bin-${VERSION}-1.x86_64.rpm
 ```
+
+```bash
+# 2. Fedora COPR — source-built under the COPR runners' rust.
+#    Works on Fedora N (current) and -1 only; for RHEL / Rocky /
+#    Alma / CentOS Stream use path 1 instead.
+sudo dnf copr enable sebastienrousseau/raidhos
+sudo dnf install raidhos
+```
+
+The binary `.rpm` is `noarch`-free — it ships the same x86_64
+or aarch64 binary as every other Linux channel and works on
+RHEL 9+ / Rocky 9+ / Alma 9+ / CentOS Stream 9+ as well as
+Fedora 41+. There's no `BuildRequires:` so you don't need a
+Rust toolchain or pkgconf headers in the install environment.
 
 ### AppImage (any modern glibc-based distro)
 

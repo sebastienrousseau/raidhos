@@ -242,9 +242,66 @@ jobs:
           path: /tmp/pkgbuild/*.pkg.tar.zst
           if-no-files-found: error
 
+  rpm-bin:
+    name: Fedora / RHEL .rpm
+    needs: build
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:latest
+      options: --user root
+    strategy:
+      fail-fast: false
+      matrix:
+        rpm_arch: [x86_64, aarch64]
+    steps:
+      - name: Install rpmbuild + util
+        run: dnf install -y rpm-build git findutils tar
+
+      - uses: actions/checkout@v4
+
+      - name: Download Linux release tarballs from the build job
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Stage the tarball where rpmbuild expects it
+        # The bin spec's Source0 is a `releases/download/...` URL.
+        # At tag-build time the release doesn't exist yet, so we
+        # pre-stage the tarball in ~/rpmbuild/SOURCES with the
+        # filename rpmbuild expects after URL-stripping.
+        run: |
+          set -eux
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          PKGVER="${TAG#v}"
+          ARCH="${{ matrix.rpm_arch }}"
+          mkdir -p ~/rpmbuild/SOURCES
+          cp "artifacts/raidhos-${ARCH}-unknown-linux-gnu/raidhos-${PKGVER}-${ARCH}-unknown-linux-gnu.tar.gz" \
+             "$HOME/rpmbuild/SOURCES/raidhos-${PKGVER}-${ARCH}-unknown-linux-gnu.tar.gz"
+          # Pin Version: to the actual tag.
+          sed -i "s/^Version:.*/Version:        ${PKGVER}/" packaging/fedora/raidhos-bin.spec
+          echo "PKGVER=${PKGVER}" >> "$GITHUB_ENV"
+
+      - name: rpmbuild
+        run: |
+          set -eux
+          # `--target` so we always produce the arch we asked for,
+          # even if the runner is x86_64. The bin spec is
+          # ExclusiveArch x86_64/aarch64; rpmbuild does the right
+          # thing for a noarch-pure repackage like this.
+          rpmbuild -bb packaging/fedora/raidhos-bin.spec \
+            --target "${{ matrix.rpm_arch }}-linux"
+          find ~/rpmbuild/RPMS -name '*.rpm' -print
+
+      - name: Upload the .rpm
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpm-bin-${{ matrix.rpm_arch }}
+          path: /github/home/rpmbuild/RPMS/${{ matrix.rpm_arch }}/*.rpm
+          if-no-files-found: error
+
   publish:
     name: Publish GitHub Release
-    needs: [build, sbom, grub, arch-pkg]
+    needs: [build, sbom, grub, arch-pkg, rpm-bin]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

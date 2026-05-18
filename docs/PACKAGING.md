@@ -34,8 +34,10 @@ how to use them and what RaidhOS expects from its environment.
 | Homebrew (personal tap) | upstream | [`packaging/homebrew/raidhos.rb`](../packaging/homebrew/raidhos.rb) |
 | winget | upstream | [`packaging/winget/sebastienrousseau.RaidhOS.yaml`](../packaging/winget/sebastienrousseau.RaidhOS.yaml) |
 | AppImage | upstream | [`packaging/appimage/build-appimage.sh`](../packaging/appimage/build-appimage.sh) |
-| AUR | community | not yet shipped |
-| Fedora `.rpm` | community | not yet shipped |
+| AUR (`raidhos` / `raidhos-bin`) | upstream | [`packaging/arch/PKGBUILD`](../packaging/arch/PKGBUILD), [`packaging/arch/PKGBUILD.bin`](../packaging/arch/PKGBUILD.bin) |
+| pacman `.pkg.tar.zst` (release asset) | upstream | built by `arch-pkg` in [`release.yml`](../.github/workflows/release.yml) |
+| Fedora COPR (`raidhos`, source) | upstream | [`packaging/fedora/raidhos.spec`](../packaging/fedora/raidhos.spec) |
+| Fedora / RHEL `.rpm` (release asset, binary-only) | upstream | [`packaging/fedora/raidhos-bin.spec`](../packaging/fedora/raidhos-bin.spec) (built by `rpm-bin` in [`release.yml`](../.github/workflows/release.yml)) |
 | nixpkgs | community | not yet shipped |
 | conda-forge | community | not yet shipped |
 | scoop | community | not yet shipped |
