@@ -33,7 +33,7 @@
 
 **Getting started**
 
-- [Install](#install) — Homebrew, winget, deb, AUR, Fedora COPR, Flatpak, AppImage, Cargo, source
+- [Install](#install) — Homebrew, winget, deb, pacman, AUR, Fedora COPR, Flatpak, AppImage, Cargo, source
 - [Preview without flashing](#preview-without-flashing) — `--simulator` mode against a sparse file
 - [Quick start](#quick-start) — list disks, dry-run, install in five lines
 - [Verifying a release](#verifying-a-release) — cosign + SLSA + SHA-256
@@ -76,6 +76,7 @@
 | Homebrew (personal tap) | `brew tap sebastienrousseau/tap && brew install raidhos` | macOS, Linuxbrew |
 | winget (Windows) | `winget install sebastienrousseau.RaidhOS` | Windows 10/11 |
 | Debian/Ubuntu (.deb) | `sudo dpkg -i raidhos_0.0.1_amd64.deb` | Debian, Ubuntu, Mint, Pop!_OS |
+| pacman (release .pkg.tar.zst) | `curl -LO https://github.com/sebastienrousseau/raidhos/releases/download/v0.0.1/raidhos-bin-0.0.1-1-x86_64.pkg.tar.zst && sudo pacman -U raidhos-bin-0.0.1-1-x86_64.pkg.tar.zst` | CachyOS, Arch, Manjaro, EndeavourOS, Garuda — no AUR helper needed |
 | AUR (`raidhos` / `raidhos-bin`) | `yay -S raidhos` *(source)* or `yay -S raidhos-bin` *(prebuilt)* | Arch, CachyOS, Manjaro, EndeavourOS, Garuda |
 | Fedora COPR | `sudo dnf copr enable sebastienrousseau/raidhos && sudo dnf install raidhos` | Fedora, RHEL 9+, Rocky, Alma, CentOS Stream |
 | Flatpak (Flathub) | `flatpak install flathub io.github.sebastienrousseau.raidhos` | Silverblue, Kinoite, Bazzite, SteamOS, NixOS, openSUSE Aeon |

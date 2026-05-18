@@ -26,18 +26,40 @@ Both produce the same on-disk layout:
 
 ## Install for end users
 
+Three paths, in order of "least new machinery":
+
 ```bash
-# From source (vanilla AUR helper, e.g. yay):
-yay -S raidhos
-
-# Pre-built binary, cosign-verified:
-yay -S raidhos-bin
-
-# Or pacstall, paru, pikaur, etc. — pick your favourite.
+# 1. Straight pacman against the release .pkg.tar.zst.
+#    No AUR helper, no makepkg, nothing to clone.
+curl -LO https://github.com/sebastienrousseau/raidhos/releases/download/v0.0.1/raidhos-bin-0.0.1-1-x86_64.pkg.tar.zst
+sudo pacman -U raidhos-bin-0.0.1-1-x86_64.pkg.tar.zst
 ```
 
-CachyOS users can install via the same commands; CachyOS uses
-the AUR directly.
+```bash
+# 2. AUR — same package, fetched and built by your AUR helper.
+yay -S raidhos-bin     # pre-built binary, cosign-verified
+yay -S raidhos         # build from source under your rustup
+# Or paru, pikaur, pacstall — pick your favourite helper.
+```
+
+```bash
+# 3. makepkg from this repo (developers / packagers).
+makepkg -si -p PKGBUILD.bin     # prebuilt binary
+# or
+makepkg -si                     # builds from source
+```
+
+**CachyOS** users get the same binary as Arch — the package is
+built with `-march=x86-64` (not `-march=x86-64-v3`), so it runs
+on every supported CPU. If you want a v3 / v4-optimised local
+build, use the AUR `raidhos` source package; rustup will pick
+up your `RUSTFLAGS`.
+
+The `.pkg.tar.zst` is published as a release asset by
+[`arch-pkg` in `.github/workflows/release.yml`](../../.github/workflows/release.yml).
+It's built inside an `archlinux:base-devel` container against
+the same `raidhos-${VERSION}-x86_64-unknown-linux-gnu.tar.gz`
+that ships as the standard Linux tarball.
 
 ## Verify the binary release first
 

@@ -26,7 +26,7 @@ see [`USER_GUIDE.md`](USER_GUIDE.md) once you have the binary.
 flowchart LR
   USER([You]) --> OS{Your OS}
   OS -->|Linux Debian/Ubuntu| DEB[sudo dpkg -i raidhos_*.deb]
-  OS -->|Linux Arch| AUR[yay -S raidhos-bin]
+  OS -->|Linux Arch / CachyOS / Manjaro| AUR[pacman -U …pkg.tar.zst<br/>or yay -S raidhos-bin]
   OS -->|Linux any| AI[chmod +x RaidhOS-*.AppImage]
   OS -->|macOS| HB[brew install raidhos]
   OS -->|Windows| WG[winget install sebastienrousseau.RaidhOS]
@@ -70,13 +70,45 @@ The package installs:
 - `/usr/share/bash-completion/completions/raidhos-cli`
 - (and the zsh / fish completion files in their usual places)
 
-### Arch / Manjaro (AUR — coming with v0.0.1 release)
+### CachyOS / Arch / Manjaro / EndeavourOS / Garuda
+
+Three install paths, in order of "least new machinery":
 
 ```bash
-yay -S raidhos-bin       # pre-built binary, signed
-# or
-yay -S raidhos           # build from source
+# 1. Straight pacman against the release .pkg.tar.zst.
+#    No AUR helper, no makepkg — works on a fresh box.
+curl -LO https://github.com/sebastienrousseau/raidhos/releases/download/v${VERSION}/raidhos-bin-${VERSION}-1-x86_64.pkg.tar.zst
+# (Recommended) verify the cosign signature before installing:
+cosign verify-blob \
+    --certificate-identity-regexp 'https://github.com/sebastienrousseau/raidhos/.*' \
+    --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+    --signature raidhos-${VERSION}-x86_64-unknown-linux-gnu.tar.gz.sig \
+    --certificate raidhos-${VERSION}-x86_64-unknown-linux-gnu.tar.gz.pem \
+    raidhos-${VERSION}-x86_64-unknown-linux-gnu.tar.gz
+sudo pacman -U raidhos-bin-${VERSION}-1-x86_64.pkg.tar.zst
 ```
+
+```bash
+# 2. AUR — same package, fetched and built by your AUR helper.
+yay -S raidhos-bin       # pre-built binary, cosign-verified
+# or
+yay -S raidhos           # build from source under your rustup
+```
+
+```bash
+# 3. makepkg from the repo (developers / packagers).
+git clone https://github.com/sebastienrousseau/raidhos.git
+cd raidhos/packaging/arch
+makepkg -si              # uses PKGBUILD (source build)
+# or
+makepkg -si -p PKGBUILD.bin
+```
+
+CachyOS users get the same binary as Arch — the package is
+`-march=x86-64` (not `-march=x86-64-v3`), so it runs on every
+supported CPU. If you want a v3 / v4-optimised local build,
+use the AUR `raidhos` source package; rustup will pick up your
+`RUSTFLAGS`.
 
 ### Fedora / RHEL (`.rpm` — coming with v0.0.1 release)
 

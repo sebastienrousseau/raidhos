@@ -177,9 +177,74 @@ jobs:
             BOOTX64.EFI.pem
           if-no-files-found: error
 
+  arch-pkg:
+    name: Arch / CachyOS .pkg.tar.zst
+    needs: build
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+      options: --user root
+    steps:
+      # actions/checkout has GLIBC requirements; the archlinux:base-devel
+      # image is current enough but missing git for the action's clone
+      # step. Install it first.
+      - name: Install git inside the container
+        run: pacman -Syu --noconfirm --needed git
+
+      - uses: actions/checkout@v4
+
+      - name: Download Linux release tarballs from the build job
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Stage the prebuilt tarballs where makepkg expects them
+        # makepkg's `source_*` array would normally fetch from
+        # `releases/download/v<ver>/...` — but at tag-build time the
+        # release doesn't exist yet. Pre-populate $SRCDEST with the
+        # tarballs from the upstream build job and use `--noextract`
+        # to skip the download.
+        run: |
+          set -eux
+          # Extract the version from the tag (drop the leading `v`).
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          PKGVER="${TAG#v}"
+          # The build job's artifacts are split per-target under
+          # `artifacts/raidhos-${target}/`. We need the linux-gnu ones.
+          mkdir -p /tmp/srcdest
+          cp "artifacts/raidhos-x86_64-unknown-linux-gnu/raidhos-${PKGVER}-x86_64-unknown-linux-gnu.tar.gz" \
+             "/tmp/srcdest/raidhos-${PKGVER}-x86_64.tar.gz"
+          cp "artifacts/raidhos-aarch64-unknown-linux-gnu/raidhos-${PKGVER}-aarch64-unknown-linux-gnu.tar.gz" \
+             "/tmp/srcdest/raidhos-${PKGVER}-aarch64.tar.gz"
+          # Drop the PKGBUILD into its own work dir so the build user
+          # can read it without owning the whole repo checkout.
+          mkdir -p /tmp/pkgbuild
+          cp packaging/arch/PKGBUILD.bin /tmp/pkgbuild/PKGBUILD
+          # Pin pkgver to the tag we're building (PKGBUILD.bin's default
+          # is the latest published version and may lag the tag).
+          sed -i "s/^pkgver=.*/pkgver=${PKGVER}/" /tmp/pkgbuild/PKGBUILD
+          chown -R nobody:nobody /tmp/pkgbuild /tmp/srcdest
+
+      - name: makepkg (x86_64)
+        run: |
+          set -eux
+          cd /tmp/pkgbuild
+          sudo -u nobody env SRCDEST=/tmp/srcdest \
+            makepkg -fc --skipinteg --noconfirm --noextract -A
+          # `-A` ignores arch mismatches in case the runner is x86_64
+          # but the PKGBUILD's arch list checks aarch64 too. Final
+          # artefact name: raidhos-bin-${PKGVER}-1-x86_64.pkg.tar.zst.
+
+      - name: Upload the .pkg.tar.zst
+        uses: actions/upload-artifact@v4
+        with:
+          name: arch-pkg
+          path: /tmp/pkgbuild/*.pkg.tar.zst
+          if-no-files-found: error
+
   publish:
     name: Publish GitHub Release
-    needs: [build, sbom, grub]
+    needs: [build, sbom, grub, arch-pkg]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
