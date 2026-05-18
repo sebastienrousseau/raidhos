@@ -30,6 +30,7 @@ This document walks through verifying any of them.
 - [What you need](#what-you-need)
 - [Recipe — Linux / macOS](#recipe--linux--macos)
 - [Recipe — Windows](#recipe--windows)
+- [Verifying the native packages (`.pkg.tar.zst`, `.rpm`)](#verifying-the-native-packages-pkgtarzst-rpm)
 - [Verifying the SBOM](#verifying-the-sbom)
 - [Verifying SLSA provenance](#verifying-slsa-provenance)
 - [Verifying the bundled `BOOTX64.EFI`](#verifying-the-bundled-bootx64efi)
@@ -144,6 +145,60 @@ gh attestation verify $Archive --owner sebastienrousseau
 # 5. If all three pass, extract.
 Expand-Archive $Archive -DestinationPath .
 ```
+
+---
+
+## Verifying the native packages (`.pkg.tar.zst`, `.rpm`)
+
+Each release also ships pre-built native packages so you can
+`sudo pacman -U …pkg.tar.zst` (Arch / CachyOS / Manjaro /
+EndeavourOS / Garuda) and `sudo dnf install ./…rpm`
+(Fedora 41+, RHEL 9+, Rocky, Alma, CentOS Stream) without an
+AUR helper or COPR enable.
+
+The packages are **repackages of the cosign-signed Linux
+tarball** — no second build, no second signature. The
+verification path is:
+
+1. Download the tarball + signature alongside the package, and
+   run the [Recipe — Linux / macOS](#recipe--linux--macos)
+   block against the tarball.
+2. Verify the package's own SHA-256 against the line in the
+   release's `SHA256SUMS`.
+3. Install the package.
+
+```bash
+VERSION=0.0.1
+ARCH=x86_64   # or aarch64
+
+# Pull the tarball + signature + the package.
+gh release download "v${VERSION}" \
+    --repo sebastienrousseau/raidhos \
+    --pattern "raidhos-${VERSION}-${ARCH}-unknown-linux-gnu.tar.gz*" \
+    --pattern "raidhos-bin-${VERSION}*"
+
+# Verify the tarball (steps 1-3 of the Linux/macOS recipe).
+cosign verify-blob \
+    --certificate "raidhos-${VERSION}-${ARCH}-unknown-linux-gnu.tar.gz.pem" \
+    --signature   "raidhos-${VERSION}-${ARCH}-unknown-linux-gnu.tar.gz.sig" \
+    --certificate-identity-regexp "https://github.com/sebastienrousseau/raidhos/.+" \
+    --certificate-oidc-issuer     "https://token.actions.githubusercontent.com" \
+    "raidhos-${VERSION}-${ARCH}-unknown-linux-gnu.tar.gz"
+
+# Verify the package against SHA256SUMS.
+gh release download "v${VERSION}" \
+    --repo sebastienrousseau/raidhos --pattern "SHA256SUMS"
+grep -E "raidhos-bin-${VERSION}.*\\.(pkg\\.tar\\.zst|rpm)$" SHA256SUMS | sha256sum -c -
+
+# Install.
+sudo pacman -U raidhos-bin-${VERSION}-1-${ARCH}.pkg.tar.zst   # Arch family
+# or
+sudo dnf install ./raidhos-bin-${VERSION}-1.${ARCH}.rpm       # Fedora family
+```
+
+The SLSA L3 build-provenance attestation covers the source
+tarball; the package wrappers are byte-stable repackages so a
+provenance check on the tarball transitively covers them.
 
 ---
 
