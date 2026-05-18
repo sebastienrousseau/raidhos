@@ -108,7 +108,7 @@ which adds:
 - **seccomp-bpf denylist** (Linux) —
   [`crates/priv-helper/src/seccomp.rs`](../../priv-helper/src/seccomp.rs).
 - **polkit policy + pkexec wrapping** —
-  [`packaging/polkit/org.raidhos.priv.policy`](../../../packaging/polkit/org.raidhos.priv.policy).
+  [`packaging/linux/org.raidhos.policy`](../../../packaging/linux/org.raidhos.policy).
 - **argv length cap** before clap parses —
   [`crates/priv-helper/src/main.rs`](../../priv-helper/src/main.rs).
 

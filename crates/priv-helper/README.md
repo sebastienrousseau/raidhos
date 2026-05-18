@@ -223,7 +223,7 @@ The helper is **not** setuid. Elevation is delegated per host:
 
 | Host | Mechanism | Authoring |
 |---|---|---|
-| Linux | `pkexec` against [`org.raidhos.priv.policy`](../../packaging/polkit/org.raidhos.priv.policy) | Distros install the policy to `/usr/share/polkit-1/actions/` |
+| Linux | `pkexec` against [`org.raidhos.priv.policy`](../../packaging/linux/org.raidhos.policy) | Distros install the policy to `/usr/share/polkit-1/actions/` |
 | macOS | `osascript -e 'do shell script "…" with administrator privileges'` | Built into the GUI; no preinstalled policy |
 | Windows | `Start-Process -Verb RunAs` triggers UAC | Built into the GUI; no preinstalled policy |
 
@@ -303,7 +303,7 @@ real binary and assert on:
 | [`../../docs/HARDENING.md`](../../docs/HARDENING.md) | Workspace-wide hardening citations |
 | [`../../docs/THREAT_MODEL.md`](../../docs/THREAT_MODEL.md) | Attacker model this binary defends against |
 | [`../core/README.md`](../core/README.md) | Library the helper drives |
-| [`packaging/polkit/org.raidhos.priv.policy`](../../packaging/polkit/org.raidhos.priv.policy) | Linux polkit rule |
+| [`packaging/linux/org.raidhos.policy`](../../packaging/linux/org.raidhos.policy) | Linux polkit rule |
 
 ---
 

@@ -117,7 +117,7 @@ elevate. Each one prompts the user for authentication:
 
 | Host | Mechanism | Authoring |
 |---|---|---|
-| Linux | `pkexec` against [`org.raidhos.priv.policy`](../../../packaging/polkit/org.raidhos.priv.policy) | Installed by distro packages |
+| Linux | `pkexec` against [`org.raidhos.priv.policy`](../../../packaging/linux/org.raidhos.policy) | Installed by distro packages |
 | macOS | `osascript -e 'do shell script "…" with administrator privileges'` | Built into the GUI |
 | Windows | `Start-Process -Verb RunAs` triggers UAC | Built into the GUI |
 
