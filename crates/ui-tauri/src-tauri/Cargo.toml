@@ -19,6 +19,9 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-shell = "2"
 
+[dev-dependencies]
+sha2 = "0.10"
+
 [features]
 # Used for production builds (no dev server).
 custom-protocol = ["tauri/custom-protocol"]

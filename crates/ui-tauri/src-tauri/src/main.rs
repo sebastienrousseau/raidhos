@@ -39,6 +39,20 @@ struct PartitionInfo {
     mountpoints: Vec<String>,
 }
 
+/// Result of a pre-flight ISO verification: did we find a SHA-256
+/// companion file, did the recomputed hash match, and (if helpful)
+/// the hash itself for display.
+#[derive(Serialize)]
+struct IsoVerification {
+    /// One of `ok` (companion present + matched), `missing` (no
+    /// `<iso>.sha256` next to it — can't say either way), or
+    /// `mismatch` (companion present but the recomputed hash
+    /// differed — treat as corrupted / tampered).
+    kind: String,
+    /// Human-readable detail surfaced in the UI tooltip.
+    message: String,
+}
+
 #[derive(Deserialize, Serialize)]
 pub struct BootConfig {
     pub entries: Vec<BootEntryConfig>,
@@ -256,6 +270,48 @@ fn scan_isos(dirs: Vec<String>) -> Result<Vec<IsoEntry>, String> {
             params: e.params,
         })
         .collect())
+}
+
+/// Pre-flight check: look for a `<iso>.sha256` companion file
+/// alongside the ISO and verify the recomputed SHA-256 matches.
+/// Never errors out — returns a structured `IsoVerification` so the
+/// frontend can show a green/amber/red badge per entry. A `missing`
+/// result is the common case (most ISOs don't ship companion files
+/// in place) and should be shown neutrally, not as a failure.
+#[tauri::command]
+fn verify_iso(path: String) -> IsoVerification {
+    let p = std::path::Path::new(&path);
+    match core::verify_iso_companion_sha256(p) {
+        Ok(hash) => IsoVerification {
+            kind: "ok".to_string(),
+            message: format!("SHA-256 verified ({}…)", &hash[..16.min(hash.len())]),
+        },
+        Err(core::CatalogError::Sha256Mismatch { expected, computed }) => IsoVerification {
+            kind: "mismatch".to_string(),
+            message: format!(
+                "Hash mismatch — expected {}… got {}…",
+                &expected[..16.min(expected.len())],
+                &computed[..16.min(computed.len())]
+            ),
+        },
+        Err(e) => {
+            // Most "errors" here are just "no .sha256 companion file
+            // present". Surface them as `missing`, not failures, so
+            // the UX stays calm.
+            let msg = e.to_string();
+            if msg.contains("read companion") {
+                IsoVerification {
+                    kind: "missing".to_string(),
+                    message: "No SHA-256 companion file alongside the ISO".to_string(),
+                }
+            } else {
+                IsoVerification {
+                    kind: "missing".to_string(),
+                    message: msg,
+                }
+            }
+        }
+    }
 }
 
 #[tauri::command]
@@ -492,6 +548,7 @@ fn main() {
             write_boot_config_to_device,
             get_payload_version,
             list_partitions,
+            verify_iso,
             write_grub_cfg_to_esp,
             copy_isos_to_data,
             install_elevated
@@ -551,6 +608,85 @@ mod tests {
             s.contains("raidhos") || !pb.as_os_str().is_empty(),
             "unexpected config dir: {s}",
         );
+    }
+
+    #[test]
+    fn verify_iso_reports_missing_when_no_companion_file() {
+        let scratch = std::env::temp_dir().join(format!(
+            "raidhos-ui-verify-missing-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&scratch).unwrap();
+        let iso = scratch.join("ubuntu.iso");
+        std::fs::write(&iso, b"fake-iso-bytes").unwrap();
+
+        let v = verify_iso(iso.display().to_string());
+        assert_eq!(v.kind, "missing");
+        assert!(
+            v.message.contains("No SHA-256 companion") || v.message.contains("read companion"),
+            "unexpected message: {}",
+            v.message
+        );
+
+        std::fs::remove_dir_all(&scratch).ok();
+    }
+
+    #[test]
+    fn verify_iso_reports_ok_when_companion_matches() {
+        use sha2::{Digest, Sha256};
+        let scratch = std::env::temp_dir().join(format!(
+            "raidhos-ui-verify-ok-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&scratch).unwrap();
+        let iso = scratch.join("ubuntu.iso");
+        let body = b"fake-iso-bytes";
+        std::fs::write(&iso, body).unwrap();
+        let mut hasher = Sha256::new();
+        hasher.update(body);
+        let hex = format!("{:x}", hasher.finalize());
+        std::fs::write(scratch.join("ubuntu.iso.sha256"), &hex).unwrap();
+
+        let v = verify_iso(iso.display().to_string());
+        assert_eq!(v.kind, "ok", "message was: {}", v.message);
+        assert!(v.message.starts_with("SHA-256 verified"));
+
+        std::fs::remove_dir_all(&scratch).ok();
+    }
+
+    #[test]
+    fn verify_iso_reports_mismatch_when_companion_is_wrong() {
+        let scratch = std::env::temp_dir().join(format!(
+            "raidhos-ui-verify-mismatch-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&scratch).unwrap();
+        let iso = scratch.join("ubuntu.iso");
+        std::fs::write(&iso, b"fake-iso-bytes").unwrap();
+        // 64 hex chars but deliberately not the real hash.
+        std::fs::write(
+            scratch.join("ubuntu.iso.sha256"),
+            "0".repeat(64),
+        )
+        .unwrap();
+
+        let v = verify_iso(iso.display().to_string());
+        assert_eq!(v.kind, "mismatch");
+        assert!(v.message.contains("mismatch"), "msg: {}", v.message);
+
+        std::fs::remove_dir_all(&scratch).ok();
     }
 
     #[test]

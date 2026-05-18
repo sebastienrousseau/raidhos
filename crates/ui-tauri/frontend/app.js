@@ -48,6 +48,7 @@
       let selectedDataMount = null;
       let renderedTargets = [];
       let renderedEntries = [];
+      let totalIsoBytes = 0;
       let selectedIndex = -1;
       const BOOT_TIMEOUT_SECONDS = 7;
       let bootTimer = null;
@@ -81,15 +82,24 @@
         entries.forEach((entry) => {
           const el = document.createElement('div');
           el.className = 'disk';
+          // Each entry gets a per-ISO verification badge that starts
+          // neutral and is updated when verify_iso resolves. The
+          // .iso-verify span is scoped to this card via data-path.
           el.innerHTML = `
             <div>
               <strong>${entry.title}</strong>
               <div><small>${entry.subtitle}</small></div>
             </div>
-            <div class="pill">${entry.tag}</div>
+            <div class="iso-badges">
+              <span class="badge badge--info iso-verify" data-path="${entry.subtitle || ''}">Checking…</span>
+              <span class="pill">${entry.tag}</span>
+            </div>
           `;
           el.addEventListener('click', () => selectEntry(entry, el));
           entriesEl.appendChild(el);
+          // Fire and forget — the badge updates in place once the
+          // hash recompute finishes.
+          verifyEntryAsync(entry.subtitle, el.querySelector('.iso-verify'));
         });
 
         if (entriesConfigEl) {
@@ -265,6 +275,29 @@
         stopBootTimer();
       }
 
+      // Compute the safety verdict for a candidate target disk:
+      //   system  → red, blocked (will not let the user pick it)
+      //   small   → amber, allowed but warned
+      //   ok      → green, ready
+      // The "too small" threshold is the sum of the picked ISOs plus
+      // a 1 GiB headroom for ESP + GRUB. If we don't yet know the
+      // ISO sizes we just use a conservative 4 GiB minimum.
+      function diskVerdict(disk) {
+        if (disk.is_system) {
+          return { kind: 'system', label: 'System drive · blocked' };
+        }
+        const headroom = 1024 * 1024 * 1024; // 1 GiB ESP/GRUB
+        const fallback = 4 * 1024 * 1024 * 1024; // 4 GiB sane default
+        const needed = totalIsoBytes > 0 ? totalIsoBytes + headroom : fallback;
+        if (disk.size_bytes && disk.size_bytes < needed) {
+          return {
+            kind: 'small',
+            label: `Too small (${formatBytes(disk.size_bytes)} < ${formatBytes(needed)})`,
+          };
+        }
+        return { kind: 'ok', label: disk.removable ? 'Removable · ready' : 'Fixed · ready' };
+      }
+
       function renderTargets(disks) {
         renderedTargets = disks;
         targetsEl.innerHTML = '';
@@ -276,16 +309,23 @@
           const el = document.createElement('div');
           el.className = 'disk';
           const mounts = disk.mountpoints && disk.mountpoints.length ? ` · ${disk.mountpoints.join(', ')}` : '';
-          const tag = disk.is_system ? 'System' : (disk.removable ? 'Removable' : 'Fixed');
+          const verdict = diskVerdict(disk);
+          const badgeKind = verdict.kind === 'system'
+            ? 'danger'
+            : verdict.kind === 'small'
+              ? 'warn'
+              : 'ok';
           el.innerHTML = `
             <div>
               <strong>${disk.id}</strong>
               <div><small>${disk.model || 'Unknown model'} · ${formatBytes(disk.size_bytes)}${mounts}</small></div>
             </div>
-            <div class="pill">${tag}</div>
+            <span class="badge badge--${badgeKind}">${verdict.label}</span>
           `;
-          if (disk.is_system) {
-            el.style.opacity = '0.5';
+          if (verdict.kind === 'system') {
+            el.classList.add('disk--blocked');
+            el.setAttribute('aria-disabled', 'true');
+            el.title = 'System drive — selecting this would brick your machine. Pick a removable disk.';
           } else {
             el.addEventListener('click', () => selectDisk(disk, el));
           }
@@ -595,6 +635,31 @@
         el.classList.add(`badge--${kind}`);
       }
 
+      // Pre-flight ISO verification: ask the backend to hash the ISO
+      // and compare against any `<iso>.sha256` companion file. Result
+      // is rendered as a coloured badge on the entry card — green
+      // "Verified", red "Hash mismatch" (corrupt/tampered), or amber
+      // "Unverified" when no companion file exists. Tooltip carries
+      // the full message.
+      async function verifyEntryAsync(path, badgeEl) {
+        if (!badgeEl || !path) return;
+        try {
+          const { invoke } = window.__TAURI__.tauri;
+          const v = await invoke('verify_iso', { path });
+          if (!v) return;
+          badgeEl.title = v.message || '';
+          if (v.kind === 'ok') {
+            setBadge(badgeEl, 'Verified', 'ok');
+          } else if (v.kind === 'mismatch') {
+            setBadge(badgeEl, 'Hash mismatch', 'danger');
+          } else {
+            setBadge(badgeEl, 'Unverified', 'warn');
+          }
+        } catch (_err) {
+          setBadge(badgeEl, 'Unverified', 'warn');
+        }
+      }
+
       async function loadPayloadVersion() {
         if (!payloadBadge) return;
         try {
@@ -622,6 +687,7 @@
           const { invoke } = window.__TAURI__.tauri;
           const dirs = parseScanDirs();
           const isos = await invoke('scan_isos', { dirs });
+          totalIsoBytes = isos.reduce((acc, iso) => acc + (iso.size_bytes || 0), 0);
           const entries = isos.map((iso) => ({
             title: iso.title,
             subtitle: iso.path,
@@ -633,6 +699,9 @@
           localStorage.setItem('raidhos_last_isos', JSON.stringify(entries));
           hydrateEntryParams(entries);
           renderEntries(entries);
+          // Re-render the disk targets so the new total flows into
+          // the per-disk "Too small" warnings.
+          if (renderedTargets.length) renderTargets(renderedTargets);
         } catch (err) {
           renderEntries([]);
         }
@@ -1023,6 +1092,14 @@
             // Reveal all panels.
             panels.forEach((p) => p.classList.add('active'));
             steps.forEach((s) => s.classList.remove('active', 'done'));
+          }
+          // In expert (non-wizard) mode the Boot Config card is part
+          // of the right-hand bento column; auto-open it so the user
+          // can see what they opted into. In wizard mode it's hidden
+          // anyway, so leave its state alone.
+          const advanced = document.querySelector('.card.boot-config > details');
+          if (advanced && !on) {
+            advanced.open = true;
           }
         }
 

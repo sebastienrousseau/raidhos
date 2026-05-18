@@ -751,3 +751,48 @@ body.wizard-mode .card[data-wizard-step].active {
   color: #e0b8b8;
   border-color: #5a2e2e;
 }
+
+/* Per-entry badge column. Stacks the Verified/Unverified badge
+   above the static ISO pill so both stay readable on narrow cards. */
+.iso-badges {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+/* Blocked target disks (system drives) are visually struck out and
+   not clickable. Cursor stays not-allowed to reinforce the lock. */
+.disk--blocked {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.disk--blocked:hover {
+  background: transparent !important;
+}
+
+/* ---------------------------------------------------------------
+   Expert mode (wizard toggle OFF): place the happy-path columns
+   on the left and the Advanced/Boot Config column on the right so
+   the power user gets a Bento-style 2-up grid at wide widths and
+   the regular stacked column on narrow screens.
+   --------------------------------------------------------------- */
+@media (min-width: 1100px) {
+  body:not(.wizard-mode) .shell {
+    width: min(1240px, 96vw);
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    grid-template-areas:
+      "header  header"
+      "wizard  wizard"
+      "step1   advanced"
+      "step2   advanced"
+      "footer  footer";
+    align-items: start;
+  }
+  body:not(.wizard-mode) .shell > header { grid-area: header; }
+  body:not(.wizard-mode) .shell > .wizard-nav { grid-area: wizard; }
+  body:not(.wizard-mode) .shell > .card[data-wizard-step="1"] { grid-area: step1; }
+  body:not(.wizard-mode) .shell > .card[data-wizard-step="2"] { grid-area: step2; }
+  body:not(.wizard-mode) .shell > .card.boot-config { grid-area: advanced; }
+  body:not(.wizard-mode) .shell > .card.footer { grid-area: footer; }
+}
