@@ -155,12 +155,20 @@ WebKit2GTK is older than what Tauri 2 needs.
 ### Pre-flight (any Linux)
 
 The bootstrap scripts under
-[`scripts/`](../scripts/) install only what's missing:
+[`scripts/`](../scripts/) install only what's missing. If you'd
+rather not pick the per-distro script yourself, use the
+dispatcher — it reads `/etc/os-release` and routes:
 
 ```bash
-./scripts/bootstrap-debian.sh    # Debian, Ubuntu
-./scripts/bootstrap-arch.sh      # Arch, Manjaro
-./scripts/bootstrap-fedora.sh    # Fedora, RHEL-likes
+./scripts/bootstrap.sh           # auto-detects via /etc/os-release
+```
+
+Or invoke the per-distro script directly:
+
+```bash
+./scripts/bootstrap-debian.sh    # Debian, Ubuntu, Mint, Pop!_OS
+./scripts/bootstrap-arch.sh      # Arch, CachyOS, Manjaro, EndeavourOS, Garuda
+./scripts/bootstrap-fedora.sh    # Fedora, RHEL, Rocky, Alma, CentOS Stream
 ```
 
 ---
