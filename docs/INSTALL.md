@@ -204,7 +204,7 @@ out of scope. Use the native install for any write operation.
 
 ## From source
 
-Required toolchain: Rust 1.78+ (the workspace pins to `stable`).
+Required toolchain: Rust 1.85+ (the workspace pins to `stable`).
 Tauri UI build also needs platform-specific WebKit/WebView2 deps
 — the bootstrap scripts install them.
 

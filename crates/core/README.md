@@ -66,7 +66,7 @@ cd raidhos
 cargo test -p raidhos-core --all-targets
 ```
 
-**MSRV**: 1.78. The library compiles on every supported host
+**MSRV**: 1.85. The library compiles on every supported host
 (Linux, macOS, Windows) with the same source — platform code is
 behind `#[cfg(target_os = "…")]`.
 

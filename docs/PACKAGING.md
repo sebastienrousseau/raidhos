@@ -202,7 +202,7 @@ Summary:        Memory-safe multi-ISO USB imager
 License:        GPLv3
 URL:            https://github.com/sebastienrousseau/raidhos
 Source0:        %{url}/archive/v%{version}/%{name}-v%{version}.tar.gz
-BuildRequires:  rust >= 1.78, cargo
+BuildRequires:  rust >= 1.85, cargo
 Requires:       parted, dosfstools, exfatprogs, polkit
 
 %description

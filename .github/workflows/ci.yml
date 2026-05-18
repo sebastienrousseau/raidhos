@@ -143,21 +143,25 @@ jobs:
           if-no-files-found: warn
 
   msrv:
-    name: MSRV (1.78) sanity check
+    name: MSRV (1.85) sanity check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.78
+      - uses: dtolnay/rust-toolchain@1.85
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: msrv-ubuntu
-      # The workspace's `rust-version = "1.78"` is a contract with
-      # packagers — pinning it in Cargo.toml is necessary but not
-      # sufficient. A stable-toolchain feature creeping in would
-      # only fail on the end user's machine. `cargo check` under
-      # the pinned toolchain catches the drift in CI.
-      - name: cargo check --workspace under 1.78
-        run: cargo +1.78 check --workspace --exclude raidhos-ui --all-targets
+      # The workspace's `rust-version` is a contract with packagers
+      # (Debian, AUR, Homebrew). Declaring it in Cargo.toml is
+      # necessary but not sufficient — a stable-toolchain feature
+      # creeping in would only fail on the end user's machine.
+      # `cargo check` under the pinned toolchain catches the drift.
+      #
+      # Bumped 1.78 → 1.85 on 2026-05-18 after this gate caught the
+      # transitive `roff 1.1.1` (via clap_mangen) requiring
+      # `edition2024`, which only stabilised in 1.85.
+      - name: cargo check --workspace under 1.85
+        run: cargo +1.85 check --workspace --exclude raidhos-ui --all-targets
 
   grub-build:
     name: Reproducible GRUB build

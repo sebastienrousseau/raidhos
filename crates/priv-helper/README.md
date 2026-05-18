@@ -74,7 +74,7 @@ cargo build --release -p raidhos-priv-helper
 sudo ./target/release/raidhos-priv-helper list-disks | jq .
 ```
 
-MSRV: 1.78.
+MSRV: 1.85.
 
 ---
 

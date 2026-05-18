@@ -229,9 +229,15 @@ of which are blocked by those OSes' sandbox models.
 
 ### What is the minimum supported Rust version?
 
-1.78. Pinned in [`rust-toolchain.toml`](../rust-toolchain.toml)
-and asserted in `Cargo.toml`'s `rust-version`. CI verifies this
-across Ubuntu, macOS, and Windows.
+1.85. Asserted in `Cargo.toml`'s `rust-version` and verified in
+CI by a dedicated `msrv` job that installs Rust 1.85 and runs
+`cargo check --workspace --exclude raidhos-ui --all-targets`
+against the pinned toolchain. (`rust-toolchain.toml` just
+selects `stable` for the regular build matrix.)
+
+Bumped from 1.78 → 1.85 on 2026-05-18 after the new MSRV gate
+caught the transitive `roff 1.1.1` (via `clap_mangen`) requiring
+`edition2024`, which only stabilised in Rust 1.85.
 
 ### What is the minimum supported kernel version (Linux)?
 

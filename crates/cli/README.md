@@ -76,7 +76,7 @@ cargo build --release -p raidhos-cli
 ./target/release/raidhos-cli --help
 ```
 
-MSRV: 1.78. The `build.rs` emits a man page and shell completions
+MSRV: 1.85. The `build.rs` emits a man page and shell completions
 (bash / zsh / fish / elvish / PowerShell) into `OUT_DIR/dist/`
 at compile time.
 

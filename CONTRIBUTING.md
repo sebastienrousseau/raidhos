@@ -52,7 +52,7 @@ locally before pushing saves a round-trip.
 | Format | `cargo fmt --all -- --check` | clean |
 | Lint | `cargo clippy --workspace --exclude raidhos-ui --all-targets -- -D warnings` | zero warnings |
 | Tests | `cargo test --workspace --exclude raidhos-ui` | all green |
-| MSRV | `cargo +1.78 check --workspace --exclude raidhos-ui --all-targets` | clean |
+| MSRV | `cargo +1.85 check --workspace --exclude raidhos-ui --all-targets` | clean |
 | Coverage (core) | `cargo tarpaulin -p raidhos-core --exclude-files 'crates/{cli,priv-helper,ui-tauri}/**' --exclude-files 'fuzz/**'` | `--fail-under 100` |
 | Coverage (cli) | same shape, `-p raidhos-cli --engine llvm --exclude-files 'crates/cli/tests/**'` (plus the other crate excludes) | `--fail-under 100` |
 | Coverage (priv-helper) | same shape, `-p raidhos-priv-helper --engine llvm` | `--fail-under 90` (Linux); 100% on macOS dev hosts |

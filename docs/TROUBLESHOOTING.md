@@ -364,7 +364,7 @@ and friends.
 
 ### `cargo install` complains about MSRV
 
-We pin MSRV at 1.78. Update your toolchain:
+We pin MSRV at 1.85. Update your toolchain:
 
 ```bash
 rustup update stable

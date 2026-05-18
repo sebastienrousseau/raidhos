@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- **MSRV bumped 1.78 → 1.85.** A new CI `msrv` job that installs
+  Rust 1.85 and runs `cargo check --workspace --exclude
+  raidhos-ui --all-targets` caught a transitive `roff 1.1.1`
+  (pulled in via `clap_mangen`) requiring the `edition2024`
+  Cargo feature, which only stabilised in Rust 1.85. The
+  workspace's `rust-version` is now `"1.85"`. Packagers
+  building from source need Rust ≥ 1.85 (Ubuntu 25.04+, Fedora
+  41+, Arch / CachyOS rolling, Debian Trixie+, Homebrew current).
+  README badge, FAQ, INSTALL, PACKAGING, TROUBLESHOOTING, and
+  every per-crate README updated to match.
+
 ### Ventoy gap closures
 
 Sixteen of the 25 gaps tracked in
