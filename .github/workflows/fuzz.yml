@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@5b842231ba77f5c045dba54ac5560fed2db780e2 # nightly, snapshot 2026-05-18
 
       - name: Cache cargo-fuzz install
         uses: actions/cache@v4

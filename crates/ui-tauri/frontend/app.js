@@ -652,9 +652,14 @@
         if (globalGrubSuperuser) {
           globalGrubSuperuser.value = localStorage.getItem('raidhos_grub_superuser') || '';
         }
-        if (globalGrubPasswordPbkdf2) {
-          globalGrubPasswordPbkdf2.value = localStorage.getItem('raidhos_grub_password_pbkdf2') || '';
-        }
+        // grub_password_pbkdf2 is intentionally NOT restored from
+        // localStorage — even though it's a PBKDF2 hash, the hash
+        // enables offline brute-force against the password, and
+        // localStorage is reachable from any same-origin XSS.
+        // Source of truth lives in boot.json on disk via the
+        // Tauri save_boot_config command; the user re-pastes
+        // the hash into the field once per session if they want
+        // to change it.
       }
 
       function entryKey(entry) {
@@ -809,9 +814,13 @@
         if (globalGrubSuperuser) {
           localStorage.setItem('raidhos_grub_superuser', globalGrubSuperuser.value || '');
         }
-        if (globalGrubPasswordPbkdf2) {
-          localStorage.setItem('raidhos_grub_password_pbkdf2', globalGrubPasswordPbkdf2.value || '');
-        }
+        // grub_password_pbkdf2 is intentionally NOT written to
+        // localStorage. The PBKDF2 hash enables offline
+        // brute-force against the password, and localStorage is
+        // reachable from any same-origin XSS even under our
+        // strict CSP. The hash already flows through
+        // save_boot_config → boot.json on disk, so the user's
+        // configured password persists across sessions there.
       }
 
       if (scanPathsInput) scanPathsInput.addEventListener('change', persistState);

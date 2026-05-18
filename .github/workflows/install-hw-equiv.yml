@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable, snapshot 2026-05-18
 
       - name: Install host deps
         run: |
@@ -178,7 +178,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable, snapshot 2026-05-18
 
       - name: Build CLI + helper
         run: cargo build --release --workspace --exclude raidhos-ui
@@ -267,7 +267,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable, snapshot 2026-05-18
 
       - name: Build CLI + helper
         shell: pwsh
