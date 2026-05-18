@@ -36,9 +36,11 @@ not "the USB imager with the most features."
 - **Linux power users**: yes, with the caveat that v0.0.1 is
   the first tagged release. Keep a backup of anything on the
   target USB before flashing.
-- **macOS / Windows users**: the install path is code-complete
-  but **not yet hardware-validated**. Discovery and dry-run
-  work; we'll declare these platforms stable in v0.0.2.
+- **macOS / Windows users**: the destructive install path is
+  exercised in CI against virtual disks (x86_64 + aarch64 on
+  both platforms) every push. The only v0.0.1 caveat is one
+  physical-USB validation pass before these platforms are
+  declared stable — landing in v0.0.2.
 
 ### What licence is RaidhOS under?
 
