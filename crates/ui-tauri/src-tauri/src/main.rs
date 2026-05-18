@@ -272,6 +272,33 @@ fn scan_isos(dirs: Vec<String>) -> Result<Vec<IsoEntry>, String> {
         .collect())
 }
 
+/// Open the native file picker filtered to `.iso` files and
+/// return the picked paths. We call the dialog plugin from Rust
+/// because the JS-side global (`window.__TAURI__.dialog.open`)
+/// isn't reliably exposed under `withGlobalTauri: true` —
+/// invoking the picker via `invoke('open_iso_picker')` works
+/// universally. Returns an empty vec when the user cancels.
+#[tauri::command]
+async fn open_iso_picker(app: tauri::AppHandle) -> Vec<String> {
+    use tauri_plugin_dialog::DialogExt;
+    // `blocking_pick_files` blocks the current thread; that's
+    // safe here because the command is `async`, so Tauri runs it
+    // on a worker thread rather than the main event loop.
+    let picked = app
+        .dialog()
+        .file()
+        .add_filter("ISO images", &["iso"])
+        .blocking_pick_files()
+        .unwrap_or_default();
+    picked
+        .into_iter()
+        .filter_map(|fp| match fp {
+            tauri_plugin_dialog::FilePath::Path(pb) => Some(pb.display().to_string()),
+            tauri_plugin_dialog::FilePath::Url(_) => None,
+        })
+        .collect()
+}
+
 /// Host metadata + sensible default ISO scan locations. The
 /// frontend uses these to render OS-appropriate help text (e.g.
 /// "drop ISOs in ~/Downloads" on macOS rather than the Linux
@@ -613,6 +640,7 @@ fn main() {
             list_partitions,
             verify_iso,
             get_host_info,
+            open_iso_picker,
             write_grub_cfg_to_esp,
             copy_isos_to_data,
             install_elevated

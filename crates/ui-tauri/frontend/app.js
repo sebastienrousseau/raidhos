@@ -1,7 +1,22 @@
-      // Tauri 1 -> 2 compatibility shim. Tauri 2 moved the invoke API
-      // from `__TAURI__.tauri.invoke` to `__TAURI__.core.invoke` and
-      // renamed file-drop events. Bridge both so the rest of the
-      // frontend doesn't have to care which Tauri version it runs on.
+      // Find the Tauri 2 invoke function regardless of which global
+      // happens to be present. Tauri 2 with `withGlobalTauri: true`
+      // exposes `window.__TAURI__.core.invoke`; the Tauri 1
+      // compatibility alias is `window.__TAURI__.tauri.invoke`;
+      // some Tauri 2 versions also stash a raw fn at
+      // `window.__TAURI_INTERNALS__.invoke`. Use whichever exists.
+      function tauriInvoke() {
+        if (typeof window === 'undefined') return null;
+        const t = window.__TAURI__ || {};
+        if (t.core && typeof t.core.invoke === 'function') return t.core.invoke;
+        if (t.tauri && typeof t.tauri.invoke === 'function') return t.tauri.invoke;
+        if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {
+          return window.__TAURI_INTERNALS__.invoke;
+        }
+        return null;
+      }
+
+      // Legacy shim — keep working for code paths that still use
+      // `window.__TAURI__.tauri.invoke`.
       if (window.__TAURI__ && !window.__TAURI__.tauri && window.__TAURI__.core) {
         window.__TAURI__.tauri = { invoke: window.__TAURI__.core.invoke };
       }
@@ -71,6 +86,7 @@
         entriesEl.innerHTML = '';
         if (entriesConfigEl) entriesConfigEl.innerHTML = '';
         stopBootTimer();
+        if (typeof updateEntryBadge === 'function') updateEntryBadge(entries.length);
         if (!entries.length) {
           // Leave entriesEl empty so the dropzone above (hero) plus
           // the dropzone container CSS take over. The note below
@@ -116,6 +132,7 @@
         startBootTimer();
         pushBootConfig();
         updateDefaultLabel();
+        document.dispatchEvent(new CustomEvent('raidhos:entries-updated'));
       }
 
       function renderConfigEntries(entries) {
@@ -380,7 +397,7 @@
 
       async function listDisks() {
         try {
-          const { invoke } = window.__TAURI__.tauri;
+          const invoke = tauriInvoke(); if (!invoke) throw new Error("Tauri runtime not available");
           const disks = await invoke('list_disks');
           renderTargets(disks);
         } catch (err) {
@@ -392,7 +409,7 @@
         selectedEspMount = null;
         selectedDataMount = null;
         try {
-          const { invoke } = window.__TAURI__.tauri;
+          const invoke = tauriInvoke(); if (!invoke) throw new Error("Tauri runtime not available");
           const parts = await invoke('list_partitions', { device });
           parts.forEach((p) => {
             const mounts = p.mountpoints || [];
@@ -459,7 +476,7 @@
         if (!selectedDisk) return;
         progressEl.innerHTML = '';
         try {
-          const { invoke } = window.__TAURI__.tauri;
+          const invoke = tauriInvoke(); if (!invoke) throw new Error("Tauri runtime not available");
           const isWrite = enableWrite && enableWrite.checked;
           if (isWrite) {
             showBanner('Elevating privileges...', false, true);
@@ -515,19 +532,24 @@
       if (browseIsosBtn) {
         browseIsosBtn.addEventListener('click', async () => {
           try {
-            // Tauri 2 dialog plugin. Falls back to a hint if the
-            // plugin isn't loaded (e.g. during static-page preview).
-            if (!(window.__TAURI__ && window.__TAURI__.dialog)) {
-              showBanner('File picker unavailable — drop ISOs onto the card instead.', true, false);
+            // Route through our own Rust command rather than the
+            // JS-side dialog global. The plugin doesn't reliably
+            // expose itself under `window.__TAURI__.dialog`, so we
+            // call `open_iso_picker` which wraps the dialog plugin
+            // from the Rust side and returns the paths.
+            const inv = tauriInvoke();
+            if (!inv) {
+              showBanner(
+                'Tauri runtime missing — open the app through `cargo run -p raidhos-ui`, not by opening index.html directly.',
+                true,
+                false,
+              );
               return;
             }
-            const picked = await window.__TAURI__.dialog.open({
-              multiple: true,
-              filters: [{ name: 'ISO images', extensions: ['iso'] }],
-            });
-            if (!picked) return;
-            const paths = Array.isArray(picked) ? picked : [picked];
-            ingestDroppedIsos(paths);
+            const paths = await inv('open_iso_picker');
+            if (Array.isArray(paths) && paths.length) {
+              await ingestDroppedIsos(paths);
+            }
           } catch (err) {
             showBanner(`Browse failed: ${err}`, true, false);
           }
@@ -611,7 +633,7 @@
         const sources = renderedEntries.map((entry) => entry.subtitle || entry.path).filter(Boolean);
         if (!sources.length) return;
         try {
-          const { invoke } = window.__TAURI__.tauri;
+          const invoke = tauriInvoke(); if (!invoke) throw new Error("Tauri runtime not available");
           await invoke('copy_isos_to_data', { mountPath: selectedDataMount, sources });
           renderedEntries.forEach((entry) => {
             entry.path = mapEntryPath(entry);
@@ -671,7 +693,7 @@
       async function verifyEntryAsync(path, badgeEl) {
         if (!badgeEl || !path) return;
         try {
-          const { invoke } = window.__TAURI__.tauri;
+          const invoke = tauriInvoke(); if (!invoke) throw new Error("Tauri runtime not available");
           const v = await invoke('verify_iso', { path });
           if (!v) return;
           badgeEl.title = v.message || '';
@@ -689,16 +711,28 @@
 
       async function loadPayloadVersion() {
         const aboutVersionLine = document.getElementById('aboutVersionLine');
-        if (!payloadBadge) return;
+        // Don't touch the entry-card status badge — that one
+        // reflects "what's in the entries list", not "is the dev
+        // payload available". We surface payload status only in
+        // the About modal and via a low-noise toast on failure.
         try {
-          const { invoke } = window.__TAURI__.tauri;
+          const invoke = tauriInvoke();
+          if (!invoke) throw new Error('Tauri runtime not available');
           const version = await invoke('get_payload_version');
-          setBadge(payloadBadge, `Payload ${version}`, 'ok');
           if (aboutVersionLine) aboutVersionLine.textContent = `Payload version: ${version}`;
         } catch (_err) {
-          setBadge(payloadBadge, 'Payload missing', 'warn');
-          showBanner('Payload manifest not found. Set payload/manifest.json.', true, false);
           if (aboutVersionLine) aboutVersionLine.textContent = 'Payload version: missing';
+        }
+      }
+
+      // Flip the entry-card badge from neutral "Awaiting ISO…" to
+      // a positive count once entries land. Called from renderEntries.
+      function updateEntryBadge(count) {
+        if (!payloadBadge) return;
+        if (!count) {
+          setBadge(payloadBadge, 'Awaiting ISO…', 'info');
+        } else {
+          setBadge(payloadBadge, `${count} ISO${count === 1 ? '' : 's'}`, 'ok');
         }
       }
 
@@ -710,7 +744,7 @@
 
       async function loadHostInfo() {
         try {
-          const { invoke } = window.__TAURI__.tauri;
+          const invoke = tauriInvoke(); if (!invoke) throw new Error("Tauri runtime not available");
           hostInfo = await invoke('get_host_info');
         } catch (_err) {
           // Fall through to defaults — non-Tauri preview.
@@ -752,7 +786,7 @@
 
       async function loadEntries() {
         try {
-          const { invoke } = window.__TAURI__.tauri;
+          const invoke = tauriInvoke(); if (!invoke) throw new Error("Tauri runtime not available");
           const dirs = parseScanDirs();
           const isos = await invoke('scan_isos', { dirs });
           totalIsoBytes = isos.reduce((acc, iso) => acc + (iso.size_bytes || 0), 0);
@@ -860,7 +894,7 @@
 
       async function pushBootConfig() {
         try {
-          const { invoke } = window.__TAURI__.tauri;
+          const invoke = tauriInvoke(); if (!invoke) throw new Error("Tauri runtime not available");
           const defaultEntry = localStorage.getItem('raidhos_default_entry');
           const payload = {
             default_entry: defaultEntry || null,
@@ -897,7 +931,7 @@
         }
         try {
           showBanner('Writing config to target...', false, true);
-          const { invoke } = window.__TAURI__.tauri;
+          const invoke = tauriInvoke(); if (!invoke) throw new Error("Tauri runtime not available");
           const defaultEntry = localStorage.getItem('raidhos_default_entry');
           const payload = {
             default_entry: defaultEntry || null,
@@ -933,7 +967,7 @@
           return;
         }
         try {
-          const { invoke } = window.__TAURI__.tauri;
+          const invoke = tauriInvoke(); if (!invoke) throw new Error("Tauri runtime not available");
           const defaultEntry = localStorage.getItem('raidhos_default_entry');
           const payload = {
             default_entry: defaultEntry || null,
@@ -1153,7 +1187,9 @@
         // If a USB target is already mounted, also copy onto it.
         if (selectedDataMount) {
           try {
-            const copied = await window.__TAURI__.tauri.invoke(
+            const inv = tauriInvoke();
+            if (!inv) throw new Error('Tauri runtime not available');
+            const copied = await inv(
               'copy_isos_to_data',
               { mountPath: selectedDataMount, sources: paths }
             );
@@ -1169,30 +1205,68 @@
         const dropZone = document.getElementById('app');
         if (!dropZone) return;
 
-        // Browser-level dragover / dragleave gives us the visual
-        // hover state. Path delivery uses Tauri's event.
-        dropZone.addEventListener('dragover', (e) => {
-          e.preventDefault();
-          dropZone.classList.add('dragging');
+        // Browser-level events give us the visual hover state.
+        // We always prevent the browser default so the webview
+        // doesn't navigate away from the app if the Tauri event
+        // chain misses for some reason.
+        ['dragenter', 'dragover'].forEach((name) => {
+          dropZone.addEventListener(name, (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragging');
+          });
         });
-        dropZone.addEventListener('dragleave', () => {
-          dropZone.classList.remove('dragging');
+        ['dragleave', 'dragend'].forEach((name) => {
+          dropZone.addEventListener(name, () => {
+            dropZone.classList.remove('dragging');
+          });
         });
         dropZone.addEventListener('drop', (e) => {
-          // Stop the browser from opening the file directly when the
-          // Tauri event doesn't fire for whatever reason.
+          // Belt-and-braces: also try to read paths from the
+          // browser DataTransfer in case the Tauri event misses.
+          // Webview2/macOS Safari often give us full paths here.
           e.preventDefault();
+          dropZone.classList.remove('dragging');
+          const dt = e.dataTransfer;
+          if (!dt) return;
+          const fallback = [];
+          for (let i = 0; i < dt.files.length; i++) {
+            const f = dt.files[i];
+            // `path` is a non-standard webkit field — present in
+            // Tauri's WKWebView on macOS and Webview2 on Windows.
+            if (f && typeof f.path === 'string') fallback.push(f.path);
+          }
+          if (fallback.length) ingestDroppedIsos(fallback);
         });
 
-        if (window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen) {
+        // Tauri event delivery. Listen for both spellings (Tauri 1
+        // and Tauri 2). `event.listen` is async-returning, but the
+        // handler registers synchronously inside.
+        const ev = (window.__TAURI__ && window.__TAURI__.event) || null;
+        if (ev && typeof ev.listen === 'function') {
           const dropHandler = async (event) => {
-            const rawPaths = (event.payload && event.payload.paths)
-              ? event.payload.paths
-              : (event.payload || []);
-            await ingestDroppedIsos(Array.isArray(rawPaths) ? rawPaths : []);
+            const payload = event && event.payload;
+            // Tauri 2 payload: { type: 'drop'|'over'|'leave', paths, position }
+            // Tauri 1 payload: ["...paths..."]
+            let rawPaths = [];
+            if (payload && Array.isArray(payload.paths)) {
+              rawPaths = payload.paths;
+            } else if (Array.isArray(payload)) {
+              rawPaths = payload;
+            }
+            if (rawPaths.length) await ingestDroppedIsos(rawPaths);
           };
-          window.__TAURI__.event.listen('tauri://file-drop', dropHandler);
-          window.__TAURI__.event.listen('tauri://drag-drop', dropHandler);
+          ev.listen('tauri://file-drop', dropHandler).catch(() => {});
+          ev.listen('tauri://drag-drop', dropHandler).catch(() => {});
+          // Hover events from Tauri so the dragging class flips
+          // even when the browser-level dragover doesn't fire
+          // (it sometimes doesn't on Tauri 2 macOS).
+          const overHandler = () => dropZone.classList.add('dragging');
+          const leaveHandler = () => dropZone.classList.remove('dragging');
+          ev.listen('tauri://drag-over', overHandler).catch(() => {});
+          ev.listen('tauri://drag-enter', overHandler).catch(() => {});
+          ev.listen('tauri://drag-leave', leaveHandler).catch(() => {});
+          ev.listen('tauri://file-drop-hover', overHandler).catch(() => {});
+          ev.listen('tauri://file-drop-cancelled', leaveHandler).catch(() => {});
         }
       })();
 
@@ -1270,7 +1344,21 @@
             btn.classList.toggle('done', s < n);
             btn.setAttribute('aria-selected', s === n ? 'true' : 'false');
           });
+          // Light up the rail in brand once step 1 is no longer
+          // the current step (i.e. the user has progressed). The
+          // class lives on .wizard-nav so the rail CSS can react.
+          const nav = document.querySelector('.wizard-nav');
+          if (nav) nav.classList.toggle('step-1-done', n >= 2);
         }
+
+        // Also light the rail proactively when step 1 has at least
+        // one ISO — the user "completed" step 1 even if they
+        // haven't clicked into step 2 yet. Hook off renderEntries.
+        const origRender = window.renderEntries;
+        document.addEventListener('raidhos:entries-updated', () => {
+          const nav = document.querySelector('.wizard-nav');
+          if (nav) nav.classList.toggle('step-1-done', renderedEntries.length > 0);
+        });
 
         steps.forEach((btn) => {
           btn.addEventListener('click', () => {

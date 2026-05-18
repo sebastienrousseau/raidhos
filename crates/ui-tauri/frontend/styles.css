@@ -829,10 +829,18 @@
   transition: background 120ms, border-color 120ms, color 120ms;
 }
 .wizard-rail {
-  flex: 0 1 64px;
-  height: 1px;
-  background: var(--stroke);
+  flex: 0 1 96px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 2px;
   margin: 0 var(--space-2);
+  transition: background 180ms ease-in-out;
+}
+/* When the first step is done, the rail lights up in brand to
+   pull the eye toward step 2. setupWizard adds .step-1-done to
+   .wizard-nav once the user advances. */
+.wizard-nav.step-1-done .wizard-rail {
+  background: var(--brand);
 }
 .wizard-step.active {
   color: var(--ink);
@@ -878,13 +886,32 @@ body.wizard-mode .card[data-wizard-step].active {
    --------------------------------------------------------------- */
 .card--primary {
   background: var(--surface);
-  border: 1px solid var(--stroke);
-  box-shadow: var(--shadow);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, var(--shadow);
 }
 
 /* The hero dropzone is the single drop target. The entries
    container below it is a plain list — no border, no ghost
    "drop here" text. */
+
+/* The "No ISOs found in …" hint sits below the entries list as
+   a centred, low-noise footer rather than a left-aligned wall
+   of text. The pseudo-element prepends a small info glyph. */
+#entryNote {
+  text-align: center;
+  margin: var(--space-4) auto 0 auto;
+  padding: var(--space-3);
+  color: var(--muted);
+  max-width: 540px;
+}
+#entryNote::before {
+  content: "ℹ ";
+  margin-right: 4px;
+  color: var(--brand-2);
+}
+#entryNote:empty {
+  display: none;
+}
 
 /* Big primary call-to-action. `.cta-large` is the install button. */
 .primary.cta-large {
