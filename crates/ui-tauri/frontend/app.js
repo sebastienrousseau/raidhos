@@ -128,7 +128,7 @@
           renderConfigEntries(entries);
         }
 
-        if (entryNote) entryNote.textContent = 'Entries sourced from ISO files.';
+        if (entryNote) entryNote.textContent = '';
         startBootTimer();
         pushBootConfig();
         updateDefaultLabel();
@@ -693,10 +693,14 @@
       async function verifyEntryAsync(path, badgeEl) {
         if (!badgeEl || !path) return;
         try {
-          const invoke = tauriInvoke(); if (!invoke) throw new Error("Tauri runtime not available");
+          const invoke = tauriInvoke();
+          if (!invoke) throw new Error('Tauri runtime not available');
           const v = await invoke('verify_iso', { path });
           if (!v) return;
+          // Both the native `title` (sr-only fallback) and the
+          // styled custom tooltip read from data-tip.
           badgeEl.title = v.message || '';
+          badgeEl.setAttribute('data-tip', v.message || '');
           if (v.kind === 'ok') {
             setBadge(badgeEl, 'Verified', 'ok');
           } else if (v.kind === 'mismatch') {
@@ -706,6 +710,10 @@
           }
         } catch (_err) {
           setBadge(badgeEl, 'Unverified', 'warn');
+          badgeEl.setAttribute(
+            'data-tip',
+            'Could not verify — ISO hashing failed or no companion .sha256 file exists',
+          );
         }
       }
 
@@ -1353,12 +1361,32 @@
 
         // Also light the rail proactively when step 1 has at least
         // one ISO — the user "completed" step 1 even if they
-        // haven't clicked into step 2 yet. Hook off renderEntries.
-        const origRender = window.renderEntries;
+        // haven't clicked into step 2 yet. The same event reveals
+        // the "Continue to Select USB →" CTA so users have a clear
+        // next action.
+        const step1Cta = document.getElementById('step1Cta');
+        const continueBtn = document.getElementById('continueToStep2');
         document.addEventListener('raidhos:entries-updated', () => {
           const nav = document.querySelector('.wizard-nav');
-          if (nav) nav.classList.toggle('step-1-done', renderedEntries.length > 0);
+          const ready = renderedEntries.length > 0;
+          if (nav) nav.classList.toggle('step-1-done', ready);
+          if (step1Cta) step1Cta.hidden = !ready;
         });
+        if (continueBtn) {
+          continueBtn.addEventListener('click', () => {
+            // Make sure guided mode is active so step 2 actually
+            // shows; if the user was in expert mode this is a
+            // visual scroll instead.
+            if (!document.body.classList.contains('wizard-mode')) {
+              const target = document.querySelector('[data-wizard-step="2"]');
+              if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              return;
+            }
+            setStep(2);
+            const target = document.querySelector('[data-wizard-step="2"]');
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+        }
 
         steps.forEach((btn) => {
           btn.addEventListener('click', () => {

@@ -402,12 +402,27 @@
 
       input {
         width: 100%;
-        border-radius: 0;
+        border-radius: 6px;
         padding: var(--space-3) var(--space-4);
-        border: 1px solid var(--stroke);
+        border: 1px solid rgba(255, 255, 255, 0.15);
         font-size: var(--font-sm);
-        background: #141414;
+        background: rgba(255, 255, 255, 0.04);
         color: var(--ink);
+        transition: border-color 120ms ease-in-out, background 120ms ease-in-out;
+        font-family: inherit;
+      }
+      input::placeholder {
+        color: var(--muted);
+        opacity: 0.7;
+      }
+      input:hover {
+        background: rgba(255, 255, 255, 0.06);
+      }
+      input:focus {
+        outline: none;
+        border-color: var(--brand);
+        background: rgba(255, 255, 255, 0.06);
+        box-shadow: 0 0 0 3px var(--brand-soft);
       }
 
       .entry-params {
@@ -968,6 +983,53 @@ body.wizard-mode .card[data-wizard-step].active {
   flex-direction: column;
   align-items: flex-end;
   gap: 4px;
+}
+
+/* Custom hover tooltip on the verify badge. Wins over the
+   browser-native `title` tooltip because it can be styled to
+   match the rest of the app. The native title is still set as
+   a screen-reader fallback. */
+.iso-verify {
+  position: relative;
+  cursor: help;
+}
+.iso-verify[data-tip]:hover::after,
+.iso-verify[data-tip]:focus::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  background: var(--surface-strong);
+  color: var(--ink);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.85em;
+  white-space: nowrap;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  z-index: 10;
+  box-shadow: var(--shadow);
+}
+
+/* "Continue to Select USB →" CTA at the foot of step 1. Hidden
+   while no ISOs are present; revealed via the [hidden] flip. */
+.step1-cta {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  text-align: center;
+}
+.step1-cta .cta-large {
+  max-width: 360px;
+  margin: 0 auto;
+}
+.step1-cta-hint {
+  margin: var(--space-2) 0 0 0;
+  color: var(--muted);
+  font-size: 0.9em;
 }
 
 /* Blocked target disks (system drives) are visually struck out and
