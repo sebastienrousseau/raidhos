@@ -142,6 +142,23 @@ jobs:
           path: cobertura.xml
           if-no-files-found: warn
 
+  msrv:
+    name: MSRV (1.78) sanity check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.78
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: msrv-ubuntu
+      # The workspace's `rust-version = "1.78"` is a contract with
+      # packagers — pinning it in Cargo.toml is necessary but not
+      # sufficient. A stable-toolchain feature creeping in would
+      # only fail on the end user's machine. `cargo check` under
+      # the pinned toolchain catches the drift in CI.
+      - name: cargo check --workspace under 1.78
+        run: cargo +1.78 check --workspace --exclude raidhos-ui --all-targets
+
   grub-build:
     name: Reproducible GRUB build
     runs-on: ubuntu-latest

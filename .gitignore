@@ -14,6 +14,10 @@ dist/
 cobertura.xml
 tarpaulin-report.html
 lcov.info
+# tarpaulin --engine llvm drops .profraw next to the binary's
+# working directory; cargo doesn't sweep these.
+*.profraw
+*.profdata
 
 # Editors
 .vscode/
