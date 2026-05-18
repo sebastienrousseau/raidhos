@@ -212,6 +212,20 @@ the destructive paths deferred to v0.0.2.
   metainfo). Covers CachyOS / Arch / Manjaro / EndeavourOS /
   Garuda / Fedora / RHEL / Rocky / Alma / openSUSE / Silverblue
   / Bazzite / SteamOS / NixOS.
+- Release-asset native packages built by the tag pipeline so
+  Arch / CachyOS / Manjaro / EndeavourOS / Garuda users can
+  `sudo pacman -U raidhos-bin-*-x86_64.pkg.tar.zst` and Fedora
+  / RHEL 9+ / Rocky / Alma / CentOS Stream users can
+  `sudo dnf install ./raidhos-bin-*-x86_64.rpm` without an AUR
+  helper or COPR enable. New CI jobs `arch-pkg` (in
+  `archlinux:base-devel`) and `rpm-bin` (matrix x86_64 + aarch64
+  in `fedora:latest`) repackage the cosign-signed Linux release
+  tarball verbatim, sharing the on-disk layout of the source
+  builds (`/usr/bin/raidhos-cli`, `/usr/libexec/raidhos-priv-helper`,
+  polkit policy, completions, catalog) via `Provides: raidhos`
+  + `Conflicts: raidhos`. The new spec `packaging/fedora/raidhos-bin.spec`
+  has no Rust `BuildRequires` so the install path is
+  toolchain-free.
 - Secure Boot signing tooling: `tools/secure-boot/generate-mok.sh`
   (RSA-2048 keypair + X.509 cert), `tools/secure-boot/sign-bootx64.sh`
   (sbsign), and the rewritten `scripts/raidhos-mok-enroll.sh` with
