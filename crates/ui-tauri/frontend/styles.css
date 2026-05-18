@@ -179,7 +179,7 @@
       .dropzone-hero {
         border: 2px dashed var(--stroke);
         border-radius: var(--radius-sm);
-        padding: var(--space-6) var(--space-5);
+        padding: var(--space-7) var(--space-5);
         text-align: center;
         margin-bottom: var(--space-4);
         background: linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 60%);
@@ -742,13 +742,23 @@
   box-shadow: var(--shadow);
   z-index: 100;
 }
-.shell.dragging::after {
+.app-shell.dragging::after {
   content: "";
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.12);
   pointer-events: none;
   z-index: 50;
+}
+
+/* View switching driven by the sidebar. The active class is set
+   by setupSidebar(); plain [hidden] is fine for the inactive ones
+   since accessibility already follows. */
+.view {
+  display: contents;
+}
+.view[hidden] {
+  display: none;
 }
 
 /* Push-progress lines. */
@@ -872,27 +882,9 @@ body.wizard-mode .card[data-wizard-step].active {
   box-shadow: var(--shadow);
 }
 
-/* Dropzone styling on the ISO list. The dashed border + hover cue
-   tells users they can drop .iso files straight in. */
-.disks.dropzone {
-  border: 2px dashed var(--stroke);
-  border-radius: var(--radius-sm);
-  padding: var(--space-4);
-  min-height: 120px;
-  transition: border-color 120ms ease-in-out, background 120ms ease-in-out;
-}
-.disks.dropzone:empty::before {
-  content: "Drop .iso files here, or click List Disks → Rescan ISOs.";
-  display: block;
-  text-align: center;
-  color: var(--muted);
-  padding: var(--space-5) var(--space-4);
-  font-size: var(--font-sm);
-}
-.shell.dragging .disks.dropzone {
-  border-color: var(--stroke-strong);
-  background: rgba(255, 255, 255, 0.03);
-}
+/* The hero dropzone is the single drop target. The entries
+   container below it is a plain list — no border, no ghost
+   "drop here" text. */
 
 /* Big primary call-to-action. `.cta-large` is the install button. */
 .primary.cta-large {

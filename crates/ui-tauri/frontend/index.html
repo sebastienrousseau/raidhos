@@ -16,29 +16,33 @@
     </div>
 
     <div class="app-shell" id="app">
-      <!-- Slim sidebar: global app navigation. The Flash view is the
-           current task; Settings / Logs / About are placeholders for
-           future panes but already serve as visual app-shell anchors
-           so the UI feels like a real desktop app, not a web page. -->
       <aside class="sidebar" aria-label="App navigation">
         <div class="sidebar-brand" aria-hidden="true">ᚱ</div>
         <nav class="sidebar-nav" role="navigation">
           <button class="sidebar-item active" data-view="flash" aria-current="page" aria-label="Flash">
-            <span class="sidebar-icon" aria-hidden="true">▣</span>
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>
+            </span>
             <span class="sidebar-label">Flash</span>
           </button>
           <button class="sidebar-item" data-view="settings" aria-label="Settings">
-            <span class="sidebar-icon" aria-hidden="true">⚙</span>
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </span>
             <span class="sidebar-label">Settings</span>
           </button>
           <button class="sidebar-item" data-view="logs" aria-label="Logs">
-            <span class="sidebar-icon" aria-hidden="true">≡</span>
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            </span>
             <span class="sidebar-label">Logs</span>
           </button>
         </nav>
         <div class="sidebar-footer">
           <button class="sidebar-item" data-view="about" aria-label="About">
-            <span class="sidebar-icon" aria-hidden="true">ⓘ</span>
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            </span>
             <span class="sidebar-label">About</span>
           </button>
         </div>
@@ -56,105 +60,127 @@
           </div>
         </div>
 
+        <div class="modal" id="aboutModal" role="dialog" aria-modal="true" aria-labelledby="aboutModalTitle">
+          <div class="modal-card">
+            <strong id="aboutModalTitle">RaidhOS</strong>
+            <p class="subtitle">
+              Memory-safe multi-ISO USB imager. Rust core,
+              <code>forbid(unsafe)</code>, reproducible build,
+              cosign + SLSA L3 signed releases.
+            </p>
+            <p class="subtitle"><span id="aboutVersionLine">Version: …</span></p>
+            <p class="subtitle"><span id="aboutHostLine">Host: …</span></p>
+            <div class="modal-actions">
+              <button class="ghost" id="closeAbout">Close</button>
+            </div>
+          </div>
+        </div>
+
         <header class="top-bar">
           <div class="top-bar-title">
-            <h1>Flash a USB</h1>
+            <h1 id="viewTitle">Flash a USB</h1>
             <p class="subtitle" id="topSubtitle">Build a multi-ISO bootable USB on macOS / Linux / Windows.</p>
           </div>
           <div class="top-bar-actions">
             <span class="subtitle" id="lastSaved" aria-live="polite"></span>
-            <button class="ghost" id="saveConfig" aria-label="Save boot configuration">Save Config</button>
           </div>
         </header>
 
-        <nav class="wizard-nav" role="tablist" aria-label="Install steps">
-          <button class="wizard-step active" data-step="1" role="tab" aria-selected="true">
-            <span class="wizard-num">1</span><span class="wizard-text">Pick ISOs</span>
-          </button>
-          <span class="wizard-rail" aria-hidden="true"></span>
-          <button class="wizard-step" data-step="2" role="tab" aria-selected="false">
-            <span class="wizard-num">2</span><span class="wizard-text">Pick USB &amp; flash</span>
-          </button>
-          <label class="wizard-toggle">
-            <input type="checkbox" id="wizardToggle" />
-            <span>Guided mode</span>
-          </label>
-        </nav>
+        <!-- Flash view: the happy-path workflow. -->
+        <div class="view view--flash active" data-view="flash">
+          <nav class="wizard-nav" role="tablist" aria-label="Install steps">
+            <button class="wizard-step active" data-step="1" role="tab" aria-selected="true">
+              <span class="wizard-num">1</span><span class="wizard-text">Pick ISOs</span>
+            </button>
+            <span class="wizard-rail" aria-hidden="true"></span>
+            <button class="wizard-step" data-step="2" role="tab" aria-selected="false">
+              <span class="wizard-num">2</span><span class="wizard-text">Pick USB &amp; flash</span>
+            </button>
+            <label class="wizard-toggle">
+              <input type="checkbox" id="wizardToggle" />
+              <span>Guided mode</span>
+            </label>
+          </nav>
 
-        <section class="card card--primary" data-wizard-step="1" aria-label="Pick ISOs">
-          <div class="card-head">
-            <span class="badge badge--info" id="payloadBadge">Payload: checking…</span>
-            <span class="subtitle" id="defaultLabel"></span>
-          </div>
-          <div class="boot-progress" id="bootProgress">
-            <div class="boot-progress-fill" id="bootProgressFill"></div>
-          </div>
-          <div class="dropzone-hero" id="dropzoneHero">
-            <div class="dropzone-icon" aria-hidden="true">⤓</div>
-            <div class="dropzone-title">Drag &amp; drop ISOs here</div>
-            <div class="dropzone-sub" id="dropzoneSub">or browse your filesystem</div>
-            <div class="dropzone-actions">
-              <button class="primary" id="browseIsosBtn">Browse for ISOs…</button>
-              <button class="ghost" id="scanBtn">Rescan default folders</button>
+          <section class="card card--primary" data-wizard-step="1" aria-label="Pick ISOs">
+            <div class="card-head">
+              <span class="badge badge--info" id="payloadBadge">Payload: checking…</span>
+              <span class="subtitle" id="defaultLabel"></span>
             </div>
-          </div>
-          <div class="disks dropzone" id="entries" aria-label="Drop ISO images here"></div>
-          <p class="subtitle" id="entryNote"></p>
-        </section>
-
-        <section class="card card--primary panel" id="main" data-wizard-step="2" aria-labelledby="installHeading">
-          <div class="card-head">
-            <h2 id="installHeading" class="sr-only">Pick USB &amp; flash</h2>
-            <span class="badge badge--info" id="modeBadge">Dry-run · no changes made</span>
-          </div>
-          <div class="confirm">
-            <div class="row-with-action">
-              <div>
-                <strong>Target devices</strong>
-                <div><small id="targetsHint">Pick a removable drive. System disks are blocked.</small></div>
+            <div class="boot-progress" id="bootProgress">
+              <div class="boot-progress-fill" id="bootProgressFill"></div>
+            </div>
+            <div class="dropzone-hero" id="dropzoneHero">
+              <div class="dropzone-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               </div>
-              <button class="ghost" id="refresh" aria-label="Refresh disks">↻ Refresh disks</button>
+              <div class="dropzone-title">Drag &amp; drop ISOs here</div>
+              <div class="dropzone-sub" id="dropzoneSub">or click below to browse your files</div>
+              <div class="dropzone-actions">
+                <button class="primary" id="browseIsosBtn">Browse for ISOs…</button>
+                <button class="ghost" id="scanBtn">Rescan default folders</button>
+              </div>
             </div>
-          </div>
-          <div class="disks" id="targets"></div>
-          <div class="confirm" id="planContainer">
-            <div><strong>Install plan</strong></div>
-            <div class="plan" id="installPlan"></div>
-          </div>
-          <div class="confirm">
-            <div><strong>Selected:</strong> <span id="selected">None</span></div>
-            <div><small>Type the device path to confirm (e.g. /dev/sdb).</small></div>
-            <input id="confirmInput" placeholder="/dev/sdX" aria-label="Confirm target device path" />
-            <div class="confirm">
-              <label>
-                <input type="checkbox" id="acceptWrite" />
-                I understand this will erase the selected device.
-              </label>
-              <label>
-                <input type="checkbox" id="enableWrite" />
-                Enable actual write (not a dry-run).
-              </label>
-              <div><small>Type ERASE to proceed with actual write.</small></div>
-              <input id="confirmErase" placeholder="ERASE" aria-label="Type ERASE to confirm destructive write" />
-            </div>
-            <button class="primary cta-large" id="installBtn" disabled aria-label="Run install (dry-run by default)">Run Dry-Run Install</button>
-          </div>
-          <div class="banner" id="configBanner" role="status" aria-live="polite"></div>
-          <div class="progress" id="progress" role="log" aria-live="polite" aria-label="Install progress"></div>
-        </section>
+            <div class="disks" id="entries" aria-label="ISO entry list"></div>
+            <p class="subtitle" id="entryNote"></p>
+          </section>
 
-        <section class="card boot-config" id="bootConfig">
-          <details>
-            <summary>Advanced — Boot Config &amp; GRUB security</summary>
-            <p class="subtitle">Per-entry parameters and optional GRUB password gate. Most users can ignore this.</p>
+          <section class="card card--primary panel" id="main" data-wizard-step="2" aria-labelledby="installHeading">
+            <div class="card-head">
+              <h2 id="installHeading" class="sr-only">Pick USB &amp; flash</h2>
+              <span class="badge badge--info" id="modeBadge">Dry-run · no changes made</span>
+            </div>
+            <div class="confirm">
+              <div class="row-with-action">
+                <div>
+                  <strong>Target devices</strong>
+                  <div><small id="targetsHint">Pick a removable drive. System disks are blocked.</small></div>
+                </div>
+                <button class="ghost" id="refresh" aria-label="Refresh disks">↻ Refresh disks</button>
+              </div>
+            </div>
+            <div class="disks" id="targets"></div>
+            <div class="confirm" id="planContainer">
+              <div><strong>Install plan</strong></div>
+              <div class="plan" id="installPlan"></div>
+            </div>
+            <div class="confirm">
+              <div><strong>Selected:</strong> <span id="selected">None</span></div>
+              <div><small>Type the device path to confirm (e.g. /dev/sdb).</small></div>
+              <input id="confirmInput" placeholder="/dev/sdX" aria-label="Confirm target device path" />
+              <div class="confirm">
+                <label>
+                  <input type="checkbox" id="acceptWrite" />
+                  I understand this will erase the selected device.
+                </label>
+                <label>
+                  <input type="checkbox" id="enableWrite" />
+                  Enable actual write (not a dry-run).
+                </label>
+                <div><small>Type ERASE to proceed with actual write.</small></div>
+                <input id="confirmErase" placeholder="ERASE" aria-label="Type ERASE to confirm destructive write" />
+              </div>
+              <button class="primary cta-large" id="installBtn" disabled aria-label="Run install (dry-run by default)">Run Dry-Run Install</button>
+            </div>
+            <div class="banner" id="configBanner" role="status" aria-live="polite"></div>
+          </section>
+        </div>
+
+        <!-- Settings view: configuration that used to live in the top
+             bar plus the boot-config card. Hidden by default. -->
+        <div class="view view--settings" data-view="settings" hidden>
+          <section class="card card--primary">
+            <h2>Boot configuration</h2>
+            <p class="subtitle">Per-entry parameters and optional GRUB password gate.</p>
             <div class="actions actions--mb-3">
+              <button class="primary" id="saveConfig" aria-label="Save boot configuration">Save Config</button>
               <button class="ghost" id="resetParams">Reset Params</button>
               <label class="entry-default">
                 <input type="checkbox" id="saveOnInstallOnly" />
                 Save config only after install
               </label>
             </div>
-            <details class="boot-global">
+            <details class="boot-global" open>
               <summary>Global menu settings</summary>
               <div class="boot-global-row">
                 <label class="entry-default">
@@ -175,8 +201,17 @@
               </div>
             </details>
             <div class="disks" id="entriesConfig"></div>
-          </details>
-        </section>
+          </section>
+        </div>
+
+        <!-- Logs view: install progress log. Hidden by default. -->
+        <div class="view view--logs" data-view="logs" hidden>
+          <section class="card card--primary">
+            <h2>Install progress</h2>
+            <p class="subtitle">Most recent install output. Runs append in real time.</p>
+            <div class="progress" id="progress" role="log" aria-live="polite" aria-label="Install progress"></div>
+          </section>
+        </div>
 
         <section class="card footer">
           Cross-platform core in Rust. UI powered by Tauri.

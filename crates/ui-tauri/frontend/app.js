@@ -688,14 +688,17 @@
       }
 
       async function loadPayloadVersion() {
+        const aboutVersionLine = document.getElementById('aboutVersionLine');
         if (!payloadBadge) return;
         try {
           const { invoke } = window.__TAURI__.tauri;
           const version = await invoke('get_payload_version');
           setBadge(payloadBadge, `Payload ${version}`, 'ok');
+          if (aboutVersionLine) aboutVersionLine.textContent = `Payload version: ${version}`;
         } catch (_err) {
           setBadge(payloadBadge, 'Payload missing', 'warn');
           showBanner('Payload manifest not found. Set payload/manifest.json.', true, false);
+          if (aboutVersionLine) aboutVersionLine.textContent = 'Payload version: missing';
         }
       }
 
@@ -717,7 +720,7 @@
         }
         if (dropzoneSubEl) {
           const first = hostInfo.suggested_scan_dirs[0] || '~/Downloads';
-          dropzoneSubEl.textContent = `or browse — RaidhOS also scans ${first}`;
+          dropzoneSubEl.textContent = `or click below — RaidhOS also scans ${first}`;
         }
         if (topSubtitleEl) {
           const osLabel = {
@@ -728,6 +731,14 @@
           topSubtitleEl.textContent =
             `Build a multi-ISO bootable USB on ${osLabel}.`;
         }
+        // About modal: fill in host line once we know what the OS is.
+        const aboutHostLine = document.getElementById('aboutHostLine');
+        if (aboutHostLine) {
+          aboutHostLine.textContent = `Host: ${hostInfo.os}`;
+        }
+        // Re-render any empty entry list so the host-aware "scans
+        // ~/Downloads" copy replaces the placeholder defaults.
+        if (!renderedEntries.length) renderEntries([]);
       }
 
       function parseScanDirs() {
@@ -1000,29 +1011,71 @@
         });
       }
 
-      // Sidebar nav: only the Flash view exists today; Settings /
-      // Logs / About are visual app-shell anchors that scroll to or
-      // open the relevant card on the same page. This keeps the
-      // "real app" feel without spinning up actual routing in v0.0.1.
+      // Sidebar nav drives the multi-view shell. Each `.view` block
+      // owns its DOM; the sidebar item with the matching
+      // `data-view` attribute toggles visibility. The About item
+      // pops a modal rather than swapping the view.
       (function setupSidebar() {
         const items = Array.from(document.querySelectorAll('.sidebar-item'));
-        const settingsCard = document.getElementById('bootConfig');
-        const progressEl2 = document.getElementById('progress');
+        const views = Array.from(document.querySelectorAll('.view'));
+        const viewTitleEl = document.getElementById('viewTitle');
+        const topSubtitleElLocal = document.getElementById('topSubtitle');
+        const aboutModal = document.getElementById('aboutModal');
+        const closeAbout = document.getElementById('closeAbout');
+        const titleByView = {
+          flash: ['Flash a USB', 'Build a multi-ISO bootable USB.'],
+          settings: ['Settings', 'Boot config + GRUB security.'],
+          logs: ['Logs', 'Install pipeline output.'],
+        };
+
+        function showView(name) {
+          views.forEach((v) => {
+            v.hidden = v.getAttribute('data-view') !== name;
+          });
+          if (viewTitleEl && titleByView[name]) {
+            viewTitleEl.textContent = titleByView[name][0];
+            if (topSubtitleElLocal) {
+              topSubtitleElLocal.textContent = titleByView[name][1];
+            }
+          }
+        }
+
+        function showAbout() {
+          if (!aboutModal) return;
+          aboutModal.classList.add('open');
+        }
+        function hideAbout() {
+          if (!aboutModal) return;
+          aboutModal.classList.remove('open');
+        }
+
         items.forEach((btn) => {
           btn.addEventListener('click', () => {
-            items.forEach((b) => b.classList.remove('active'));
-            btn.classList.add('active');
             const view = btn.getAttribute('data-view');
-            if (view === 'settings' && settingsCard) {
-              const det = settingsCard.querySelector('details');
-              if (det) det.open = true;
-              settingsCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            } else if (view === 'logs' && progressEl2) {
-              progressEl2.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            } else if (view === 'flash') {
-              document.querySelector('[data-wizard-step="1"]').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            if (view === 'about') {
+              showAbout();
+              return;
             }
+            items.forEach((b) => {
+              b.classList.toggle('active', b === btn);
+              if (b === btn) {
+                b.setAttribute('aria-current', 'page');
+              } else {
+                b.removeAttribute('aria-current');
+              }
+            });
+            showView(view);
           });
+        });
+
+        if (closeAbout) closeAbout.addEventListener('click', hideAbout);
+        if (aboutModal) {
+          aboutModal.addEventListener('click', (e) => {
+            if (e.target === aboutModal) hideAbout();
+          });
+        }
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') hideAbout();
         });
       })();
 
