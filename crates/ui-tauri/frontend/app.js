@@ -30,7 +30,8 @@
       const defaultLabel = document.getElementById('defaultLabel');
       const planEl = document.getElementById('installPlan');
       const planContainer = document.getElementById('planContainer');
-      const payloadLabel = document.getElementById('payloadLabel');
+      const payloadBadge = document.getElementById('payloadBadge');
+      const modeBadge = document.getElementById('modeBadge');
       const configBanner = document.getElementById('configBanner');
       const resetParamsBtn = document.getElementById('resetParams');
       const saveOnInstallOnly = document.getElementById('saveOnInstallOnly');
@@ -67,8 +68,14 @@
         if (entriesConfigEl) entriesConfigEl.innerHTML = '';
         stopBootTimer();
         if (!entries.length) {
-          entriesEl.innerHTML = '<div class="disk">No entries detected.</div>';
-          if (entryNote) entryNote.textContent = 'No ISO images found in default paths.';
+          // Leave entriesEl empty so the dropzone empty-state CSS
+          // takes over with "Drop .iso files here…". The note below
+          // gives a concrete next action.
+          if (entryNote) {
+            entryNote.innerHTML =
+              'No ISOs found in <code>/media</code>, <code>/mnt</code>, <code>/home</code>. ' +
+              'Drop ISO files onto the card above, or set custom scan paths under step 2.';
+          }
           return;
         }
         entries.forEach((entry) => {
@@ -306,13 +313,21 @@
           ? (confirmErase && confirmErase.value.trim() === 'ERASE')
           : true;
         installBtn.disabled = !ok;
+        const destructive = enableWrite && enableWrite.checked;
         if (installBtn) {
-          installBtn.textContent = enableWrite && enableWrite.checked && allowWriteOk
-            ? 'Run Install'
+          installBtn.textContent = destructive && allowWriteOk
+            ? 'Run Install (destructive)'
             : 'Run Dry-Run Install';
         }
-        if (enableWrite && enableWrite.checked && !allowWriteOk) {
+        if (destructive && !allowWriteOk) {
           installBtn.disabled = true;
+        }
+        if (modeBadge) {
+          setBadge(
+            modeBadge,
+            destructive ? 'Destructive · will erase target' : 'Dry-run · no changes made',
+            destructive ? 'danger' : 'info',
+          );
         }
         updateInstallPlan();
       }
@@ -573,14 +588,21 @@
         planEl.innerHTML = steps.map((s) => `<div class="plan-item">${s}</div>`).join('');
       }
 
+      function setBadge(el, text, kind) {
+        if (!el) return;
+        el.textContent = text;
+        el.classList.remove('badge--info', 'badge--ok', 'badge--warn', 'badge--danger');
+        el.classList.add(`badge--${kind}`);
+      }
+
       async function loadPayloadVersion() {
-        if (!payloadLabel) return;
+        if (!payloadBadge) return;
         try {
           const { invoke } = window.__TAURI__.tauri;
           const version = await invoke('get_payload_version');
-          payloadLabel.textContent = `Payload: ${version}`;
+          setBadge(payloadBadge, `Payload ${version}`, 'ok');
         } catch (_err) {
-          payloadLabel.textContent = 'Payload: missing';
+          setBadge(payloadBadge, 'Payload missing', 'warn');
           showBanner('Payload manifest not found. Set payload/manifest.json.', true, false);
         }
       }
@@ -978,8 +1000,9 @@
       //   1. Pick ISO entries (the existing entries section).
       //   2. Pick USB and confirm (the install panel).
       //
-      // Triggered by the toggle in the wizard-nav. Defaults to off so
-      // power-users see the full dashboard. State persists in
+      // Triggered by the toggle in the wizard-nav. Defaults to ON
+      // for first-time users (the happy path is the headline UX);
+      // power-users can flip it off and the choice persists in
       // localStorage.
       // ---------------------------------------------------------------
       (function setupWizard() {
@@ -1031,5 +1054,9 @@
           applyWizardMode(toggle.checked);
         });
 
-        applyWizardMode(localStorage.getItem(STATE_KEY) === '1');
+        // First-time users default to Guided mode ON. Once a user
+        // explicitly toggles, the explicit choice wins from then on.
+        const saved = localStorage.getItem(STATE_KEY);
+        const initial = saved === null ? true : saved === '1';
+        applyWizardMode(initial);
       })();
