@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: GPL-3.0-only
+blank_issues_enabled: false
+contact_links:
+  - name: Security disclosure
+    url: https://github.com/sebastienrousseau/raidhos/security/advisories/new
+    about: Report a security issue privately via GitHub Security Advisories.
+  - name: General questions / discussions
+    url: https://github.com/sebastienrousseau/raidhos/discussions
+    about: Ask a question or start a design conversation in Discussions.

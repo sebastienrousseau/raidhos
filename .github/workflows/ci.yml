@@ -2,34 +2,169 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: Build / test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable, snapshot 2026-05-18
         with:
           components: rustfmt, clippy
 
-      - name: Build
-        run: cargo build --workspace
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
+        with:
+          shared-key: ci-${{ matrix.os }}
+          cache-targets: true
+          cache-all-crates: true
+
+      - name: Build (CLI + core + helper)
+        run: cargo build --workspace --exclude raidhos-ui
 
       - name: Format
         run: cargo fmt --all -- --check
 
       - name: Lint
-        run: cargo clippy --workspace -- -D warnings
+        run: cargo clippy --workspace --exclude raidhos-ui --all-targets -- -D warnings
 
-      - name: Coverage (raidhos-core)
+      - name: Test
+        run: cargo test --workspace --exclude raidhos-ui --all-targets
+
+  coverage:
+    name: Coverage gate (raidhos-core)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable, snapshot 2026-05-18
+
+      - name: Cache cargo + tarpaulin install
+        uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
+        with:
+          shared-key: coverage
+          cache-targets: true
+
+      - name: Cache tarpaulin binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-tarpaulin
+          key: cargo-tarpaulin-${{ runner.os }}-v1
+
+      - name: Install tarpaulin
         run: |
-          cargo install cargo-tarpaulin
-          cargo tarpaulin -p raidhos-core --fail-under 95
+          if ! command -v cargo-tarpaulin >/dev/null 2>&1; then
+            cargo install --locked cargo-tarpaulin
+          fi
+      # Coverage gate: 100% across raidhos-core, raidhos-cli, and
+      # raidhos-priv-helper. Untestable lines (binary entry points,
+      # platform-specific dispatch wrappers) have been refactored
+      # into helpers with unit tests; pub-fn wrappers in
+      # platform/{linux,macos,windows}.rs are cfg-gated to their
+      # host so each runner only sees its own arm.
+      #
+      # If this gate fails, fix the test — don't lower the bar.
+      # See `docs/V0_0_1_STATUS.md` for the per-file breakdown.
+      - name: Tarpaulin (raidhos-core, 100%)
+        run: |
+          cargo tarpaulin \
+            -p raidhos-core \
+            --exclude-files 'crates/priv-helper/**' \
+            --exclude-files 'crates/cli/**' \
+            --exclude-files 'crates/ui-tauri/**' \
+            --exclude-files 'fuzz/**' \
+            --fail-under 100 \
+            --out Xml
+      - name: Tarpaulin (raidhos-cli, 100%)
+        run: |
+          # `--follow-exec` is needed on Linux: tarpaulin's default
+          # ptrace engine doesn't trace into spawned child processes,
+          # which means the cli integration tests (which spawn the
+          # built binary) wouldn't contribute coverage to main.rs.
+          # Also exclude the integration-test files themselves so the
+          # gate is strictly about the cli's source, not the test
+          # scaffolding.
+          cargo tarpaulin \
+            -p raidhos-cli \
+            --engine llvm \
+            --exclude-files 'crates/core/**' \
+            --exclude-files 'crates/priv-helper/**' \
+            --exclude-files 'crates/ui-tauri/**' \
+            --exclude-files 'crates/cli/tests/**' \
+            --exclude-files 'fuzz/**' \
+            --fail-under 100
+      - name: Tarpaulin (raidhos-priv-helper, 90%)
+        run: |
+          # Linux CI: 90% with the Runtime-refactored
+          # `create_persistence_with` + targeted unit tests
+          # covering the cfg-conditional arms of seccomp.rs
+          # and toctou.rs. The remaining 10% (≈22 lines) is
+          # the production-only privileged path:
+          #   - `Command::Install` arms gated on
+          #     `allow_write && !dry_run` (TOCTOU fd pin path
+          #     + persistence-overlay enable branch).
+          #   - The thin `create_persistence` shim that plugs
+          #     `RealRuntime` into the testable
+          #     `create_persistence_with`.
+          #   - Lines that fire only when seccomp fails to
+          #     install on the host kernel.
+          # Reaching those needs a privileged runner with real
+          # block devices; tracked for v0.0.2 hardware-validation
+          # CI.
+          #
+          # macOS dev host shows 100% (70/70) because the Linux-
+          # only modules (seccomp.rs, toctou.rs, persistence_tests)
+          # don't compile there.
+          cargo tarpaulin \
+            -p raidhos-priv-helper \
+            --engine llvm \
+            --exclude-files 'crates/core/**' \
+            --exclude-files 'crates/cli/**' \
+            --exclude-files 'crates/ui-tauri/**' \
+            --exclude-files 'crates/priv-helper/tests/**' \
+            --exclude-files 'fuzz/**' \
+            --fail-under 90
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: cobertura.xml
+          if-no-files-found: warn
+
+  msrv:
+    name: MSRV (1.85) sanity check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@c56a35af9328d0bc581dc86c05e58f97f7c38a0e # 1.85, snapshot 2026-05-18
+      - uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
+        with:
+          shared-key: msrv-ubuntu
+      # The workspace's `rust-version` is a contract with packagers
+      # (Debian, AUR, Homebrew). Declaring it in Cargo.toml is
+      # necessary but not sufficient — a stable-toolchain feature
+      # creeping in would only fail on the end user's machine.
+      # `cargo check` under the pinned toolchain catches the drift.
+      #
+      # Bumped 1.78 → 1.85 on 2026-05-18 after this gate caught the
+      # transitive `roff 1.1.1` (via clap_mangen) requiring
+      # `edition2024`, which only stabilised in 1.85.
+      - name: cargo check --workspace under 1.85
+        run: cargo +1.85 check --workspace --exclude raidhos-ui --all-targets
 
   grub-build:
+    name: Reproducible GRUB build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

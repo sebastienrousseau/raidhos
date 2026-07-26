@@ -1,0 +1,55 @@
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self'; script-src 'self';
+                 connect-src 'self' ipc: tauri:" />
+  <title>raidhos-ui — save_boot_config example</title>
+  <script defer>
+    document.addEventListener('DOMContentLoaded', () => {
+      const { core } = window.__TAURI__;
+      const out = document.getElementById('out');
+
+      document.getElementById('save').addEventListener('click', async () => {
+        const config = {
+          version: 1,
+          default: 'ubuntu',
+          timeout: 5,
+          entries: [
+            { title: 'ubuntu', iso: 'boot/isos/ubuntu.iso', params: 'quiet splash' },
+            { title: 'arch',   iso: 'boot/isos/arch.iso',   params: '' },
+          ],
+        };
+        try {
+          await core.invoke('save_boot_config', { config });
+          out.textContent = 'saved to ProjectDirs';
+        } catch (e) {
+          out.textContent = `error: ${e}`;
+        }
+      });
+
+      document.getElementById('load').addEventListener('click', async () => {
+        try {
+          const cfg = await core.invoke('load_boot_config');
+          out.textContent = JSON.stringify(cfg, null, 2);
+        } catch (e) {
+          out.textContent = `error: ${e}`;
+        }
+      });
+    });
+  </script>
+</head>
+<body>
+  <h1>save_boot_config / load_boot_config</h1>
+  <p>Round-trips a <code>boot.json</code> to the user's
+     <code>directories::ProjectDirs</code> location.</p>
+
+  <button id="save">Save sample config</button>
+  <button id="load">Load it back</button>
+
+  <h2>Output</h2>
+  <pre id="out">Ready.</pre>
+</body>
+</html>

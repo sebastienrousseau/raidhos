@@ -1,0 +1,330 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build (e.g. v0.0.1)"
+        required: true
+
+permissions:
+  contents: write    # create release, upload assets
+  id-token: write    # cosign keyless signing via OIDC
+  attestations: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+            cross: true
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            archive: tar.gz
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            archive: tar.gz
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            archive: zip
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+            archive: zip
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable, snapshot 2026-05-18
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross (Linux aarch64)
+        if: matrix.cross
+        run: cargo install cross --locked
+
+      - name: Build CLI + helper (non-cross)
+        if: '!matrix.cross'
+        shell: bash
+        run: |
+          cargo build --release --workspace --exclude raidhos-ui --target ${{ matrix.target }}
+
+      - name: Build CLI + helper (cross)
+        if: matrix.cross
+        run: cross build --release --workspace --exclude raidhos-ui --target ${{ matrix.target }}
+
+      - name: Package
+        id: pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          name="raidhos-${{ github.event.inputs.tag || github.ref_name }}-${{ matrix.target }}"
+          mkdir -p "dist/$name"
+          if [[ "${{ matrix.os }}" == windows-* ]]; then
+            cp "target/${{ matrix.target }}/release/raidhos-cli.exe" "dist/$name/"
+            cp "target/${{ matrix.target }}/release/raidhos-priv-helper.exe" "dist/$name/"
+          else
+            cp "target/${{ matrix.target }}/release/raidhos-cli" "dist/$name/"
+            cp "target/${{ matrix.target }}/release/raidhos-priv-helper" "dist/$name/"
+          fi
+          cp README.md LICENSE SECURITY.md CHANGELOG.md "dist/$name/"
+          cd dist
+          if [[ "${{ matrix.archive }}" == "zip" ]]; then
+            7z a "$name.zip" "$name" >/dev/null
+            echo "asset=dist/$name.zip" >> "$GITHUB_OUTPUT"
+          else
+            tar -czf "$name.tar.gz" "$name"
+            echo "asset=dist/$name.tar.gz" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v shasum >/dev/null; then
+            shasum -a 256 "${{ steps.pack.outputs.asset }}" > "${{ steps.pack.outputs.asset }}.sha256"
+          else
+            sha256sum "${{ steps.pack.outputs.asset }}" > "${{ steps.pack.outputs.asset }}.sha256"
+          fi
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@f713795cb21599bc4e5c4b58cbad1da852d7eeb9 # v3.7.0
+
+      - name: cosign sign (keyless via OIDC)
+        shell: bash
+        env:
+          COSIGN_YES: "true"
+        run: |
+          cosign sign-blob --yes \
+            --output-signature "${{ steps.pack.outputs.asset }}.sig" \
+            --output-certificate "${{ steps.pack.outputs.asset }}.pem" \
+            "${{ steps.pack.outputs.asset }}"
+
+      - name: SLSA build provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: ${{ steps.pack.outputs.asset }}
+
+      - name: Upload artefact (for release job)
+        uses: actions/upload-artifact@v4
+        with:
+          name: raidhos-${{ matrix.target }}
+          path: |
+            ${{ steps.pack.outputs.asset }}
+            ${{ steps.pack.outputs.asset }}.sha256
+            ${{ steps.pack.outputs.asset }}.sig
+            ${{ steps.pack.outputs.asset }}.pem
+          if-no-files-found: error
+
+  sbom:
+    name: SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable, snapshot 2026-05-18
+      - name: Install cargo-cyclonedx
+        run: cargo install --locked cargo-cyclonedx
+      - name: Generate CycloneDX SBOM
+        run: cargo cyclonedx --format json --override-filename raidhos.cdx
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: raidhos.cdx.json
+          if-no-files-found: error
+
+  grub:
+    name: GRUB BOOTX64.EFI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build reproducible GRUB
+        run: ./tools/grub/build_grub.sh
+      - name: SHA-256
+        run: sha256sum BOOTX64.EFI > BOOTX64.EFI.sha256
+      - name: Install cosign
+        uses: sigstore/cosign-installer@f713795cb21599bc4e5c4b58cbad1da852d7eeb9 # v3.7.0
+      - name: cosign sign
+        env:
+          COSIGN_YES: "true"
+        run: |
+          cosign sign-blob --yes \
+            --output-signature BOOTX64.EFI.sig \
+            --output-certificate BOOTX64.EFI.pem \
+            BOOTX64.EFI
+      - name: SLSA build provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: BOOTX64.EFI
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: bootx64-efi
+          path: |
+            BOOTX64.EFI
+            BOOTX64.EFI.sha256
+            BOOTX64.EFI.sig
+            BOOTX64.EFI.pem
+          if-no-files-found: error
+
+  arch-pkg:
+    name: Arch / CachyOS .pkg.tar.zst
+    needs: build
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+      options: --user root
+    steps:
+      # actions/checkout has GLIBC requirements; the archlinux:base-devel
+      # image is current enough but missing git for the action's clone
+      # step. Install it first.
+      - name: Install git inside the container
+        run: pacman -Syu --noconfirm --needed git
+
+      - uses: actions/checkout@v4
+
+      - name: Download Linux release tarballs from the build job
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Stage the prebuilt tarballs where makepkg expects them
+        # makepkg's `source_*` array would normally fetch from
+        # `releases/download/v<ver>/...` — but at tag-build time the
+        # release doesn't exist yet. Pre-populate $SRCDEST with the
+        # tarballs from the upstream build job and use `--noextract`
+        # to skip the download.
+        run: |
+          set -eux
+          # Extract the version from the tag (drop the leading `v`).
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          PKGVER="${TAG#v}"
+          # The build job's artifacts are split per-target under
+          # `artifacts/raidhos-${target}/`. We need the linux-gnu ones.
+          mkdir -p /tmp/srcdest
+          cp "artifacts/raidhos-x86_64-unknown-linux-gnu/raidhos-${PKGVER}-x86_64-unknown-linux-gnu.tar.gz" \
+             "/tmp/srcdest/raidhos-${PKGVER}-x86_64.tar.gz"
+          cp "artifacts/raidhos-aarch64-unknown-linux-gnu/raidhos-${PKGVER}-aarch64-unknown-linux-gnu.tar.gz" \
+             "/tmp/srcdest/raidhos-${PKGVER}-aarch64.tar.gz"
+          # Drop the PKGBUILD into its own work dir so the build user
+          # can read it without owning the whole repo checkout.
+          mkdir -p /tmp/pkgbuild
+          cp packaging/arch/PKGBUILD.bin /tmp/pkgbuild/PKGBUILD
+          # Pin pkgver to the tag we're building (PKGBUILD.bin's default
+          # is the latest published version and may lag the tag).
+          sed -i "s/^pkgver=.*/pkgver=${PKGVER}/" /tmp/pkgbuild/PKGBUILD
+          chown -R nobody:nobody /tmp/pkgbuild /tmp/srcdest
+
+      - name: makepkg (x86_64)
+        run: |
+          set -eux
+          cd /tmp/pkgbuild
+          sudo -u nobody env SRCDEST=/tmp/srcdest \
+            makepkg -fc --skipinteg --noconfirm --noextract -A
+          # `-A` ignores arch mismatches in case the runner is x86_64
+          # but the PKGBUILD's arch list checks aarch64 too. Final
+          # artefact name: raidhos-bin-${PKGVER}-1-x86_64.pkg.tar.zst.
+
+      - name: Upload the .pkg.tar.zst
+        uses: actions/upload-artifact@v4
+        with:
+          name: arch-pkg
+          path: /tmp/pkgbuild/*.pkg.tar.zst
+          if-no-files-found: error
+
+  rpm-bin:
+    name: Fedora / RHEL .rpm
+    needs: build
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:latest
+      options: --user root
+    strategy:
+      fail-fast: false
+      matrix:
+        rpm_arch: [x86_64, aarch64]
+    steps:
+      - name: Install rpmbuild + util
+        run: dnf install -y rpm-build git findutils tar
+
+      - uses: actions/checkout@v4
+
+      - name: Download Linux release tarballs from the build job
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Stage the tarball where rpmbuild expects it
+        # The bin spec's Source0 is a `releases/download/...` URL.
+        # At tag-build time the release doesn't exist yet, so we
+        # pre-stage the tarball in ~/rpmbuild/SOURCES with the
+        # filename rpmbuild expects after URL-stripping.
+        run: |
+          set -eux
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          PKGVER="${TAG#v}"
+          ARCH="${{ matrix.rpm_arch }}"
+          mkdir -p ~/rpmbuild/SOURCES
+          cp "artifacts/raidhos-${ARCH}-unknown-linux-gnu/raidhos-${PKGVER}-${ARCH}-unknown-linux-gnu.tar.gz" \
+             "$HOME/rpmbuild/SOURCES/raidhos-${PKGVER}-${ARCH}-unknown-linux-gnu.tar.gz"
+          # Pin Version: to the actual tag.
+          sed -i "s/^Version:.*/Version:        ${PKGVER}/" packaging/fedora/raidhos-bin.spec
+          echo "PKGVER=${PKGVER}" >> "$GITHUB_ENV"
+
+      - name: rpmbuild
+        run: |
+          set -eux
+          # `--target` so we always produce the arch we asked for,
+          # even if the runner is x86_64. The bin spec is
+          # ExclusiveArch x86_64/aarch64; rpmbuild does the right
+          # thing for a noarch-pure repackage like this.
+          rpmbuild -bb packaging/fedora/raidhos-bin.spec \
+            --target "${{ matrix.rpm_arch }}-linux"
+          find ~/rpmbuild/RPMS -name '*.rpm' -print
+
+      - name: Upload the .rpm
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpm-bin-${{ matrix.rpm_arch }}
+          path: /github/home/rpmbuild/RPMS/${{ matrix.rpm_arch }}/*.rpm
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: [build, sbom, grub, arch-pkg, rpm-bin]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten artifacts
+        run: |
+          mkdir release-assets
+          find artifacts -type f -exec cp {} release-assets/ \;
+
+      - name: Generate checksums manifest
+        working-directory: release-assets
+        run: |
+          sha256sum * > SHA256SUMS
+
+      - name: Create / update GitHub Release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.0.8
+        with:
+          name: ${{ github.event.inputs.tag || github.ref_name }}
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          body_path: CHANGELOG.md
+          files: release-assets/*
+          fail_on_unmatched_files: true

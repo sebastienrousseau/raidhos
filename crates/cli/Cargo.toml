@@ -1,8 +1,24 @@
 [package]
-name = "cli"
+name = "raidhos-cli"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+build = "build.rs"
+
+[[bin]]
+name = "raidhos-cli"
+path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 raidhos-core = { path = "../core" }
+
+[build-dependencies]
+clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
+clap_mangen = "0.3"
+
+[lints]
+workspace = true

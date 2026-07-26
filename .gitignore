@@ -1,3 +1,26 @@
-target
-node_modules
+target/
+node_modules/
 .DS_Store
+
+# Build outputs
+build/
+BOOTX64.EFI
+dist/
+*.tar.gz
+*.zip
+*.sha256
+
+# Coverage
+cobertura.xml
+tarpaulin-report.html
+lcov.info
+# tarpaulin --engine llvm drops .profraw next to the binary's
+# working directory; cargo doesn't sweep these.
+*.profraw
+*.profdata
+
+# Editors
+.vscode/
+.idea/
+*.swp
+.claude/

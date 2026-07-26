@@ -4,1296 +4,227 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>RaidhOS</title>
-    <style>
-      :root {
-        --bg: #121212;
-        --bg-2: #1a1a1a;
-        --ink: #e0e0e0;
-        --muted: #bdbdbd;
-        --accent: #2a2a2a;
-        --accent-2: #303030;
-        --accent-3: #262626;
-        --card: #171717;
-        --surface: #1f1f1f;
-        --surface-strong: #262626;
-        --stroke: #707070;
-        --stroke-strong: #9a9a9a;
-        --glow: rgba(0, 0, 0, 0);
-        --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
-        --space-1: 4px;
-        --space-2: 6px;
-        --space-3: 10px;
-        --space-4: 16px;
-        --space-5: 26px;
-        --space-6: 42px;
-        --space-7: 68px;
-        --space-8: 110px;
-        --radius-sm: var(--space-2);
-        --radius-md: 0px;
-        --radius-lg: 0px;
-        --icon-sm: var(--space-4);
-        --icon-md: var(--space-5);
-        --icon-lg: var(--space-6);
-        --icon-xl: var(--space-7);
-        --icon-xxl: var(--space-8);
-        --font-xs: var(--space-3);
-        --font-sm: var(--space-4);
-        --font-md: var(--space-5);
-        --font-lg: var(--space-6);
-        --font-xl: var(--space-7);
-        --font-xxl: var(--space-8);
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      body {
-        margin: 0;
-        min-height: 100vh;
-        display: grid;
-        place-items: center;
-        background: radial-gradient(1200px 800px at 25% 10%, var(--bg-2), var(--bg) 60%);
-        color: var(--ink);
-        font-family: "Avenir Next", "SF Pro Display", "Segoe UI Variable", "Noto Sans", "Ubuntu", sans-serif;
-        letter-spacing: 0.4px;
-        line-height: 1.6;
-        font-size: var(--font-sm);
-        font-weight: 500;
-      }
-
-      .shell {
-        width: min(980px, 92vw);
-        display: grid;
-        gap: var(--space-5);
-      }
-
-      header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: var(--space-4);
-      }
-
-      .brand {
-        display: flex;
-        align-items: center;
-        gap: var(--space-4);
-      }
-
-      .logo {
-        background: transparent;
-        box-shadow: none;
-        width: auto;
-        height: auto;
-        display: inline-block;
-        color: #f0f0f0;
-        font-weight: 700;
-        letter-spacing: 1.2px;
-        font-size: var(--font-md);
-        line-height: 1;
-      }
-
-      h1 {
-        font-size: var(--font-lg);
-        margin: 0;
-      }
-
-      h2 {
-        margin: 0 0 var(--space-2) 0;
-        font-size: var(--font-md);
-        font-weight: 600;
-      }
-
-      .subtitle {
-        color: var(--muted);
-        margin: var(--space-1) 0 0 0;
-      }
-
-      .card {
-        background: var(--card);
-        border-radius: 0;
-        border: 1px solid var(--stroke);
-        padding: var(--space-5);
-        box-shadow: var(--shadow);
-        backdrop-filter: blur(16px);
-      }
-
-      .actions {
-        display: flex;
-        gap: var(--space-3);
-      }
-
-      button {
-        border: 0;
-        border-radius: 0;
-        padding: var(--space-3) var(--space-4);
-        min-height: var(--space-5);
-        font-weight: 600;
-        cursor: pointer;
-        transition: transform 160ms ease, box-shadow 160ms ease;
-      }
-
-      button:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-      }
-
-      .primary {
-        background: var(--accent);
-        color: #f0f0f0;
-        box-shadow: none;
-      }
-
-      .primary:hover {
-        transform: translateY(-1px);
-      }
-
-      .ghost {
-        background: transparent;
-        border: 1px solid var(--stroke);
-        color: var(--ink);
-      }
-
-      .disks {
-        display: grid;
-        gap: var(--space-3);
-      }
-
-      .disk {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        align-items: center;
-        padding: var(--space-4) var(--space-4);
-        border-radius: 0;
-        border: 1px solid var(--stroke);
-        background: var(--surface);
-        transition: transform 160ms ease, box-shadow 160ms ease;
-        cursor: pointer;
-        position: relative;
-      }
-
-      .disk.selected {
-        border-color: var(--stroke-strong);
-        background: var(--surface-strong);
-        box-shadow: none;
-      }
-
-      .disk.selected::before {
-        content: "";
-        position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        width: var(--space-1);
-        background: var(--stroke-strong);
-        border-radius: 0;
-      }
-
-      .disk:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 16px 40px rgba(9, 97, 120, 0.22);
-      }
-
-      .disk strong {
-        font-size: 15px;
-      }
-
-      .disk small {
-        color: var(--muted);
-      }
-
-      .pill {
-        padding: var(--space-2) var(--space-3);
-        background: #232323;
-        color: #eaeaea;
-        border-radius: 0;
-        font-size: var(--font-xs);
-        font-weight: 600;
-        border: 1px solid var(--stroke-strong);
-      }
-
-      .footer {
-        color: var(--muted);
-        font-size: var(--font-xs);
-      }
-
-      .panel {
-        display: grid;
-        gap: var(--space-3);
-      }
-
-      .confirm {
-        display: grid;
-        gap: var(--space-3);
-        padding: var(--space-4);
-        border-radius: 0;
-        border: 1px dashed var(--stroke);
-        background: var(--surface);
-      }
-
-      input {
-        width: 100%;
-        border-radius: 0;
-        padding: var(--space-3) var(--space-4);
-        border: 1px solid var(--stroke);
-        font-size: var(--font-sm);
-        background: #141414;
-        color: var(--ink);
-      }
-
-      .entry-params {
-        width: 100%;
-        margin-top: var(--space-2);
-      }
-
-      .confirm label {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--space-2);
-        line-height: 1.4;
-      }
-
-      input[type="checkbox"] {
-        width: var(--space-4);
-        height: var(--space-4);
-        accent-color: var(--stroke-strong);
-      }
-
-      .entry-advanced {
-        margin-top: var(--space-3);
-      }
-
-      .entry-advanced summary {
-        cursor: pointer;
-        color: var(--muted);
-        font-size: var(--font-xs);
-        letter-spacing: 0.4px;
-      }
-
-      .entry-advanced input {
-        margin-top: var(--space-2);
-      }
-
-      .entry-default {
-        display: inline-flex;
-        gap: var(--space-2);
-        align-items: center;
-        margin-top: var(--space-2);
-        color: var(--muted);
-        font-size: var(--font-xs);
-      }
-
-      .progress {
-        display: grid;
-        gap: var(--space-2);
-      }
-
-      .progress-item {
-        display: flex;
-        justify-content: space-between;
-        background: #222222;
-        border: 1px solid var(--stroke);
-        border-radius: 0;
-        padding: var(--space-2) var(--space-3);
-        font-size: var(--font-sm);
-      }
-
-      .plan {
-        display: grid;
-        gap: var(--space-2);
-        font-size: var(--font-sm);
-        color: var(--muted);
-      }
-
-      .plan-item {
-        border: 1px solid var(--stroke);
-        padding: var(--space-2) var(--space-3);
-        background: #1d1d1d;
-      }
-
-      .banner {
-        display: none;
-        border: 1px solid var(--stroke);
-        padding: var(--space-2) var(--space-3);
-        background: #1a1a1a;
-        font-size: var(--font-sm);
-        color: var(--ink);
-      }
-
-      .banner.error {
-        border-color: #7a7a7a;
-      }
-
-      .spinner {
-        display: inline-block;
-        width: var(--space-3);
-        height: var(--space-3);
-        border: 2px solid var(--stroke);
-        border-top-color: transparent;
-        animation: spin 700ms linear infinite;
-        margin-right: var(--space-2);
-      }
-
-      .modal {
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.55);
-        display: none;
-        place-items: center;
-        z-index: 1000;
-      }
-
-      .modal.open {
-        display: grid;
-      }
-
-      .modal-card {
-        background: #1a1a1a;
-        border: 1px solid var(--stroke);
-        padding: var(--space-5);
-        width: min(420px, 90vw);
-      }
-
-      .modal-actions {
-        display: flex;
-        gap: var(--space-3);
-        margin-top: var(--space-4);
-      }
-
-      @keyframes spin {
-        to {
-          transform: rotate(360deg);
-        }
-      }
-
-      .boot-progress {
-        height: var(--space-1);
-        background: #1a1a1a;
-        border: 1px solid var(--stroke);
-        border-radius: 0;
-        overflow: hidden;
-      }
-
-      .boot-progress-fill {
-        height: 100%;
-        width: 0%;
-        background: var(--stroke-strong);
-        transition: width 120ms linear;
-      }
-
-      @keyframes fadeUp {
-        from {
-          opacity: 0;
-          transform: translateY(10px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-
-      .card {
-        animation: fadeUp 380ms ease both;
-      }
-
-      /* Boot splash */
-      .splash {
-        position: fixed;
-        inset: 0;
-        background: #121212;
-        display: grid;
-        place-items: center;
-        z-index: 999;
-        opacity: 1;
-        transition: opacity 420ms ease;
-      }
-
-      .splash.hidden {
-        opacity: 0;
-        pointer-events: none;
-      }
-
-      .splash-logo {
-        display: grid;
-        place-items: center;
-        position: relative;
-      }
-
-      .splash-glyph {
-        font-size: var(--font-xxl);
-        color: #f0f0f0;
-        text-shadow: none;
-        z-index: 1;
-      }
-
-      .splash-text {
-        margin-top: var(--space-4);
-        font-size: var(--font-sm);
-        letter-spacing: 1.2px;
-        color: #9aa7b8;
-      }
-
-      @keyframes pulse {
-        0% {
-          opacity: 0.85;
-        }
-        50% {
-          opacity: 1;
-        }
-        100% {
-          opacity: 0.85;
-        }
-      }
-
-      .splash-logo {
-        animation: pulse 2.8s ease-in-out infinite;
-      }
-
-      .app {
-        opacity: 0;
-        transform: translateY(6px);
-        transition: opacity 420ms ease, transform 420ms ease;
-      }
-
-      .app.ready {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    </style>
+    <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="splash" id="splash">
+    <a class="sr-only" href="#main">Skip to main content</a>
+
+    <div class="splash" id="splash" role="status" aria-live="polite" aria-label="RaidhOS loading">
       <div class="splash-logo">
-        <div class="splash-glyph">ᚱ</div>
+        <div class="splash-glyph" aria-hidden="true">ᚱ</div>
       </div>
     </div>
 
-    <div class="shell app" id="app">
-      <div class="modal" id="resetModal">
-        <div class="modal-card">
-          <strong>Reset all parameters?</strong>
-          <p class="subtitle">This will revert params, initrd, and kernel args for all entries.</p>
-          <div class="modal-actions">
-            <button class="ghost" id="cancelReset">Cancel</button>
-            <button class="primary" id="confirmReset">Reset</button>
-          </div>
+    <div class="app-shell" id="app">
+      <aside class="sidebar" aria-label="App navigation">
+        <div class="sidebar-brand" aria-hidden="true">ᚱ</div>
+        <nav class="sidebar-nav" role="navigation">
+          <button class="sidebar-item active" data-view="flash" aria-current="page" aria-label="Flash">
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>
+            </span>
+            <span class="sidebar-label">Flash</span>
+          </button>
+          <button class="sidebar-item" data-view="settings" aria-label="Settings">
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </span>
+            <span class="sidebar-label">Settings</span>
+          </button>
+          <button class="sidebar-item" data-view="logs" aria-label="Logs">
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            </span>
+            <span class="sidebar-label">Logs</span>
+          </button>
+        </nav>
+        <div class="sidebar-footer">
+          <button class="sidebar-item" data-view="about" aria-label="About">
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            </span>
+            <span class="sidebar-label">About</span>
+          </button>
         </div>
-      </div>
-      <section class="card boot-config" id="bootConfig">
-        <details open>
-          <summary>Boot Config</summary>
-          <p class="subtitle">Edit boot entries and parameters.</p>
-          <div class="actions" style="margin-bottom: var(--space-3);">
-            <button class="ghost" id="resetParams">Reset Params</button>
-            <label class="entry-default">
-              <input type="checkbox" id="saveOnInstallOnly" />
-              Save config only after install
-            </label>
-          </div>
-          <div class="disks" id="entriesConfig"></div>
-        </details>
-      </section>
-      <header>
-        <div class="brand">
-          <div class="logo">ᚱ</div>
-        </div>
-        <div class="actions">
-          <button class="ghost" id="saveConfig">Save Config</button>
-          <span class="subtitle" id="lastSaved"></span>
-          <button class="ghost" id="refresh">Refresh</button>
-          <button class="primary" id="load">List Disks</button>
-        </div>
-      </header>
+      </aside>
 
-      <section class="card">
-        <h2>Boot Entries</h2>
-        <p class="subtitle">Use ↑/↓ to move. Enter to select. <span id="defaultLabel"></span></p>
-        <div class="boot-progress" id="bootProgress">
-          <div class="boot-progress-fill" id="bootProgressFill"></div>
-        </div>
-        <div class="disks" id="entries"></div>
-        <p class="subtitle" id="entryNote"></p>
-      </section>
-
-      <section class="card panel">
-        <h2>Install</h2>
-        <p class="subtitle">Dry-run only for now. No changes are made. <span id="payloadLabel"></span></p>
-        <div class="confirm">
-          <div><strong>ISO scan paths</strong></div>
-          <div><small>Comma-separated directories (default: /media, /mnt, /home)</small></div>
-          <input id="scanPaths" placeholder="/media,/mnt,/home" />
-          <button class="ghost" id="scanBtn">Rescan ISOs</button>
-        </div>
-        <div class="confirm" id="planContainer">
-          <div><strong>Install plan</strong></div>
-          <div class="plan" id="installPlan"></div>
-        </div>
-        <div class="disks" id="targets"></div>
-        <div class="confirm">
-          <div><strong>Selected:</strong> <span id="selected">None</span></div>
-          <div><small>Type the device path to confirm (e.g. /dev/sdb).</small></div>
-          <input id="confirmInput" placeholder="/dev/sdX" />
-          <div class="confirm">
-            <label>
-              <input type="checkbox" id="acceptWrite" />
-              I understand this will erase the selected device.
-            </label>
-            <label>
-              <input type="checkbox" id="enableWrite" />
-              Enable actual write (not a dry-run).
-            </label>
-            <div><small>Type ERASE to proceed with actual write.</small></div>
-            <input id="confirmErase" placeholder="ERASE" />
-          </div>
-          <button class="primary" id="installBtn" disabled>Run Dry-Run Install</button>
-        </div>
-        <div class="banner" id="configBanner"></div>
-        <div class="progress" id="progress"></div>
-      </section>
-
-      <section class="card footer">
-        Cross-platform core in Rust. UI powered by Tauri.
-      </section>
-    </div>
-
-    <script>
-      const entriesEl = document.getElementById('entries');
-      const entriesConfigEl = document.getElementById('entriesConfig');
-      const targetsEl = document.getElementById('targets');
-      const saveConfigBtn = document.getElementById('saveConfig');
-      const lastSavedEl = document.getElementById('lastSaved');
-      const loadBtn = document.getElementById('load');
-      const refreshBtn = document.getElementById('refresh');
-      const splash = document.getElementById('splash');
-      const app = document.getElementById('app');
-      const selectedEl = document.getElementById('selected');
-      const confirmInput = document.getElementById('confirmInput');
-      const acceptWrite = document.getElementById('acceptWrite');
-      const enableWrite = document.getElementById('enableWrite');
-      const confirmErase = document.getElementById('confirmErase');
-      const scanPathsInput = document.getElementById('scanPaths');
-      const scanBtn = document.getElementById('scanBtn');
-      const installBtn = document.getElementById('installBtn');
-      const progressEl = document.getElementById('progress');
-      const bootProgress = document.getElementById('bootProgress');
-      const bootProgressFill = document.getElementById('bootProgressFill');
-      const entryNote = document.getElementById('entryNote');
-      const defaultLabel = document.getElementById('defaultLabel');
-      const planEl = document.getElementById('installPlan');
-      const planContainer = document.getElementById('planContainer');
-      const payloadLabel = document.getElementById('payloadLabel');
-      const configBanner = document.getElementById('configBanner');
-      const resetParamsBtn = document.getElementById('resetParams');
-      const saveOnInstallOnly = document.getElementById('saveOnInstallOnly');
-      const resetModal = document.getElementById('resetModal');
-      const cancelReset = document.getElementById('cancelReset');
-      const confirmReset = document.getElementById('confirmReset');
-
-      let selectedDisk = null;
-      let selectedEspMount = null;
-      let selectedDataMount = null;
-      let renderedTargets = [];
-      let renderedEntries = [];
-      let selectedIndex = -1;
-      const BOOT_TIMEOUT_SECONDS = 7;
-      let bootTimer = null;
-      let bootRemaining = 0;
-
-      function formatBytes(bytes) {
-        if (!bytes || bytes === 0) return '0 B';
-        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(1024));
-        const value = (bytes / Math.pow(1024, i)).toFixed(1);
-        return `${value} ${units[i]}`;
-      }
-
-      function renderEntries(entries) {
-        renderedEntries = entries;
-        selectedIndex = -1;
-        entriesEl.innerHTML = '';
-        if (entriesConfigEl) entriesConfigEl.innerHTML = '';
-        stopBootTimer();
-        if (!entries.length) {
-          entriesEl.innerHTML = '<div class="disk">No entries detected.</div>';
-          if (entryNote) entryNote.textContent = 'No ISO images found in default paths.';
-          return;
-        }
-        entries.forEach((entry) => {
-          const el = document.createElement('div');
-          el.className = 'disk';
-          el.innerHTML = `
-            <div>
-              <strong>${entry.title}</strong>
-              <div><small>${entry.subtitle}</small></div>
+      <main class="shell" aria-label="RaidhOS">
+        <div class="modal" id="resetModal" role="dialog" aria-modal="true" aria-labelledby="resetModalTitle">
+          <div class="modal-card">
+            <strong id="resetModalTitle">Reset all parameters?</strong>
+            <p class="subtitle">This will revert params, initrd, and kernel args for all entries.</p>
+            <div class="modal-actions">
+              <button class="ghost" id="cancelReset">Cancel</button>
+              <button class="primary" id="confirmReset">Reset</button>
             </div>
-            <div class="pill">${entry.tag}</div>
-          `;
-          el.addEventListener('click', () => selectEntry(entry, el));
-          entriesEl.appendChild(el);
-        });
+          </div>
+        </div>
 
-        if (entriesConfigEl) {
-          renderConfigEntries(entries);
-        }
+        <div class="modal" id="aboutModal" role="dialog" aria-modal="true" aria-labelledby="aboutModalTitle">
+          <div class="modal-card">
+            <strong id="aboutModalTitle">RaidhOS</strong>
+            <p class="subtitle">
+              Memory-safe multi-ISO USB imager. Rust core,
+              <code>forbid(unsafe)</code>, reproducible build,
+              cosign + SLSA L3 signed releases.
+            </p>
+            <p class="subtitle"><span id="aboutVersionLine">Version: …</span></p>
+            <p class="subtitle"><span id="aboutHostLine">Host: …</span></p>
+            <div class="modal-actions">
+              <button class="ghost" id="closeAbout">Close</button>
+            </div>
+          </div>
+        </div>
 
-        if (entryNote) entryNote.textContent = 'Entries sourced from ISO files.';
-        startBootTimer();
-        pushBootConfig();
-        updateDefaultLabel();
-      }
+        <header class="top-bar">
+          <div class="top-bar-title">
+            <h1 id="viewTitle">Flash a USB</h1>
+            <p class="subtitle" id="topSubtitle">Build a multi-ISO bootable USB on macOS / Linux / Windows.</p>
+          </div>
+          <div class="top-bar-actions">
+            <span class="subtitle" id="lastSaved" aria-live="polite"></span>
+          </div>
+        </header>
 
-      function renderConfigEntries(entries) {
-        entriesConfigEl.innerHTML = '';
-        entries.forEach((entry) => {
-          const el = document.createElement('div');
-          el.className = 'disk';
-          const isDefault = entry.path === localStorage.getItem('raidhos_default_entry');
-          el.innerHTML = `
-            <div>
-              <strong>${entry.title}</strong>
-              <div><small>${entry.subtitle}</small></div>
-              <div><small>Params:</small></div>
-              <input class="entry-params" value="${entry.params}" />
-              <label class="entry-default">
-                <input type="radio" name="defaultEntry" ${isDefault ? 'checked' : ''} />
-                Default entry
-              </label>
-              <div class="actions" style="margin-top: var(--space-2);">
-                <button class="ghost entry-up">Move Up</button>
-                <button class="ghost entry-down">Move Down</button>
-                <button class="ghost entry-delete">Delete</button>
+        <!-- Flash view: the happy-path workflow. -->
+        <div class="view view--flash active" data-view="flash">
+          <nav class="wizard-nav" role="tablist" aria-label="Install steps">
+            <button class="wizard-step active" data-step="1" role="tab" aria-selected="true">
+              <span class="wizard-num">1</span><span class="wizard-text">Pick ISOs</span>
+            </button>
+            <span class="wizard-rail" aria-hidden="true"></span>
+            <button class="wizard-step" data-step="2" role="tab" aria-selected="false">
+              <span class="wizard-num">2</span><span class="wizard-text">Pick USB &amp; flash</span>
+            </button>
+            <label class="wizard-toggle">
+              <input type="checkbox" id="wizardToggle" />
+              <span>Guided mode</span>
+            </label>
+          </nav>
+
+          <section class="card card--primary" data-wizard-step="1" aria-label="Pick ISOs">
+            <div class="card-head">
+              <span class="badge badge--info" id="payloadBadge">Awaiting ISO…</span>
+              <span class="subtitle" id="defaultLabel"></span>
+            </div>
+            <div class="boot-progress" id="bootProgress">
+              <div class="boot-progress-fill" id="bootProgressFill"></div>
+            </div>
+            <div class="dropzone-hero" id="dropzoneHero">
+              <div class="dropzone-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               </div>
-              <details class="entry-advanced">
-                <summary>Advanced options</summary>
-                <div><small>Initrd (optional)</small></div>
-                <input class="entry-initrd" value="${entry.initrd || ''}" />
-                <div><small>Kernel args (optional)</small></div>
-                <input class="entry-kargs" value="${entry.kargs || ''}" />
-              </details>
+              <div class="dropzone-title">Drag &amp; drop ISOs here</div>
+              <div class="dropzone-sub" id="dropzoneSub">or click below to browse your files</div>
+              <div class="dropzone-actions">
+                <button class="primary" id="browseIsosBtn">Browse for ISOs…</button>
+                <button class="ghost" id="scanBtn">Rescan default folders</button>
+              </div>
             </div>
-            <div class="pill">${entry.tag}</div>
-          `;
-          const paramsInput = el.querySelector('.entry-params');
-          if (paramsInput) {
-            paramsInput.addEventListener('input', (ev) => {
-              entry.params = ev.target.value;
-              persistEntryParams(entry);
-              pushBootConfig();
-            });
-          }
-          const defaultInput = el.querySelector('.entry-default input');
-          if (defaultInput) {
-            defaultInput.addEventListener('change', () => {
-              localStorage.setItem('raidhos_default_entry', entry.path);
-              pushBootConfig();
-              updateDefaultLabel();
-            });
-          }
-          const initrdInput = el.querySelector('.entry-initrd');
-          if (initrdInput) {
-            initrdInput.addEventListener('input', (ev) => {
-              entry.initrd = ev.target.value;
-              persistEntryParams(entry);
-              pushBootConfig();
-            });
-          }
-          const kargsInput = el.querySelector('.entry-kargs');
-          if (kargsInput) {
-            kargsInput.addEventListener('input', (ev) => {
-              entry.kargs = ev.target.value;
-              persistEntryParams(entry);
-              pushBootConfig();
-            });
-          }
-          const upBtn = el.querySelector('.entry-up');
-          const downBtn = el.querySelector('.entry-down');
-          const delBtn = el.querySelector('.entry-delete');
-          if (upBtn) {
-            upBtn.addEventListener('click', () => {
-              moveEntry(entry.path, -1);
-            });
-          }
-          if (downBtn) {
-            downBtn.addEventListener('click', () => {
-              moveEntry(entry.path, 1);
-            });
-          }
-          if (delBtn) {
-            delBtn.addEventListener('click', () => {
-              deleteEntry(entry.path);
-            });
-          }
-          entriesConfigEl.appendChild(el);
-        });
-      }
-
-      function moveEntry(path, direction) {
-        const idx = renderedEntries.findIndex((e) => e.path === path);
-        if (idx < 0) return;
-        const next = idx + direction;
-        if (next < 0 || next >= renderedEntries.length) return;
-        const temp = renderedEntries[idx];
-        renderedEntries[idx] = renderedEntries[next];
-        renderedEntries[next] = temp;
-        localStorage.setItem('raidhos_last_isos', JSON.stringify(renderedEntries));
-        renderEntries(renderedEntries);
-        pushBootConfig();
-      }
-
-      function deleteEntry(path) {
-        renderedEntries = renderedEntries.filter((e) => e.path !== path);
-        localStorage.setItem('raidhos_last_isos', JSON.stringify(renderedEntries));
-        renderEntries(renderedEntries);
-        pushBootConfig();
-      }
-
-      function selectByIndex(index) {
-        if (!renderedEntries.length) return;
-        const clamped = Math.max(0, Math.min(index, renderedEntries.length - 1));
-        const entry = renderedEntries[clamped];
-        const el = entriesEl.children[clamped];
-        if (!entry || !el) return;
-        selectedIndex = clamped;
-        selectEntry(entry, el);
-      }
-
-      function selectEntry(entry, el) {
-        Array.from(entriesEl.children).forEach((d) => d.classList.remove('selected'));
-        el.classList.add('selected');
-        stopBootTimer();
-      }
-
-      function renderTargets(disks) {
-        renderedTargets = disks;
-        targetsEl.innerHTML = '';
-        if (!disks.length) {
-          targetsEl.innerHTML = '<div class="disk">No devices detected.</div>';
-          return;
-        }
-        disks.forEach((disk) => {
-          const el = document.createElement('div');
-          el.className = 'disk';
-          const mounts = disk.mountpoints && disk.mountpoints.length ? ` · ${disk.mountpoints.join(', ')}` : '';
-          const tag = disk.is_system ? 'System' : (disk.removable ? 'Removable' : 'Fixed');
-          el.innerHTML = `
-            <div>
-              <strong>${disk.id}</strong>
-              <div><small>${disk.model || 'Unknown model'} · ${formatBytes(disk.size_bytes)}${mounts}</small></div>
+            <div class="disks" id="entries" aria-label="ISO entry list"></div>
+            <p class="subtitle" id="entryNote"></p>
+            <div class="step1-cta" id="step1Cta" hidden>
+              <button class="primary cta-large" id="continueToStep2" aria-label="Continue to Pick USB & flash">
+                Continue to Select USB <span aria-hidden="true">→</span>
+              </button>
+              <p class="subtitle step1-cta-hint">Or drop more ISOs above to add them to the boot menu.</p>
             </div>
-            <div class="pill">${tag}</div>
-          `;
-          if (disk.is_system) {
-            el.style.opacity = '0.5';
-          } else {
-            el.addEventListener('click', () => selectDisk(disk, el));
-          }
-          targetsEl.appendChild(el);
-        });
-      }
+          </section>
 
-      function selectDisk(disk, el) {
-        selectedDisk = disk;
-        selectedEl.textContent = `${disk.id} (${formatBytes(disk.size_bytes)})`;
-        confirmInput.value = '';
-        Array.from(targetsEl.children).forEach((d) => d.classList.remove('selected'));
-        el.classList.add('selected');
-        loadPartitions(disk.id);
-        updateInstallState();
-      }
+          <section class="card card--primary panel" id="main" data-wizard-step="2" aria-labelledby="installHeading">
+            <div class="card-head">
+              <h2 id="installHeading" class="sr-only">Pick USB &amp; flash</h2>
+              <span class="badge badge--info" id="modeBadge">Dry-run · no changes made</span>
+            </div>
+            <div class="confirm">
+              <div class="row-with-action">
+                <div>
+                  <strong>Target devices</strong>
+                  <div><small id="targetsHint">Pick a removable drive. System disks are blocked.</small></div>
+                </div>
+                <button class="ghost" id="refresh" aria-label="Refresh disks">↻ Refresh disks</button>
+              </div>
+            </div>
+            <div class="disks" id="targets"></div>
+            <div class="confirm" id="planContainer">
+              <div><strong>Install plan</strong></div>
+              <div class="plan" id="installPlan"></div>
+            </div>
+            <div class="confirm">
+              <div><strong>Selected:</strong> <span id="selected">None</span></div>
+              <div><small>Type the device path to confirm (e.g. /dev/sdb).</small></div>
+              <input id="confirmInput" placeholder="/dev/sdX" aria-label="Confirm target device path" />
+              <div class="confirm">
+                <label>
+                  <input type="checkbox" id="acceptWrite" />
+                  I understand this will erase the selected device.
+                </label>
+                <label>
+                  <input type="checkbox" id="enableWrite" />
+                  Enable actual write (not a dry-run).
+                </label>
+                <div><small>Type ERASE to proceed with actual write.</small></div>
+                <input id="confirmErase" placeholder="ERASE" aria-label="Type ERASE to confirm destructive write" />
+              </div>
+              <button class="primary cta-large" id="installBtn" disabled aria-label="Run install (dry-run by default)">Run Dry-Run Install</button>
+            </div>
+            <div class="banner" id="configBanner" role="status" aria-live="polite"></div>
+          </section>
+        </div>
 
-      function updateInstallState() {
-        const ok = selectedDisk
-          && !selectedDisk.is_system
-          && confirmInput.value.trim() === selectedDisk.id
-          && acceptWrite
-          && acceptWrite.checked;
-        const allowWriteOk = enableWrite && enableWrite.checked
-          ? (confirmErase && confirmErase.value.trim() === 'ERASE')
-          : true;
-        installBtn.disabled = !ok;
-        if (installBtn) {
-          installBtn.textContent = enableWrite && enableWrite.checked && allowWriteOk
-            ? 'Run Install'
-            : 'Run Dry-Run Install';
-        }
-        if (enableWrite && enableWrite.checked && !allowWriteOk) {
-          installBtn.disabled = true;
-        }
-        updateInstallPlan();
-      }
+        <!-- Settings view: configuration that used to live in the top
+             bar plus the boot-config card. Hidden by default. -->
+        <div class="view view--settings" data-view="settings" hidden>
+          <section class="card card--primary">
+            <h2>Boot configuration</h2>
+            <p class="subtitle">Per-entry parameters and optional GRUB password gate.</p>
+            <div class="actions actions--mb-3">
+              <button class="primary" id="saveConfig" aria-label="Save boot configuration">Save Config</button>
+              <button class="ghost" id="resetParams">Reset Params</button>
+              <label class="entry-default">
+                <input type="checkbox" id="saveOnInstallOnly" />
+                Save config only after install
+              </label>
+            </div>
+            <details class="boot-global" open>
+              <summary>Global menu settings</summary>
+              <div class="boot-global-row">
+                <label class="entry-default">
+                  <input type="checkbox" id="globalTreeView" />
+                  Group entries by class (TreeView)
+                </label>
+                <label class="entry-default">
+                  <input type="checkbox" id="globalEnableDiskBrowser" />
+                  Add "Browse local disks" entry (F2 hotkey)
+                </label>
+                <div><small>ISO scan paths</small></div>
+                <input id="scanPaths" placeholder="auto-detected per OS" />
+                <div><small>GRUB superuser (optional, sanitised)</small></div>
+                <input id="globalGrubSuperuser" placeholder="admin" aria-label="GRUB superuser name" />
+                <div><small>GRUB PBKDF2 password hash (output of <code>grub-mkpasswd-pbkdf2</code>)</small></div>
+                <input id="globalGrubPasswordPbkdf2" placeholder="grub.pbkdf2.sha512.…" aria-label="GRUB PBKDF2 password hash" />
+                <div class="subtitle"><small>Plaintext is rejected; both fields must be set together for the password gate to activate.</small></div>
+              </div>
+            </details>
+            <div class="disks" id="entriesConfig"></div>
+          </section>
+        </div>
 
-      async function listDisks() {
-        try {
-          const { invoke } = window.__TAURI__.tauri;
-          const disks = await invoke('list_disks');
-          renderTargets(disks);
-        } catch (err) {
-          targetsEl.innerHTML = `<div class="disk">${String(err)}</div>`;
-        }
-      }
+        <!-- Logs view: install progress log. Hidden by default. -->
+        <div class="view view--logs" data-view="logs" hidden>
+          <section class="card card--primary">
+            <h2>Install progress</h2>
+            <p class="subtitle">Most recent install output. Runs append in real time.</p>
+            <div class="progress" id="progress" role="log" aria-live="polite" aria-label="Install progress"></div>
+          </section>
+        </div>
 
-      async function loadPartitions(device) {
-        selectedEspMount = null;
-        selectedDataMount = null;
-        try {
-          const { invoke } = window.__TAURI__.tauri;
-          const parts = await invoke('list_partitions', { device });
-          parts.forEach((p) => {
-            const mounts = p.mountpoints || [];
-            if (!mounts.length) return;
-            if (p.label === 'RAIDHOS_EFI' || p.fstype === 'vfat') {
-              selectedEspMount = mounts[0];
-            }
-            if (p.label === 'DATA' || p.fstype === 'exfat') {
-              selectedDataMount = mounts[0];
-            }
-          });
-        } catch (_err) {
-        }
-        updateInstallPlan();
-      }
+        <section class="card footer">
+          Cross-platform core in Rust. UI powered by Tauri.
+        </section>
+      </main>
+    </div>
 
-      function startBootTimer() {
-        if (!renderedEntries.length) return;
-        bootRemaining = BOOT_TIMEOUT_SECONDS;
-        updateBootStatus();
-        bootTimer = setInterval(() => {
-          bootRemaining -= 1;
-          updateBootStatus();
-          if (bootRemaining <= 0) {
-            const defaultIndex = getDefaultIndex();
-            selectByIndex(defaultIndex >= 0 ? defaultIndex : 0);
-            stopBootTimer();
-          }
-        }, 1000);
-      }
-
-      function stopBootTimer() {
-        if (bootTimer) {
-          clearInterval(bootTimer);
-          bootTimer = null;
-        }
-        updateBootStatus();
-      }
-
-      function updateBootStatus() {
-        if (!bootProgress || !bootProgressFill) return;
-        if (bootTimer) {
-          bootProgress.style.opacity = '1';
-          const pct = Math.max(0, Math.min(1, (BOOT_TIMEOUT_SECONDS - bootRemaining) / BOOT_TIMEOUT_SECONDS));
-          bootProgressFill.style.width = `${pct * 100}%`;
-        } else {
-          bootProgress.style.opacity = '0';
-          bootProgressFill.style.width = '0%';
-        }
-      }
-
-      function renderProgress(events) {
-        progressEl.innerHTML = '';
-        events.forEach((event) => {
-          const row = document.createElement('div');
-          row.className = 'progress-item';
-          const percent = event.percent !== null && event.percent !== undefined ? `${event.percent}%` : '';
-          row.innerHTML = `<span>${event.phase}: ${event.message}</span><span>${percent}</span>`;
-          progressEl.appendChild(row);
-        });
-      }
-
-      async function runInstall() {
-        if (!selectedDisk) return;
-        progressEl.innerHTML = '';
-        try {
-          const { invoke } = window.__TAURI__.tauri;
-          const isWrite = enableWrite && enableWrite.checked;
-          if (isWrite) {
-            showBanner('Elevating privileges...', false, true);
-            const output = await invoke('install_elevated', {
-              device: selectedDisk.id,
-              payloadVersion: '1.1.10',
-            });
-            progressEl.innerHTML = `<div class="progress-item">${String(output)}</div>`;
-            await copyIsosToData();
-            await writeConfigToTarget();
-            await writeGrubCfgToEsp();
-            progressEl.innerHTML += '<div class="progress-item">config: written to target</div>';
-          } else {
-            const events = await invoke('install', {
-              device: selectedDisk.id,
-              payloadVersion: '1.1.10',
-              wipe: true,
-              dryRun: true,
-              allowWrite: false,
-            });
-            renderProgress(events);
-          }
-        } catch (err) {
-          progressEl.innerHTML = `<div class="progress-item">${String(err)}</div>`;
-        }
-      }
-
-      function bootSequence() {
-        const minBootMs = 1400;
-        const start = Date.now();
-        const finish = () => {
-          const elapsed = Date.now() - start;
-          const wait = Math.max(0, minBootMs - elapsed);
-          setTimeout(() => {
-            splash.classList.add('hidden');
-            app.classList.add('ready');
-          }, wait);
-        };
-
-        if (window.__TAURI__) {
-          finish();
-        } else {
-          setTimeout(finish, 200);
-        }
-      }
-
-      confirmInput.addEventListener('input', updateInstallState);
-      if (acceptWrite) acceptWrite.addEventListener('change', updateInstallState);
-      if (enableWrite) enableWrite.addEventListener('change', updateInstallState);
-      if (confirmErase) confirmErase.addEventListener('input', updateInstallState);
-      loadBtn.addEventListener('click', listDisks);
-      refreshBtn.addEventListener('click', listDisks);
-      installBtn.addEventListener('click', runInstall);
-      if (scanBtn) scanBtn.addEventListener('click', loadEntries);
-      if (saveConfigBtn) saveConfigBtn.addEventListener('click', async () => {
-        if (saveOnInstallOnly && saveOnInstallOnly.checked) {
-          showBanner('Save on install only is enabled.', false, false);
-          return;
-        }
-        await copyIsosToData();
-        await pushBootConfig();
-        await writeConfigToTarget();
-        await writeGrubCfgToEsp();
-        updateLastSaved();
-      });
-      if (resetParamsBtn) resetParamsBtn.addEventListener('click', () => {
-        if (resetModal) resetModal.classList.add('open');
-      });
-      if (cancelReset) cancelReset.addEventListener('click', () => {
-        if (resetModal) resetModal.classList.remove('open');
-      });
-      if (confirmReset) confirmReset.addEventListener('click', () => {
-        renderedEntries.forEach((entry) => {
-          entry.params = 'quiet splash';
-          entry.initrd = '';
-          entry.kargs = '';
-          persistEntryParams(entry);
-        });
-        renderConfigEntries(renderedEntries);
-        pushBootConfig();
-        updateLastSaved();
-        if (resetModal) resetModal.classList.remove('open');
-      });
-      document.addEventListener('keydown', (event) => {
-        if (!renderedEntries.length) return;
-        if (event.key === 'ArrowDown') {
-          event.preventDefault();
-          selectByIndex(selectedIndex + 1);
-        }
-        if (event.key === 'ArrowUp') {
-          event.preventDefault();
-          selectByIndex(selectedIndex - 1);
-        }
-        if (event.key === 'Enter') {
-          selectByIndex(selectedIndex < 0 ? 0 : selectedIndex);
-        }
-      });
-
-      function getDefaultIndex() {
-        const path = localStorage.getItem('raidhos_default_entry');
-        if (!path) return -1;
-        return renderedEntries.findIndex((entry) => entry.path === path);
-      }
-
-      function updateDefaultLabel() {
-        if (!defaultLabel) return;
-        const path = localStorage.getItem('raidhos_default_entry');
-        if (!path) {
-          defaultLabel.textContent = '';
-          return;
-        }
-        const entry = renderedEntries.find((e) => e.path === path);
-        defaultLabel.textContent = entry ? `Default: ${entry.title}` : '';
-      }
-
-      function mapEntryPath(entry) {
-        const src = entry.subtitle || entry.path || '';
-        const name = src.split('/').pop();
-        if (!name) return '/boot/isos/unknown.iso';
-        return `/boot/isos/${name}`;
-      }
-
-      async function copyIsosToData() {
-        if (!selectedDataMount) {
-          showBanner('Data partition not mounted. Cannot copy ISOs.', true, false);
-          return;
-        }
-        const sources = renderedEntries.map((entry) => entry.subtitle || entry.path).filter(Boolean);
-        if (!sources.length) return;
-        try {
-          const { invoke } = window.__TAURI__.tauri;
-          await invoke('copy_isos_to_data', { mountPath: selectedDataMount, sources });
-          renderedEntries.forEach((entry) => {
-            entry.path = mapEntryPath(entry);
-          });
-        } catch (_err) {
-          showBanner('Failed to copy ISO files to target.', true, false);
-        }
-      }
-
-      function showBanner(message, isError, isLoading) {
-        if (!configBanner) return;
-        configBanner.style.display = 'block';
-        configBanner.className = isError ? 'banner error' : 'banner';
-        if (isLoading) {
-          configBanner.innerHTML = `<span class="spinner"></span>${message}`;
-        } else {
-          configBanner.textContent = message;
-        }
-      }
-
-      function updateInstallPlan() {
-        if (!planEl) return;
-        if (planContainer) {
-          planContainer.style.display = selectedDisk ? 'grid' : 'none';
-        }
-        const steps = [];
-        steps.push('Validate target and confirmations');
-        steps.push('Create GPT and partitions');
-        steps.push('Format EFI + data partitions');
-        steps.push('Copy payload (if RAIDHOS_PAYLOAD_DIR set)');
-        steps.push('Write boot config to target');
-        steps.push('Write grub.cfg to ESP');
-        if (enableWrite && enableWrite.checked) {
-          steps.push('Actual write enabled');
-        } else {
-          steps.push('Dry-run mode');
-        }
-        if (selectedDisk && !selectedEspMount) {
-          steps.push('ESP not mounted (grub.cfg will be skipped)');
-        }
-        planEl.innerHTML = steps.map((s) => `<div class="plan-item">${s}</div>`).join('');
-      }
-
-      async function loadPayloadVersion() {
-        if (!payloadLabel) return;
-        try {
-          const { invoke } = window.__TAURI__.tauri;
-          const version = await invoke('get_payload_version');
-          payloadLabel.textContent = `Payload: ${version}`;
-        } catch (_err) {
-          payloadLabel.textContent = 'Payload: missing';
-          showBanner('Payload manifest not found. Set payload/manifest.json.', true, false);
-        }
-      }
-
-      function parseScanDirs() {
-        const raw = (scanPathsInput && scanPathsInput.value) ? scanPathsInput.value : '';
-        const defaults = ['/media', '/mnt', '/home'];
-        if (!raw.trim()) return defaults;
-        return raw
-          .split(',')
-          .map((s) => s.trim())
-          .filter((s) => s.length > 0);
-      }
-
-      async function loadEntries() {
-        try {
-          const { invoke } = window.__TAURI__.tauri;
-          const dirs = parseScanDirs();
-          const isos = await invoke('scan_isos', { dirs });
-          const entries = isos.map((iso) => ({
-            title: iso.title,
-            subtitle: iso.path,
-            tag: 'ISO',
-            params: iso.params || 'quiet splash',
-            initrd: '',
-            kargs: '',
-          }));
-          localStorage.setItem('raidhos_last_isos', JSON.stringify(entries));
-          hydrateEntryParams(entries);
-          renderEntries(entries);
-        } catch (err) {
-          renderEntries([]);
-        }
-      }
-
-      function loadCachedEntries() {
-        const raw = localStorage.getItem('raidhos_last_isos');
-        if (!raw) return;
-        try {
-          const cached = JSON.parse(raw);
-          if (Array.isArray(cached) && cached.length) {
-            hydrateEntryParams(cached);
-            renderEntries(cached);
-          }
-        } catch (_err) {
-        }
-      }
-
-      function restoreState() {
-        if (scanPathsInput) {
-          scanPathsInput.value = localStorage.getItem('raidhos_scan_paths') || '';
-        }
-        if (acceptWrite) {
-          acceptWrite.checked = localStorage.getItem('raidhos_accept_write') === 'true';
-        }
-        if (enableWrite) {
-          enableWrite.checked = localStorage.getItem('raidhos_enable_write') === 'true';
-        }
-        if (saveOnInstallOnly) {
-          saveOnInstallOnly.checked = localStorage.getItem('raidhos_save_on_install_only') === 'true';
-        }
-      }
-
-      function entryKey(entry) {
-        return `raidhos_entry_${entry.path}`;
-      }
-
-      function persistEntryParams(entry) {
-        if (!entry || !entry.path) return;
-        const payload = {
-          params: entry.params || '',
-          initrd: entry.initrd || '',
-          kargs: entry.kargs || '',
-        };
-        localStorage.setItem(entryKey(entry), JSON.stringify(payload));
-      }
-
-      function hydrateEntryParams(entries) {
-        entries.forEach((entry) => {
-          const raw = localStorage.getItem(entryKey(entry));
-          if (!raw) return;
-          try {
-            const parsed = JSON.parse(raw);
-            entry.params = parsed.params || entry.params;
-            entry.initrd = parsed.initrd || entry.initrd;
-            entry.kargs = parsed.kargs || entry.kargs;
-          } catch (_err) {
-          }
-        });
-      }
-
-      async function pushBootConfig() {
-        try {
-          const { invoke } = window.__TAURI__.tauri;
-          const defaultEntry = localStorage.getItem('raidhos_default_entry');
-          const payload = {
-            defaultEntry: defaultEntry || null,
-            entries: renderedEntries.map((entry) => ({
-              title: entry.title,
-              path: entry.path || mapEntryPath(entry),
-              params: entry.params || '',
-              initrd: entry.initrd || '',
-              kargs: entry.kargs || '',
-            })),
-          };
-          await invoke('save_boot_config', { config: payload });
-        } catch (_err) {
-        }
-      }
-
-      async function writeConfigToTarget() {
-        if (!selectedDisk) return;
-        const mount = selectedDataMount || (selectedDisk.mountpoints && selectedDisk.mountpoints.length ? selectedDisk.mountpoints[0] : null);
-        if (!mount) {
-          showBanner('Data partition not mounted. Cannot write config.', true, false);
-          return;
-        }
-        try {
-          showBanner('Writing config to target...', false, true);
-          const { invoke } = window.__TAURI__.tauri;
-          const defaultEntry = localStorage.getItem('raidhos_default_entry');
-          const payload = {
-            defaultEntry: defaultEntry || null,
-            entries: renderedEntries.map((entry) => ({
-              title: entry.title,
-              path: entry.subtitle || entry.path,
-              params: entry.params || '',
-              initrd: entry.initrd || '',
-              kargs: entry.kargs || '',
-            })),
-          };
-          await invoke('write_boot_config_to_device', { mountPath: mount, config: payload });
-          showBanner('Config written to target.', false, false);
-        } catch (_err) {
-          showBanner('Failed to write config to target.', true, false);
-        }
-      }
-
-      async function writeGrubCfgToEsp() {
-        if (!selectedEspMount) {
-          showBanner('ESP not mounted. Cannot write grub.cfg.', true, false);
-          return;
-        }
-        try {
-          const { invoke } = window.__TAURI__.tauri;
-          const defaultEntry = localStorage.getItem('raidhos_default_entry');
-          const payload = {
-            defaultEntry: defaultEntry || null,
-            entries: renderedEntries.map((entry) => ({
-              title: entry.title,
-              path: entry.path || mapEntryPath(entry),
-              params: entry.params || '',
-              initrd: entry.initrd || '',
-              kargs: entry.kargs || '',
-            })),
-          };
-          await invoke('write_grub_cfg_to_esp', { espMount: selectedEspMount, config: payload, dataLabel: 'DATA' });
-        } catch (_err) {
-          showBanner('Failed to write grub.cfg to ESP.', true, false);
-        }
-      }
-
-      function persistState() {
-        if (scanPathsInput) {
-          localStorage.setItem('raidhos_scan_paths', scanPathsInput.value);
-        }
-        if (acceptWrite) {
-          localStorage.setItem('raidhos_accept_write', String(acceptWrite.checked));
-        }
-        if (enableWrite) {
-          localStorage.setItem('raidhos_enable_write', String(enableWrite.checked));
-        }
-        if (saveOnInstallOnly) {
-          localStorage.setItem('raidhos_save_on_install_only', String(saveOnInstallOnly.checked));
-        }
-      }
-
-      if (scanPathsInput) scanPathsInput.addEventListener('change', persistState);
-      if (acceptWrite) acceptWrite.addEventListener('change', persistState);
-      if (enableWrite) enableWrite.addEventListener('change', persistState);
-      if (saveOnInstallOnly) saveOnInstallOnly.addEventListener('change', persistState);
-
-      restoreState();
-      updateInstallPlan();
-      loadPayloadVersion();
-      loadCachedEntries();
-      updateInstallState();
-      loadEntries();
-      bootSequence();
-
-      function updateLastSaved() {
-        if (!lastSavedEl) return;
-        const now = new Date();
-        lastSavedEl.textContent = `Last saved: ${now.toLocaleString()}`;
-        localStorage.setItem('raidhos_last_saved', now.toISOString());
-      }
-
-      function restoreLastSaved() {
-        if (!lastSavedEl) return;
-        const raw = localStorage.getItem('raidhos_last_saved');
-        if (!raw) return;
-        const date = new Date(raw);
-        if (isNaN(date.getTime())) return;
-        lastSavedEl.textContent = `Last saved: ${date.toLocaleString()}`;
-      }
-
-      restoreLastSaved();
-    </script>
+    <script src="app.js"></script>
   </body>
 </html>

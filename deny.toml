@@ -1,0 +1,75 @@
+# cargo-deny configuration. Run `cargo deny check` locally to validate.
+
+[graph]
+all-features = false
+no-default-features = false
+
+[output]
+feature-depth = 1
+
+[advisories]
+db-path = "$CARGO_HOME/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+yanked = "warn"
+# All entries below are *unmaintained* advisories on transitives we don't
+# directly depend on. Tracked upstream by the Tauri / WRY / gtk-rs ecosystems;
+# none represent exploitable vulnerabilities. Re-evaluate at each tauri bump.
+ignore = [
+    "RUSTSEC-2024-0370", # proc-macro-error (tauri-macros / windows-implement)
+    "RUSTSEC-2024-0411", # gtk3 (wry on Linux)
+    "RUSTSEC-2024-0412", # atk
+    "RUSTSEC-2024-0413", # gdk
+    "RUSTSEC-2024-0414", # gdkwayland-sys
+    "RUSTSEC-2024-0415", # gdkx11
+    "RUSTSEC-2024-0416", # gdkx11-sys
+    "RUSTSEC-2024-0417", # gtk
+    "RUSTSEC-2024-0418", # gtk-sys
+    "RUSTSEC-2024-0419", # gtk3-macros
+    "RUSTSEC-2024-0420", # atk-sys
+    "RUSTSEC-2024-0429", # gdk-sys / cairo
+    "RUSTSEC-2025-0075", # unic-char-property (urlpattern via tauri-utils)
+    "RUSTSEC-2025-0080", # unic-char-range
+    "RUSTSEC-2025-0081", # unic-common
+    "RUSTSEC-2025-0098", # unic-ucd-version
+    "RUSTSEC-2025-0100", # unic-ucd-ident
+]
+
+[licenses]
+confidence-threshold = 0.8
+allow = [
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "MIT",
+  "MIT-0",
+  "Unicode-3.0",
+  "Unicode-DFS-2016",
+  "Zlib",
+  "MPL-2.0",
+  "CC0-1.0",
+  "0BSD",
+  # The project itself is GPL-3.0-only. License is asserted via
+  # workspace.package.license. Use the SPDX-canonical "-only" form so it
+  # matches the synthesized manifest cargo-deny reads from each crate.
+  "GPL-3.0-only",
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "warn"
+highlight = "all"
+# Specific duplicates we expect because of transitives we don't control.
+skip = [
+  # thiserror v1 is still pulled by some Tauri 2 transitives. We're on
+  # v2 in our own code; the duplicate is harmless.
+  { name = "thiserror", version = "1" },
+  { name = "thiserror-impl", version = "1" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

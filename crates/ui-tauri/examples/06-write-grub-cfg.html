@@ -1,0 +1,48 @@
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self'; script-src 'self';
+                 connect-src 'self' ipc: tauri:" />
+  <title>raidhos-ui — write_grub_cfg_to_esp example</title>
+  <script defer>
+    document.addEventListener('DOMContentLoaded', () => {
+      const { core } = window.__TAURI__;
+      document.getElementById('go').addEventListener('click', async () => {
+        const out = document.getElementById('out');
+        const mountPath = document.getElementById('mount').value.trim();
+        const config = {
+          version: 1,
+          default: 'ubuntu',
+          timeout: 5,
+          entries: [
+            { title: 'ubuntu', iso: 'boot/isos/ubuntu.iso', params: 'quiet splash' },
+          ],
+        };
+        try {
+          await core.invoke('write_grub_cfg_to_esp', { mountPath, config });
+          out.textContent = `grub.cfg written under ${mountPath}/grub/`;
+        } catch (e) {
+          out.textContent = `error: ${e}`;
+        }
+      });
+    });
+  </script>
+</head>
+<body>
+  <h1>write_grub_cfg_to_esp</h1>
+  <p>Renders <code>boot.json</code> into a <code>grub.cfg</code>
+     and writes it to <code>&lt;mount&gt;/grub/grub.cfg</code>.
+     The mount path must already be writable; this example does
+     not mount anything itself.</p>
+
+  <label for="mount">Mount path</label>
+  <input id="mount" type="text" value="/Volumes/RAIDHOS_EFI" size="40" />
+  <button id="go">Write grub.cfg</button>
+
+  <h2>Output</h2>
+  <pre id="out">Ready.</pre>
+</body>
+</html>

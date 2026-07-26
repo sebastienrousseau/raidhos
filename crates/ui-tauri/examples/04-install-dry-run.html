@@ -1,0 +1,47 @@
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self'; script-src 'self';
+                 connect-src 'self' ipc: tauri:" />
+  <title>raidhos-ui — install dry-run example</title>
+  <script defer>
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('run').addEventListener('click', async () => {
+        const out = document.getElementById('out');
+        out.textContent = 'Running…';
+        try {
+          await window.__TAURI__.core.invoke('install', {
+            args: {
+              device: document.getElementById('device').value,
+              payload_version: '0.1.0',
+              wipe: true,
+              dry_run: true,
+              allow_write: false,
+            },
+          });
+          out.textContent = 'dry-run completed (no writes)';
+        } catch (e) {
+          out.textContent = `error: ${e}`;
+        }
+      });
+    });
+  </script>
+</head>
+<body>
+  <h1>Install — dry-run</h1>
+  <p>Builds an <code>InstallRequest</code> with
+     <code>dry_run=true</code> and submits it. Every safety check
+     runs (mount, system disk, payload presence) but no bytes
+     reach the device.</p>
+
+  <label for="device">Device</label>
+  <input id="device" type="text" value="/dev/sdb" size="40" />
+  <button id="run">Dry-run</button>
+
+  <h2>Output</h2>
+  <pre id="out">Ready.</pre>
+</body>
+</html>

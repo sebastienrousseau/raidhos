@@ -1,25 +1,33 @@
 {
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "RaidhOS",
+  "version": "0.0.1",
+  "identifier": "org.raidhos.raidhos",
   "build": {
     "beforeDevCommand": "",
     "beforeBuildCommand": "",
-    "devPath": "../frontend",
-    "distDir": "../frontend"
+    "frontendDist": "../frontend",
+    "devUrl": null
   },
-  "package": {
-    "productName": "RaidhOS",
-    "version": "0.1.0"
-  },
-  "tauri": {
+  "app": {
     "windows": [
       {
         "title": "RaidhOS",
         "width": 980,
         "height": 640,
-        "resizable": true
+        "resizable": true,
+        "dragDropEnabled": true
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self' ipc: tauri:; frame-ancestors 'none'; base-uri 'self'; form-action 'none'; object-src 'none'"
     }
+  },
+  "bundle": {
+    "active": true,
+    "category": "Utility",
+    "icon": [
+      "icons/icon.png"
+    ]
   }
 }

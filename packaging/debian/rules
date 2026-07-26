@@ -1,0 +1,29 @@
+#!/usr/bin/make -f
+# Debian packaging rules for RaidhOS.
+#
+# Standard debhelper sequence. The Cargo build is invoked through
+# dh_auto_build so it picks up the system rustc.
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export CARGO_HOME = $(CURDIR)/debian/cargo-home
+export PATH := $(HOME)/.cargo/bin:$(PATH)
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	cargo build --release --locked --workspace --exclude raidhos-ui
+
+override_dh_auto_install:
+	install -D -m 0755 target/release/raidhos-cli debian/raidhos/usr/bin/raidhos-cli
+	install -D -m 0755 target/release/raidhos-priv-helper debian/raidhos/usr/lib/raidhos/raidhos-priv-helper
+	install -D -m 0644 packaging/linux/org.raidhos.policy debian/raidhos/usr/share/polkit-1/actions/org.raidhos.policy
+	install -D -m 0644 LICENSE debian/raidhos/usr/share/doc/raidhos/LICENSE
+	install -D -m 0644 SECURITY.md debian/raidhos/usr/share/doc/raidhos/SECURITY.md
+
+override_dh_auto_test:
+	cargo test --workspace --exclude raidhos-ui --all-targets
+
+override_dh_auto_clean:
+	cargo clean || true
+	dh_auto_clean

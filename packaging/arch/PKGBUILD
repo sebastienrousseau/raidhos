@@ -1,0 +1,108 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Maintainer: Sebastien Rousseau <sebastian.rousseau@gmail.com>
+#
+# AUR PKGBUILD for RaidhOS. Covers Arch, CachyOS, Manjaro,
+# EndeavourOS, Garuda — any pacman-based distro.
+#
+# Two flavours are produced from the same source tree:
+#   raidhos     — builds from source via cargo (this PKGBUILD)
+#   raidhos-bin — installs pre-built signed binary from a release
+#                  tarball (see PKGBUILD.bin in the same directory)
+#
+# Publish flow:
+#   1. Update pkgver / pkgrel / sha256sums.
+#   2. `makepkg --printsrcinfo > .SRCINFO`
+#   3. Push to ssh://aur@aur.archlinux.org/raidhos.git
+
+pkgname=raidhos
+pkgver=0.0.1
+pkgrel=1
+pkgdesc="Memory-safe multi-ISO USB imager (Rust + Tauri 2, forbid(unsafe))"
+arch=('x86_64' 'aarch64')
+url="https://github.com/sebastienrousseau/raidhos"
+license=('GPL-3.0-only')
+
+depends=(
+    # Runtime tooling the install pipeline calls out to.
+    'parted'
+    'dosfstools'
+    'exfatprogs'
+    'polkit'
+    # Tauri 2 webview deps.
+    'webkit2gtk-4.1'
+    'gtk3'
+    'libsoup3'
+)
+makedepends=(
+    'rust'
+    'cargo'
+    'pkgconf'
+    'git'
+)
+optdepends=(
+    'gnupg: catalog verify command (gpg signature checks on SHA256SUMS)'
+    'systemd-boot: alternative to GRUB for ESP-side boot loader'
+)
+provides=("raidhos=$pkgver")
+conflicts=('raidhos-bin' 'raidhos-git')
+
+source=(
+    "$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"
+)
+sha256sums=(
+    'SKIP'  # Replaced on first tag; CI updates this entry.
+)
+
+build() {
+    cd "$pkgname-$pkgver"
+    # Build the CLI + privileged helper. The Tauri UI requires
+    # bundler resources that don't ship in the tarball; users who
+    # want the GUI install raidhos-ui-bin instead.
+    CARGO_TARGET_DIR=target cargo build \
+        --release \
+        --locked \
+        --workspace \
+        --exclude raidhos-ui
+}
+
+check() {
+    cd "$pkgname-$pkgver"
+    CARGO_TARGET_DIR=target cargo test \
+        --release \
+        --locked \
+        --workspace \
+        --exclude raidhos-ui
+}
+
+package() {
+    cd "$pkgname-$pkgver"
+
+    # Binaries
+    install -Dm755 target/release/raidhos-cli         "$pkgdir/usr/bin/raidhos-cli"
+    install -Dm755 target/release/raidhos-priv-helper "$pkgdir/usr/libexec/raidhos-priv-helper"
+
+    # polkit policy — the helper is launched via pkexec from the
+    # GUI / CLI elevation wrapper. Without this file pkexec returns
+    # "no authentication agent found".
+    install -Dm644 packaging/linux/org.raidhos.policy \
+        "$pkgdir/usr/share/polkit-1/actions/org.raidhos.priv.policy"
+
+    # Man page + shell completions emitted by build.rs at compile
+    # time. Look them up under the cargo OUT_DIR.
+    local out_dir
+    out_dir=$(find target/release/build/raidhos-cli-*/out/dist -mindepth 1 -maxdepth 1 2>/dev/null | head -n1)
+    if [[ -d "$out_dir" ]]; then
+        install -Dm644 "$out_dir/raidhos-cli.1"           "$pkgdir/usr/share/man/man1/raidhos-cli.1"
+        install -Dm644 "$out_dir/raidhos-cli.bash"         "$pkgdir/usr/share/bash-completion/completions/raidhos-cli"
+        install -Dm644 "$out_dir/_raidhos-cli"             "$pkgdir/usr/share/zsh/site-functions/_raidhos-cli"
+        install -Dm644 "$out_dir/raidhos-cli.fish"          "$pkgdir/usr/share/fish/vendor_completions.d/raidhos-cli.fish"
+    fi
+
+    # License + docs
+    install -Dm644 LICENSE         "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 README.md       "$pkgdir/usr/share/doc/$pkgname/README.md"
+    install -Dm644 CHANGELOG.md    "$pkgdir/usr/share/doc/$pkgname/CHANGELOG.md"
+    install -Dm644 SECURITY.md     "$pkgdir/usr/share/doc/$pkgname/SECURITY.md"
+}
+
+# vim:set ts=4 sw=4 et:

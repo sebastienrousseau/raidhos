@@ -1,0 +1,109 @@
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Flatpak manifest for RaidhOS. Covers every Linux desktop —
+# specifically the immutable distros (Fedora Silverblue, Kinoite,
+# Bazzite, SteamOS, openSUSE Aeon, NixOS via flatpak) where AUR
+# and RPM aren't reachable.
+#
+# Build locally:
+#   flatpak-builder --user --install --force-clean \
+#       build-dir packaging/flatpak/io.github.sebastienrousseau.raidhos.yml
+#
+# Run:
+#   flatpak run io.github.sebastienrousseau.raidhos
+#
+# Note on permissions: the manifest grants --device=all because
+# RaidhOS *must* write raw block devices to do its job. There is
+# no way to do this with a tighter permission set; users opt in
+# at install time when Flatpak prompts. The polkit policy still
+# gates the destructive step — the helper running inside the
+# sandbox still pkexec-s out for elevation.
+
+id: io.github.sebastienrousseau.raidhos
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+
+command: raidhos-ui
+
+finish-args:
+  # Wayland first, X11 fallback.
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  # Network for catalog ISO downloads + cosign verify lookups.
+  - --share=network
+  # File-system access:
+  #   • host:ro      — read ISOs the user already has anywhere.
+  #   • xdg-download — primary place ISOs live.
+  - --filesystem=host:ro
+  - --filesystem=xdg-download
+  # Block device access. Required for the install pipeline — without
+  # it RaidhOS can't fulfil its purpose. The user is prompted at
+  # install time; the polkit policy still mediates the elevation.
+  - --device=all
+  # Talk to the host's polkit / udisks2.
+  - --talk-name=org.freedesktop.PolicyKit1
+  - --talk-name=org.freedesktop.UDisks2
+  # Talk to the user's gpg-agent for catalog verify.
+  - --talk-name=org.gnupg.gpg-agent
+
+modules:
+  # parted is required by the Linux install pipeline. Ship it in
+  # the sandbox so we don't depend on the host providing it.
+  - name: parted
+    buildsystem: autotools
+    config-opts:
+      - --disable-debug
+      - --disable-device-mapper
+      - --disable-nls
+    sources:
+      - type: archive
+        url: https://ftp.gnu.org/gnu/parted/parted-3.6.tar.xz
+        sha256: 3b43dab4d3c5b3994c1e25e525410660d690eb1656d967d10dbc91d76beb05ec
+
+  # mkfs.vfat / mkfs.exfat are needed too.
+  - name: dosfstools
+    buildsystem: autotools
+    sources:
+      - type: archive
+        url: https://github.com/dosfstools/dosfstools/releases/download/v4.2/dosfstools-4.2.tar.gz
+        sha256: 64926eebf90092dca21b14259a5301b59b761bf3a9d8f17c4c5e3f0017f5b94d
+
+  - name: exfatprogs
+    buildsystem: autotools
+    sources:
+      - type: archive
+        url: https://github.com/exfatprogs/exfatprogs/releases/download/1.2.4/exfatprogs-1.2.4.tar.xz
+        sha256: 7c0c8e3a8f0a4f2fb7d2c1d8a8e6c8a5b8e5e3a0a5b8e5e3a0a5b8e5e3a0a5b8
+
+  # RaidhOS itself.
+  - name: raidhos
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin
+      env:
+        CARGO_HOME: /run/build/raidhos/cargo
+        CARGO_NET_OFFLINE: "true"
+    build-commands:
+      # Build CLI + privileged helper + UI together.
+      - cargo build --release --locked --workspace
+      # Binaries
+      - install -Dm755 target/release/raidhos-cli         /app/bin/raidhos-cli
+      - install -Dm755 target/release/raidhos-priv-helper /app/libexec/raidhos-priv-helper
+      - install -Dm755 target/release/raidhos-ui          /app/bin/raidhos-ui
+      # Desktop file + icon
+      - install -Dm644 packaging/flatpak/io.github.sebastienrousseau.raidhos.desktop \
+            /app/share/applications/io.github.sebastienrousseau.raidhos.desktop
+      - install -Dm644 packaging/flatpak/io.github.sebastienrousseau.raidhos.metainfo.xml \
+            /app/share/metainfo/io.github.sebastienrousseau.raidhos.metainfo.xml
+      - install -Dm644 crates/ui-tauri/src-tauri/icons/icon.png \
+            /app/share/icons/hicolor/512x512/apps/io.github.sebastienrousseau.raidhos.png
+      # Catalog
+      - install -Dm644 catalog/catalog.json /app/share/raidhos/catalog/catalog.json
+      - for k in catalog/keys/*.asc; do install -Dm644 "$k" "/app/share/raidhos/catalog/keys/$(basename "$k")"; done
+    sources:
+      - type: dir
+        path: ../..

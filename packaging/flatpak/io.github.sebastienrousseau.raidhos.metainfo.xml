@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<component type="desktop-application">
+  <id>io.github.sebastienrousseau.raidhos</id>
+  <name>RaidhOS</name>
+  <summary>Memory-safe multi-ISO USB imager</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <developer id="io.github.sebastienrousseau">
+    <name>Sebastien Rousseau</name>
+  </developer>
+
+  <description>
+    <p>
+      RaidhOS turns a USB stick into a multi-ISO boot drive in a few
+      clicks. Drop your ISOs onto the window, pick a target USB,
+      type ERASE to confirm, and let the audited pipeline do the rest.
+    </p>
+    <p>
+      Under the hood:
+    </p>
+    <ul>
+      <li>Rust core with <code>#![forbid(unsafe_code)]</code> workspace-wide.</li>
+      <li>Privileged helper is hardened with a 64 KiB argv cap, a
+          seccomp-bpf denylist (ptrace, bpf, kexec, kernel-module load),
+          and a TOCTOU-safe device fd pinned through the install.</li>
+      <li>Every destructive operation requires both <code>--wipe</code>
+          and <code>--allow-write</code>; defaults are safe.</li>
+      <li>Curated ISO catalog with GPG-signed checksum verification.</li>
+      <li>Reproducible GRUB build; cosign keyless signing; SLSA L3
+          provenance; CycloneDX SBOMs.</li>
+    </ul>
+    <p>
+      The GUI is built on Tauri 2 with a strict CSP (no
+      <code>'unsafe-inline'</code>) and a WCAG 2.2 AA accessibility
+      pass.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">io.github.sebastienrousseau.raidhos.desktop</launchable>
+
+  <url type="homepage">https://github.com/sebastienrousseau/raidhos</url>
+  <url type="bugtracker">https://github.com/sebastienrousseau/raidhos/issues</url>
+  <url type="vcs-browser">https://github.com/sebastienrousseau/raidhos</url>
+
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/sebastienrousseau/raidhos/main/docs/screenshots/dashboard.png</image>
+      <caption>Three-pane dashboard: discovery, picker, confirmation.</caption>
+    </screenshot>
+  </screenshots>
+
+  <categories>
+    <category>System</category>
+    <category>DiskUtility</category>
+  </categories>
+
+  <keywords>
+    <keyword>USB</keyword>
+    <keyword>Ventoy</keyword>
+    <keyword>ISO</keyword>
+    <keyword>Bootable</keyword>
+    <keyword>Multiboot</keyword>
+  </keywords>
+
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="0.0.1" date="2026-05-17">
+      <description>
+        <p>First public preview.</p>
+        <ul>
+          <li>Linux / macOS / Windows install pipelines.</li>
+          <li>GPG-verified ISO catalog.</li>
+          <li>Tauri 2 GUI with WCAG 2.2 AA pass.</li>
+          <li>seccomp + TOCTOU + double opt-in safety controls.</li>
+          <li>cosign keyless + SLSA L3 + CycloneDX SBOM on release.</li>
+        </ul>
+      </description>
+    </release>
+  </releases>
+
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+    <control>touch</control>
+  </supports>
+
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+</component>

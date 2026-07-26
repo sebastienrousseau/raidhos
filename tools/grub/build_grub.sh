@@ -15,7 +15,8 @@ docker run --rm -v "$ROOT_DIR":/output raidhos-grub-compiler \
   -O x86_64-efi \
   -o /output/BOOTX64.EFI \
   "boot/grub/grub.cfg=build/boot/grub/grub.cfg" \
-  fat part_gpt part_msdos normal search \
+  fat exfat ntfs ext2 btrfs xfs udf \
+  part_gpt part_msdos normal search \
   iso9660 loopback configfile test video all_video
 
 echo "Generated $OUT_EFI"

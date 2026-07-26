@@ -1,0 +1,47 @@
+[
+  {
+    "name": "Debian 12 (Bookworm) — Netinst amd64",
+    "slug": "debian-12-netinst-amd64",
+    "iso_url": "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-12.10.0-amd64-netinst.iso",
+    "sha256sums_url": "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/SHA256SUMS",
+    "sha256sums_sig_url": "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/SHA256SUMS.sign",
+    "gpg_fingerprint": "DF9B9C49EAA9298432589D76DA87E80D6294BE9B",
+    "iso_filename": "debian-12.10.0-amd64-netinst.iso"
+  },
+  {
+    "name": "Ubuntu 24.04 LTS Desktop amd64",
+    "slug": "ubuntu-24.04-desktop-amd64",
+    "iso_url": "https://releases.ubuntu.com/24.04/ubuntu-24.04.3-desktop-amd64.iso",
+    "sha256sums_url": "https://releases.ubuntu.com/24.04/SHA256SUMS",
+    "sha256sums_sig_url": "https://releases.ubuntu.com/24.04/SHA256SUMS.gpg",
+    "gpg_fingerprint": "843938DF228D22F7B3742BC0D94AA3F0EFE21092",
+    "iso_filename": "ubuntu-24.04.3-desktop-amd64.iso"
+  },
+  {
+    "name": "Fedora Workstation 41 x86_64",
+    "slug": "fedora-41-workstation-x86_64",
+    "iso_url": "https://download.fedoraproject.org/pub/fedora/linux/releases/41/Workstation/x86_64/iso/Fedora-Workstation-Live-x86_64-41-1.4.iso",
+    "sha256sums_url": "https://download.fedoraproject.org/pub/fedora/linux/releases/41/Workstation/x86_64/iso/Fedora-Workstation-41-1.4-x86_64-CHECKSUM",
+    "sha256sums_sig_url": "https://download.fedoraproject.org/pub/fedora/linux/releases/41/Workstation/x86_64/iso/Fedora-Workstation-41-1.4-x86_64-CHECKSUM.sig",
+    "gpg_fingerprint": "466CF2D8B60BC3057AA9453ED0622462E99D6AD1",
+    "iso_filename": "Fedora-Workstation-Live-x86_64-41-1.4.iso"
+  },
+  {
+    "name": "Arch Linux current",
+    "slug": "archlinux-current",
+    "iso_url": "https://mirror.rackspace.com/archlinux/iso/latest/archlinux-x86_64.iso",
+    "sha256sums_url": "https://mirror.rackspace.com/archlinux/iso/latest/sha256sums.txt",
+    "sha256sums_sig_url": "https://mirror.rackspace.com/archlinux/iso/latest/sha256sums.txt.sig",
+    "gpg_fingerprint": "4AA4767BBC9C4B1D18AE28B77F2D434B9741E8AC",
+    "iso_filename": "archlinux-x86_64.iso"
+  },
+  {
+    "name": "Tails 6.x",
+    "slug": "tails-6-current",
+    "iso_url": "https://tails.net/torrents/files/tails-amd64-6.20.iso",
+    "sha256sums_url": "https://tails.net/torrents/files/tails-amd64-6.20.sig",
+    "sha256sums_sig_url": "https://tails.net/torrents/files/tails-amd64-6.20.sig",
+    "gpg_fingerprint": "A490D0F4D311A4153E2BB7CADBB802B258ACD84F",
+    "iso_filename": "tails-amd64-6.20.iso"
+  }
+]

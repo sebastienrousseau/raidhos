@@ -1,0 +1,52 @@
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self'; script-src 'self';
+                 connect-src 'self' ipc: tauri:; frame-ancestors 'none';
+                 base-uri 'self'; form-action 'none'; object-src 'none'" />
+  <title>raidhos-ui — list_disks example</title>
+  <script defer>
+    document.addEventListener('DOMContentLoaded', async () => {
+      const out = document.getElementById('out');
+      try {
+        const disks = await window.__TAURI__.core.invoke('list_disks');
+        out.textContent = JSON.stringify(disks, null, 2);
+        renderTable(disks);
+      } catch (e) {
+        out.textContent = `error: ${e}`;
+      }
+    });
+
+    function renderTable(disks) {
+      const tbody = document.getElementById('rows');
+      tbody.replaceChildren();
+      for (const d of disks) {
+        const tr = document.createElement('tr');
+        for (const cell of [d.id, d.model, d.size_bytes,
+                            String(d.removable), String(d.is_system)]) {
+          const td = document.createElement('td');
+          td.textContent = cell;
+          tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+      }
+    }
+  </script>
+</head>
+<body>
+  <h1>list_disks example</h1>
+  <p>Calls the Tauri command <code>list_disks</code> and renders the result.</p>
+  <table>
+    <thead>
+      <tr><th>id</th><th>model</th><th>size_bytes</th>
+          <th>removable</th><th>is_system</th></tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <h2>Raw JSON</h2>
+  <pre id="out">Loading…</pre>
+</body>
+</html>
