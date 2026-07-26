@@ -43,7 +43,7 @@ jobs:
             os: windows-latest
             archive: zip
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable, snapshot 2026-05-18
         with:
@@ -130,7 +130,7 @@ jobs:
     name: SBOM
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable, snapshot 2026-05-18
       - name: Install cargo-cyclonedx
         run: cargo install --locked cargo-cyclonedx
@@ -147,7 +147,7 @@ jobs:
     name: GRUB BOOTX64.EFI
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build reproducible GRUB
         run: ./tools/grub/build_grub.sh
       - name: SHA-256
@@ -191,7 +191,7 @@ jobs:
       - name: Install git inside the container
         run: pacman -Syu --noconfirm --needed git
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Download Linux release tarballs from the build job
         uses: actions/download-artifact@v4
@@ -257,7 +257,7 @@ jobs:
       - name: Install rpmbuild + util
         run: dnf install -y rpm-build git findutils tar
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Download Linux release tarballs from the build job
         uses: actions/download-artifact@v4
@@ -304,7 +304,7 @@ jobs:
     needs: [build, sbom, grub, arch-pkg, rpm-bin]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/download-artifact@v4
         with:

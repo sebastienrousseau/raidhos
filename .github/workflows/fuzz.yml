@@ -22,7 +22,7 @@ jobs:
           - parse_disks_plist
           - parse_get_disk_json
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@5b842231ba77f5c045dba54ac5560fed2db780e2 # nightly, snapshot 2026-05-18
 
