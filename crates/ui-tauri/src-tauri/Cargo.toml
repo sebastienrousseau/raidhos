@@ -20,7 +20,7 @@ tauri-plugin-fs = "2"
 tauri-plugin-shell = "2"
 
 [dev-dependencies]
-sha2 = "0.10"
+sha2 = "0.11"
 
 [features]
 # Used for production builds (no dev server).
