@@ -1,7 +1,7 @@
 # Debian Bookworm slim, pinned by digest for reproducibility.
 # To update: `docker pull debian:bookworm-slim` then read the digest with
 # `docker images --digests debian:bookworm-slim`.
-FROM debian:bookworm-slim@sha256:2749ca60ffb3c42de053229d7967d292d7dad1067936b38995da0bbfb96c4c23
+FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
 
 RUN apt-get update && apt-get install -y \
     build-essential \
