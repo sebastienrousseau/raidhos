@@ -17,7 +17,7 @@
 # offline against the vendored Cargo.lock.
 
 Name:           raidhos
-Version:        0.0.2
+Version:        0.0.3
 Release:        1%{?dist}
 Summary:        Memory-safe multi-ISO USB imager
 License:        GPL-3.0-only

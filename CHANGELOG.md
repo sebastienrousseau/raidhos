@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-08-03
+
+### Security
+
+- Pinned every GitHub Action to an immutable commit SHA and upgraded the
+  Actions cache runtime to v5.
+- Restricted release and CodeQL token permissions to the jobs that require
+  write access.
+- Replaced unverified `curl | sh` Rustup bootstrapping with a versioned,
+  SHA-256-verified `rustup-init` installer for x86_64 and aarch64 Linux.
+- Added a direct private-vulnerability-reporting link to the security policy.
+
 ## [0.0.2] - 2026-08-03
 
 ### Security
@@ -444,6 +456,7 @@ subprocesses, validated by the virtual-disk install workflow.
   `asorti`, with a 3× retry + GitHub-mirror fallback on
   savannah's transient outages.
 
-[Unreleased]: https://github.com/sebastienrousseau/raidhos/compare/v0.0.2...HEAD
+[Unreleased]: https://github.com/sebastienrousseau/raidhos/compare/v0.0.3...HEAD
+[0.0.3]: https://github.com/sebastienrousseau/raidhos/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/sebastienrousseau/raidhos/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/sebastienrousseau/raidhos/releases/tag/v0.0.1

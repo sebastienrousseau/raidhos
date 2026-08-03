@@ -19,7 +19,7 @@
 %global debug_package %{nil}
 
 Name:           raidhos-bin
-Version:        0.0.2
+Version:        0.0.3
 Release:        1%{?dist}
 Summary:        Memory-safe multi-ISO USB imager (pre-built, cosign-signed)
 License:        GPL-3.0-only

@@ -7,7 +7,7 @@
 # alongside the artefacts.
 $schema: https://aka.ms/winget-manifest.installer.1.6.0.schema.json
 PackageIdentifier: sebastienrousseau.RaidhOS
-PackageVersion: 0.0.2
+PackageVersion: 0.0.3
 Publisher: Sebastien Rousseau
 PublisherUrl: https://github.com/sebastienrousseau
 PublisherSupportUrl: https://github.com/sebastienrousseau/raidhos/issues

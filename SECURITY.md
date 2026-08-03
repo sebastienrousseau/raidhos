@@ -5,11 +5,9 @@
 RaidhOS reads and writes raw block devices, so security issues are taken
 seriously. Please **do not** open public GitHub issues for vulnerabilities.
 
-Instead, report privately by either:
-
-- Emailing the maintainer listed in `Cargo.toml` / commits, or
-- Using GitHub's "Report a vulnerability" feature on the repository's
-  Security tab (private vulnerability reporting).
+Instead, use GitHub's
+[private vulnerability reporting form](https://github.com/sebastienrousseau/raidhos/security/advisories/new).
+Do not include exploit details in a public issue or discussion.
 
 We aim to acknowledge reports within 7 days and to share a remediation plan
 within 30 days.
@@ -54,8 +52,10 @@ RaidhOS already includes the following safeguards:
 - **CSP-aware Tauri config** with a strict default Content-Security-Policy.
 - **CI security gates.** Every PR runs `cargo audit`, `cargo deny`, and
   CodeQL on the actions and frontend code.
-- **Pinned action versions.** All GitHub Actions are pinned by major
-  version; Dependabot keeps them current.
+- **Immutable CI dependencies.** GitHub Actions are pinned to full commit
+  SHAs, and the Linux bootstrap verifies a versioned `rustup-init` binary
+  against a repository-pinned SHA-256 digest. Dependabot keeps action pins
+  current.
 
 These are real, code-level safeguards. "100% secure" is not a goal we
 claim — but we will keep adding controls and welcome reports of any gap.
