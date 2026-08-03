@@ -116,7 +116,7 @@ jobs:
           subject-path: ${{ steps.pack.outputs.asset }}
 
       - name: Upload artefact (for release job)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: raidhos-${{ matrix.target }}
           path: |
@@ -137,7 +137,7 @@ jobs:
       - name: Generate CycloneDX SBOM
         run: cargo cyclonedx --format json --override-filename raidhos.cdx
       - name: Upload SBOM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom
           path: raidhos.cdx.json
@@ -167,7 +167,7 @@ jobs:
         with:
           subject-path: BOOTX64.EFI
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bootx64-efi
           path: |
@@ -236,7 +236,7 @@ jobs:
           # artefact name: raidhos-bin-${PKGVER}-1-x86_64.pkg.tar.zst.
 
       - name: Upload the .pkg.tar.zst
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: arch-pkg
           path: /tmp/pkgbuild/*.pkg.tar.zst
@@ -293,7 +293,7 @@ jobs:
           find ~/rpmbuild/RPMS -name '*.rpm' -print
 
       - name: Upload the .rpm
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rpm-bin-${{ matrix.rpm_arch }}
           path: /github/home/rpmbuild/RPMS/${{ matrix.rpm_arch }}/*.rpm
