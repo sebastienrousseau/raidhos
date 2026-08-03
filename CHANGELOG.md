@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-08-03
+
+### Security
+
+- Updated `plist` to 1.10.0 and `quick-xml` to 0.41.0, fixing
+  RUSTSEC-2026-0194 and RUSTSEC-2026-0195.
+- Updated `anyhow` to 1.0.104, fixing RUSTSEC-2026-0190.
+- Updated pinned GitHub Actions and the Clap completion generator.
+
+### Fixed
+
+- Refactored seccomp filter construction into a testable helper and
+  covered the unknown-syscall path, restoring the privileged helper's
+  coverage gate.
+
+### Changed
+
+- Aligned workspace crates and packaging metadata on version 0.0.2.
+
 ### Breaking
 
 - **MSRV bumped 1.78 → 1.85.** A new CI `msrv` job that installs
@@ -425,5 +444,6 @@ subprocesses, validated by the virtual-disk install workflow.
   `asorti`, with a 3× retry + GitHub-mirror fallback on
   savannah's transient outages.
 
-[Unreleased]: https://github.com/sebastienrousseau/raidhos/compare/v0.0.1...HEAD
+[Unreleased]: https://github.com/sebastienrousseau/raidhos/compare/v0.0.2...HEAD
+[0.0.2]: https://github.com/sebastienrousseau/raidhos/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/sebastienrousseau/raidhos/releases/tag/v0.0.1
