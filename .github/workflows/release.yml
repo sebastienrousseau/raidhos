@@ -111,7 +111,7 @@ jobs:
             "${{ steps.pack.outputs.asset }}"
 
       - name: SLSA build provenance
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: ${{ steps.pack.outputs.asset }}
 
@@ -163,7 +163,7 @@ jobs:
             --output-certificate BOOTX64.EFI.pem \
             BOOTX64.EFI
       - name: SLSA build provenance
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: BOOTX64.EFI
       - name: Upload
