@@ -15,7 +15,7 @@
 
 pkgname=raidhos-bin
 _pkgname=raidhos
-pkgver=0.0.2
+pkgver=0.0.3
 pkgrel=1
 pkgdesc="Memory-safe multi-ISO USB imager — cosign-signed pre-built binary"
 arch=('x86_64' 'aarch64')

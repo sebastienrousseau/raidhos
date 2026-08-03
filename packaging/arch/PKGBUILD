@@ -15,7 +15,7 @@
 #   3. Push to ssh://aur@aur.archlinux.org/raidhos.git
 
 pkgname=raidhos
-pkgver=0.0.2
+pkgver=0.0.3
 pkgrel=1
 pkgdesc="Memory-safe multi-ISO USB imager (Rust + Tauri 2, forbid(unsafe))"
 arch=('x86_64' 'aarch64')

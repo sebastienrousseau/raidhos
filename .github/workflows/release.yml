@@ -10,15 +10,16 @@ on:
         description: "Tag to build (e.g. v0.0.1)"
         required: true
 
-permissions:
-  contents: write    # create release, upload assets
-  id-token: write    # cosign keyless signing via OIDC
-  attestations: write
+permissions: {}
 
 jobs:
   build:
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -43,7 +44,7 @@ jobs:
             os: windows-latest
             archive: zip
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable, snapshot 2026-05-18
         with:
@@ -51,7 +52,7 @@ jobs:
 
       - name: Install cross (Linux aarch64)
         if: matrix.cross
-        run: cargo install cross --locked
+        run: cargo install cross --locked --version 0.2.5
 
       - name: Build CLI + helper (non-cross)
         if: '!matrix.cross'
@@ -70,13 +71,16 @@ jobs:
           set -euo pipefail
           name="raidhos-${{ github.event.inputs.tag || github.ref_name }}-${{ matrix.target }}"
           mkdir -p "dist/$name"
-          if [[ "${{ matrix.os }}" == windows-* ]]; then
+          case "${{ matrix.archive }}" in
+          zip)
             cp "target/${{ matrix.target }}/release/raidhos-cli.exe" "dist/$name/"
             cp "target/${{ matrix.target }}/release/raidhos-priv-helper.exe" "dist/$name/"
-          else
+            ;;
+          *)
             cp "target/${{ matrix.target }}/release/raidhos-cli" "dist/$name/"
             cp "target/${{ matrix.target }}/release/raidhos-priv-helper" "dist/$name/"
-          fi
+            ;;
+          esac
           cp README.md LICENSE SECURITY.md CHANGELOG.md "dist/$name/"
           cd dist
           if [[ "${{ matrix.archive }}" == "zip" ]]; then
@@ -111,12 +115,12 @@ jobs:
             "${{ steps.pack.outputs.asset }}"
 
       - name: SLSA build provenance
-        uses: actions/attest-build-provenance@v4
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-path: ${{ steps.pack.outputs.asset }}
 
       - name: Upload artefact (for release job)
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: raidhos-${{ matrix.target }}
           path: |
@@ -129,15 +133,17 @@ jobs:
   sbom:
     name: SBOM
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable, snapshot 2026-05-18
       - name: Install cargo-cyclonedx
-        run: cargo install --locked cargo-cyclonedx
+        run: cargo install --locked --version 0.5.9 cargo-cyclonedx
       - name: Generate CycloneDX SBOM
         run: cargo cyclonedx --format json --override-filename raidhos.cdx
       - name: Upload SBOM
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sbom
           path: raidhos.cdx.json
@@ -146,8 +152,12 @@ jobs:
   grub:
     name: GRUB BOOTX64.EFI
     runs-on: ubuntu-latest
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build reproducible GRUB
         run: ./tools/grub/build_grub.sh
       - name: SHA-256
@@ -163,11 +173,11 @@ jobs:
             --output-certificate BOOTX64.EFI.pem \
             BOOTX64.EFI
       - name: SLSA build provenance
-        uses: actions/attest-build-provenance@v4
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-path: BOOTX64.EFI
       - name: Upload
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: bootx64-efi
           path: |
@@ -181,6 +191,8 @@ jobs:
     name: Arch / CachyOS .pkg.tar.zst
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     container:
       image: archlinux:base-devel
       options: --user root
@@ -191,10 +203,10 @@ jobs:
       - name: Install git inside the container
         run: pacman -Syu --noconfirm --needed git
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Download Linux release tarballs from the build job
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: artifacts
 
@@ -236,7 +248,7 @@ jobs:
           # artefact name: raidhos-bin-${PKGVER}-1-x86_64.pkg.tar.zst.
 
       - name: Upload the .pkg.tar.zst
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: arch-pkg
           path: /tmp/pkgbuild/*.pkg.tar.zst
@@ -246,6 +258,8 @@ jobs:
     name: Fedora / RHEL .rpm
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     container:
       image: fedora:latest
       options: --user root
@@ -257,10 +271,10 @@ jobs:
       - name: Install rpmbuild + util
         run: dnf install -y rpm-build git findutils tar
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Download Linux release tarballs from the build job
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: artifacts
 
@@ -293,7 +307,7 @@ jobs:
           find ~/rpmbuild/RPMS -name '*.rpm' -print
 
       - name: Upload the .rpm
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: rpm-bin-${{ matrix.rpm_arch }}
           path: /github/home/rpmbuild/RPMS/${{ matrix.rpm_arch }}/*.rpm
@@ -303,10 +317,12 @@ jobs:
     name: Publish GitHub Release
     needs: [build, sbom, grub, arch-pkg, rpm-bin]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: artifacts
 
@@ -318,7 +334,7 @@ jobs:
       - name: Generate checksums manifest
         working-directory: release-assets
         run: |
-          sha256sum * > SHA256SUMS
+          sha256sum -- * > SHA256SUMS
 
       - name: Create / update GitHub Release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v2.0.8

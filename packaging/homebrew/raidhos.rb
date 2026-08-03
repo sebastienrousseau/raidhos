@@ -2,7 +2,7 @@ class Raidhos < Formula
   desc "Memory-safe, multi-ISO USB imager (CLI). The privileged helper is bundled."
   homepage "https://github.com/sebastienrousseau/raidhos"
   license "GPL-3.0-only"
-  version "0.0.2"
+  version "0.0.3"
 
   # cosign-verified release artefacts. After cutting v0.0.1, replace the
   # placeholder URLs with the actual release URLs and sha256s from

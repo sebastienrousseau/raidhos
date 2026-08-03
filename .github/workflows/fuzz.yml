@@ -22,20 +22,20 @@ jobs:
           - parse_disks_plist
           - parse_get_disk_json
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: dtolnay/rust-toolchain@5b842231ba77f5c045dba54ac5560fed2db780e2 # nightly, snapshot 2026-05-18
 
       - name: Cache cargo-fuzz install
-        uses: actions/cache@v4
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: ~/.cargo/bin/cargo-fuzz
-          key: cargo-fuzz-${{ runner.os }}-v1
+          key: cargo-fuzz-${{ runner.os }}-0.13.2
 
       - name: Install cargo-fuzz
         run: |
-          if ! command -v cargo-fuzz >/dev/null 2>&1; then
-            cargo install --locked cargo-fuzz
+          if ! cargo fuzz --version 2>/dev/null | grep -q ' 0.13.2$'; then
+            cargo install --locked --force --version 0.13.2 cargo-fuzz
           fi
 
       - name: Smoke fuzz (60s)
