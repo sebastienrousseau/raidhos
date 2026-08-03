@@ -98,7 +98,7 @@ jobs:
           fi
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.7.0
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v3.7.0
 
       - name: cosign sign (keyless via OIDC)
         shell: bash
@@ -153,7 +153,7 @@ jobs:
       - name: SHA-256
         run: sha256sum BOOTX64.EFI > BOOTX64.EFI.sha256
       - name: Install cosign
-        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.7.0
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v3.7.0
       - name: cosign sign
         env:
           COSIGN_YES: "true"
