@@ -44,15 +44,18 @@ fn target_arch() -> Result<TargetArch, String> {
 /// Inherited across `clone`/`fork`/`exec`, so child processes started
 /// after this call run under the same restrictions.
 pub fn install_denylist() -> Result<(), String> {
+    let prog = build_denylist(denied_syscalls(), target_arch()?)?;
+    seccompiler::apply_filter(&prog).map_err(|e| format!("apply seccomp BPF: {e}"))?;
+    Ok(())
+}
+
+fn build_denylist(names: &[&str], arch: TargetArch) -> Result<BpfProgram, String> {
     // Each entry: syscall name. We map each to "return EPERM" so the
     // syscall fails predictably rather than killing the process — a
     // SIGKILL on `parted` mid-install would corrupt the partition
     // table.
-    let denied = denied_syscalls();
-    let arch = target_arch()?;
-
     let mut rules: BTreeMap<i64, Vec<SeccompRule>> = BTreeMap::new();
-    for name in denied {
+    for name in names {
         let Some(num) = lookup_syscall(name, arch) else {
             // Unknown on this arch — skip silently.
             continue;
@@ -68,12 +71,9 @@ pub fn install_denylist() -> Result<(), String> {
     )
     .map_err(|e| format!("build seccomp filter: {e}"))?;
 
-    let prog: BpfProgram = filter
+    filter
         .try_into()
-        .map_err(|e: seccompiler::BackendError| format!("compile seccomp BPF: {e}"))?;
-
-    seccompiler::apply_filter(&prog).map_err(|e| format!("apply seccomp BPF: {e}"))?;
-    Ok(())
+        .map_err(|e: seccompiler::BackendError| format!("compile seccomp BPF: {e}"))
 }
 
 fn denied_syscalls() -> &'static [&'static str] {
@@ -233,6 +233,12 @@ mod tests {
         // reject the filter — but install_denylist() must never panic
         // and must return a Result either way.
         let _ = install_denylist();
+    }
+
+    #[test]
+    fn build_denylist_skips_unknown_syscalls() {
+        let program = build_denylist(&["ptrace", "definitely-not-a-syscall"], TargetArch::x86_64);
+        assert!(program.is_ok());
     }
 
     #[test]
