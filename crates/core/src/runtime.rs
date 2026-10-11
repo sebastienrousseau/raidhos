@@ -102,11 +102,31 @@ impl Runtime for RealRuntime {
     }
 
     fn has_cmd(&self, cmd: &str) -> bool {
-        std::process::Command::new("sh")
-            .args(["-c", &format!("command -v {cmd} >/dev/null 2>&1")])
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false)
+        let Some(paths) = std::env::var_os("PATH") else {
+            return false;
+        };
+        std::env::split_paths(&paths).any(|dir| {
+            let candidate = dir.join(cmd);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                candidate
+                    .metadata()
+                    .map(|m| m.is_file() && (m.permissions().mode() & 0o111 != 0))
+                    .unwrap_or(false)
+            }
+            #[cfg(windows)]
+            {
+                candidate.is_file()
+                    || candidate.with_extension("exe").is_file()
+                    || candidate.with_extension("cmd").is_file()
+                    || candidate.with_extension("bat").is_file()
+            }
+            #[cfg(not(any(unix, windows)))]
+            {
+                candidate.is_file()
+            }
+        })
     }
 
     fn env_var(&self, key: &str) -> Option<String> {
