@@ -102,9 +102,7 @@ impl Runtime for RealRuntime {
     }
 
     fn has_cmd(&self, cmd: &str) -> bool {
-        let Some(paths) = std::env::var_os("PATH") else {
-            return false;
-        };
+        let paths = std::env::var_os("PATH").unwrap_or_default();
         std::env::split_paths(&paths).any(|dir| {
             let candidate = dir.join(cmd);
             #[cfg(unix)]
