@@ -59,12 +59,12 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cargo/bin/cargo-tarpaulin
-          key: cargo-tarpaulin-${{ runner.os }}-0.37.0
+          key: cargo-tarpaulin-${{ runner.os }}-0.37.5
 
       - name: Install tarpaulin
         run: |
-          if ! cargo tarpaulin --version 2>/dev/null | grep -q ' 0.37.0$'; then
-            cargo install --locked --force --version 0.37.0 cargo-tarpaulin
+          if ! cargo tarpaulin --version 2>/dev/null | grep -q ' 0.37.5$'; then
+            cargo install --locked --force --version 0.37.5 cargo-tarpaulin
           fi
       # Coverage gate: 100% across raidhos-core, raidhos-cli, and
       # raidhos-priv-helper. Untestable lines (binary entry points,
