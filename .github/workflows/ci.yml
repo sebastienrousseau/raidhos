@@ -143,11 +143,11 @@ jobs:
           if-no-files-found: warn
 
   msrv:
-    name: MSRV (1.85) sanity check
+    name: MSRV (1.89) sanity check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@c56a35af9328d0bc581dc86c05e58f97f7c38a0e # 1.85, snapshot 2026-05-18
+      - uses: dtolnay/rust-toolchain@d77020bf130f2e8c39c025bf9c4c3a445fe2b9fa # 1.89, snapshot 2026-10-09
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: msrv-ubuntu
@@ -159,9 +159,10 @@ jobs:
       #
       # Bumped 1.78 → 1.85 on 2026-05-18 after this gate caught the
       # transitive `roff 1.1.1` (via clap_mangen) requiring
-      # `edition2024`, which only stabilised in 1.85.
-      - name: cargo check --workspace under 1.85
-        run: cargo +1.85 check --workspace --exclude raidhos-ui --all-targets
+      # `edition2024`, which only stabilised in 1.85. Raised 1.85 to 1.89
+      # in 0.0.5 to share one floor with the maintainer's other crates.
+      - name: cargo check --workspace under 1.89
+        run: cargo +1.89 check --workspace --exclude raidhos-ui --all-targets
 
   grub-build:
     name: Reproducible GRUB build

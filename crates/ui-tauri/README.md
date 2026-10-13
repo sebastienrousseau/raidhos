@@ -75,7 +75,7 @@ cargo build --release -p raidhos-ui
 ./target/release/raidhos-ui
 ```
 
-The binary lands at `target/release/raidhos-ui`. MSRV: 1.85.
+The binary lands at `target/release/raidhos-ui`. MSRV: 1.89.
 
 No npm, no Webpack, no Vite. The Tauri build serves
 [`frontend/`](frontend/) directly.

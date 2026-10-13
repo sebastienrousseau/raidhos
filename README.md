@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <a href="./rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.85%2B-blue.svg?style=for-the-badge&logo=rust" alt="Rust 1.85+" /></a>
+  <a href="./rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.89%2B-blue.svg?style=for-the-badge&logo=rust" alt="Rust 1.89+" /></a>
   <a href="./Cargo.toml"><img src="https://img.shields.io/badge/unsafe-forbidden-success.svg?style=for-the-badge" alt="Unsafe forbidden" /></a>
   <a href="./.github/workflows/ci.yml"><img src="https://img.shields.io/badge/coverage-91%25-brightgreen.svg?style=for-the-badge" alt="Coverage 91%" /></a>
   <a href="./docs/THREAT_MODEL.md"><img src="https://img.shields.io/badge/threat--model-published-success.svg?style=for-the-badge" alt="Threat model published" /></a>
@@ -82,7 +82,7 @@
 | Fedora COPR | `sudo dnf copr enable sebastienrousseau/raidhos && sudo dnf install raidhos` | Fedora N / N-1 (source-built) |
 | Flatpak (Flathub) | `flatpak install flathub io.github.sebastienrousseau.raidhos` | Silverblue, Kinoite, Bazzite, SteamOS, NixOS, openSUSE Aeon |
 | AppImage (portable) | Download from [Releases](https://github.com/sebastienrousseau/raidhos/releases), `chmod +x`, run | Any glibc Linux |
-| Cargo (from source) | `cargo install --git https://github.com/sebastienrousseau/raidhos raidhos-cli` | Anywhere with Rust ≥ 1.85 |
+| Cargo (from source) | `cargo install --git https://github.com/sebastienrousseau/raidhos raidhos-cli` | Anywhere with Rust ≥ 1.89 |
 | Container (GHCR) | `docker run --rm ghcr.io/sebastienrousseau/raidhos-cli:latest list-disks` | Read-only discovery only — destructive ops need host /dev access |
 | Source | `git clone … && cargo build --release --workspace --exclude raidhos-ui` | Build from a tag locally |
 
