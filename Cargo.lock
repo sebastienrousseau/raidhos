@@ -2565,7 +2565,7 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
 name = "raidhos-cli"
-version = "0.0.3"
+version = "0.0.5"
 dependencies = [
  "clap",
  "clap_complete",
@@ -2575,7 +2575,7 @@ dependencies = [
 
 [[package]]
 name = "raidhos-core"
-version = "0.0.3"
+version = "0.0.5"
 dependencies = [
  "serde",
  "serde_json",
@@ -2585,7 +2585,7 @@ dependencies = [
 
 [[package]]
 name = "raidhos-priv-helper"
-version = "0.0.3"
+version = "0.0.5"
 dependencies = [
  "clap",
  "libc",
@@ -2597,7 +2597,7 @@ dependencies = [
 
 [[package]]
 name = "raidhos-ui"
-version = "0.0.3"
+version = "0.0.5"
 dependencies = [
  "directories",
  "raidhos-core",
