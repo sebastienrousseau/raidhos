@@ -359,7 +359,7 @@ fn is_grub_pbkdf2_hash(s: &str) -> bool {
     }
     // Rounds is a decimal integer ≥ 1. The `match` form was chosen
     // when the workspace MSRV was 1.78 (`Option::is_none_or` is 1.82);
-    // we've since bumped MSRV to 1.85 but kept the match for clarity.
+    // we have since bumped MSRV to 1.89 but kept the match for clarity.
     match segs[3].parse::<u32>() {
         Ok(n) if n > 0 => {}
         _ => return false,
