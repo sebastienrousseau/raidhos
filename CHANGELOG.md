@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.5] - Unreleased
+
+### Changed
+
+- **Breaking: the MSRV is now Rust 1.89** (was 1.85), one floor shared
+  with the maintainer's other Rust crates. The workspace manifest, the
+  MSRV CI job, the crate READMEs, the FAQ, install and troubleshooting
+  guides and the Fedora spec state it.
+
+### Dependencies
+
+- The tauri, clap, thiserror and GitHub Actions groups and libc 0.2.190
+  (Dependabot #45 to #49).
+
 ## [0.0.3] - 2026-08-03
 
 ### Security
